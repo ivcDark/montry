@@ -1,20 +1,18 @@
 <?php
 
-namespace App\Models;
+namespace app\Modules\Sites\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Check extends Model
+class Folder extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'site_id',
+        'organization_id',
         'name',
-        'type',
-        'is_enabled',
-        'timeout_ms',
-        'settings',
+        'color',
+        'sort_order',
     ];
 }

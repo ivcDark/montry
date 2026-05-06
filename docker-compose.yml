@@ -44,118 +44,125 @@ services:
     build: *web-build
     container_name: montri-web
     <<: *web-env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
     restart: unless-stopped
+    networks:
+      - montri-net
 
-  web-scheduler:
-    build: *web-build
-    container_name: montri-web-scheduler
-    <<: *web-env
-    command: ["php", "artisan", "schedule:work"]
-    depends_on:
-      web:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    restart: unless-stopped
+  vite:
+    image: node:22-alpine
+    container_name: montri-node
+    working_dir: /var/www/apps/web
+    volumes:
+      - .:/var/www
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    networks:
+      - montri-net
 
-  web-queue:
-    build: *web-build
-    container_name: montri-web-queue
-    <<: *web-env
-    command: ["php", "artisan", "queue:work", "redis", "--queue=notifications,reports,default", "--sleep=1", "--tries=3", "--timeout=120", "--memory=256"]
-    depends_on:
-      web:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
+#  web-scheduler:
+#    build: *web-build
+#    container_name: montri-web-scheduler
+#    <<: *web-env
+#    command: ["php", "artisan", "schedule:work"]
+#    depends_on:
+#      web:
+#        condition: service_started
+#      postgres:
+#        condition: service_healthy
+#      redis:
+#        condition: service_healthy
+#      rabbitmq:
+#        condition: service_healthy
+#    restart: unless-stopped
 
-  web-result-consumer:
-    build: *web-build
-    container_name: montri-web-result-consumer
-    <<: *web-env
-    command: ["php", "artisan", "checks:consume-results"]
-    depends_on:
-      web:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    restart: unless-stopped
-
-  poller-manual:
-    build: *poller-build
-    container_name: montri-poller-manual
-    <<: *poller-env
-    command: ["go", "run", "./cmd/poller", "manual"]
-    environment:
-      POLLER_MODE: manual
-      POLLER_TASK_QUEUE: checks.manual
-      POLLER_RESULT_EXCHANGE: checks.results
-      POLLER_RESULT_ROUTING_KEY: result
-      POLLER_CONCURRENCY: ${POLLER_MANUAL_CONCURRENCY:-50}
-
-  poller-http:
-    build: *poller-build
-    container_name: montri-poller-http
-    <<: *poller-env
-    command: ["go", "run", "./cmd/poller", "http"]
-    environment:
-      POLLER_MODE: http
-      POLLER_TASK_QUEUE: checks.scheduled.http
-      POLLER_RESULT_EXCHANGE: checks.results
-      POLLER_RESULT_ROUTING_KEY: result
-      POLLER_CONCURRENCY: ${POLLER_HTTP_CONCURRENCY:-200}
-
-  poller-seo:
-    build: *poller-build
-    container_name: montri-poller-seo
-    <<: *poller-env
-    command: ["go", "run", "./cmd/poller", "seo"]
-    environment:
-      POLLER_MODE: seo
-      POLLER_TASK_QUEUE: checks.scheduled.seo
-      POLLER_RESULT_EXCHANGE: checks.results
-      POLLER_RESULT_ROUTING_KEY: result
-      POLLER_CONCURRENCY: ${POLLER_SEO_CONCURRENCY:-50}
-
-  poller-ssl:
-    build: *poller-build
-    container_name: montri-poller-ssl
-    <<: *poller-env
-    command: ["go", "run", "./cmd/poller", "ssl"]
-    environment:
-      POLLER_MODE: ssl
-      POLLER_TASK_QUEUE: checks.scheduled.ssl
-      POLLER_RESULT_EXCHANGE: checks.results
-      POLLER_RESULT_ROUTING_KEY: result
-      POLLER_CONCURRENCY: ${POLLER_SSL_CONCURRENCY:-100}
-
-  poller-domain:
-    build: *poller-build
-    container_name: montri-poller-domain
-    <<: *poller-env
-    command: ["go", "run", "./cmd/poller", "domain"]
-    environment:
-      POLLER_MODE: domain
-      POLLER_TASK_QUEUE: checks.scheduled.domain
-      POLLER_RESULT_EXCHANGE: checks.results
-      POLLER_RESULT_ROUTING_KEY: result
-      POLLER_CONCURRENCY: ${POLLER_DOMAIN_CONCURRENCY:-10}
+#  web-queue:
+#    build: *web-build
+#    container_name: montri-web-queue
+#    <<: *web-env
+#    command: ["php", "artisan", "queue:work", "redis", "--queue=notifications,reports,default", "--sleep=1", "--tries=3", "--timeout=120", "--memory=256"]
+#    depends_on:
+#      web:
+#        condition: service_started
+#      postgres:
+#        condition: service_healthy
+#      redis:
+#        condition: service_healthy
+#    restart: unless-stopped
+#
+#  web-result-consumer:
+#    build: *web-build
+#    container_name: montri-web-result-consumer
+#    <<: *web-env
+#    command: ["php", "artisan", "checks:consume-results"]
+#    depends_on:
+#      web:
+#        condition: service_started
+#      postgres:
+#        condition: service_healthy
+#      rabbitmq:
+#        condition: service_healthy
+#    restart: unless-stopped
+#
+#  poller-manual:
+#    build: *poller-build
+#    container_name: montri-poller-manual
+#    <<: *poller-env
+#    command: ["go", "run", "./cmd/poller", "manual"]
+#    environment:
+#      POLLER_MODE: manual
+#      POLLER_TASK_QUEUE: checks.manual
+#      POLLER_RESULT_EXCHANGE: checks.results
+#      POLLER_RESULT_ROUTING_KEY: result
+#      POLLER_CONCURRENCY: ${POLLER_MANUAL_CONCURRENCY:-50}
+#
+#  poller-http:
+#    build: *poller-build
+#    container_name: montri-poller-http
+#    <<: *poller-env
+#    command: ["go", "run", "./cmd/poller", "http"]
+#    environment:
+#      POLLER_MODE: http
+#      POLLER_TASK_QUEUE: checks.scheduled.http
+#      POLLER_RESULT_EXCHANGE: checks.results
+#      POLLER_RESULT_ROUTING_KEY: result
+#      POLLER_CONCURRENCY: ${POLLER_HTTP_CONCURRENCY:-200}
+#
+#  poller-seo:
+#    build: *poller-build
+#    container_name: montri-poller-seo
+#    <<: *poller-env
+#    command: ["go", "run", "./cmd/poller", "seo"]
+#    environment:
+#      POLLER_MODE: seo
+#      POLLER_TASK_QUEUE: checks.scheduled.seo
+#      POLLER_RESULT_EXCHANGE: checks.results
+#      POLLER_RESULT_ROUTING_KEY: result
+#      POLLER_CONCURRENCY: ${POLLER_SEO_CONCURRENCY:-50}
+#
+#  poller-ssl:
+#    build: *poller-build
+#    container_name: montri-poller-ssl
+#    <<: *poller-env
+#    command: ["go", "run", "./cmd/poller", "ssl"]
+#    environment:
+#      POLLER_MODE: ssl
+#      POLLER_TASK_QUEUE: checks.scheduled.ssl
+#      POLLER_RESULT_EXCHANGE: checks.results
+#      POLLER_RESULT_ROUTING_KEY: result
+#      POLLER_CONCURRENCY: ${POLLER_SSL_CONCURRENCY:-100}
+#
+#  poller-domain:
+#    build: *poller-build
+#    container_name: montri-poller-domain
+#    <<: *poller-env
+#    command: ["go", "run", "./cmd/poller", "domain"]
+#    environment:
+#      POLLER_MODE: domain
+#      POLLER_TASK_QUEUE: checks.scheduled.domain
+#      POLLER_RESULT_EXCHANGE: checks.results
+#      POLLER_RESULT_ROUTING_KEY: result
+#      POLLER_CONCURRENCY: ${POLLER_DOMAIN_CONCURRENCY:-10}
 
   postgres:
     image: postgres:latest
@@ -197,38 +204,38 @@ services:
     networks:
       - montri-net
 
-  rabbitmq:
-    image: rabbitmq:management
-    container_name: montri-rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-montri}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-montri_secret}
-      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-montri}
-    ports:
-      - "${RABBITMQ_PORT:-5672}:5672"
-      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
-      - ./docker/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-      - ./docker/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
-    networks:
-      - montri-net
+#  rabbitmq:
+#    image: rabbitmq:management
+#    container_name: montri-rabbitmq
+#    environment:
+#      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-montri}
+#      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-montri_secret}
+#      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-montri}
+#    ports:
+#      - "${RABBITMQ_PORT:-5672}:5672"
+#      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+#    volumes:
+#      - rabbitmq-data:/var/lib/rabbitmq
+#      - ./docker/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+#      - ./docker/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+#    healthcheck:
+#      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 20
+#    restart: unless-stopped
+#    networks:
+#      - montri-net
 
-  mailpit:
-    image: axllent/mailpit:latest
-    container_name: montri-mailpit
-    ports:
-      - "${MAILPIT_SMTP_PORT:-1025}:1025"
-      - "${MAILPIT_UI_PORT:-8025}:8025"
-    restart: unless-stopped
-    networks:
-      - montri-net
+#  mailpit:
+#    image: axllent/mailpit:latest
+#    container_name: montri-mailpit
+#    ports:
+#      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+#      - "${MAILPIT_UI_PORT:-8025}:8025"
+#    restart: unless-stopped
+#    networks:
+#      - montri-net
 
 volumes:
   postgres-data:
