@@ -22,7 +22,10 @@ final class LoginRequest extends FormRequest
 
     public function credentials(): array
     {
-        return $this->only('email', 'password');
+        return [
+            'email' => $this->string('email')->lower()->toString(),
+            'password' => $this->string('password')->toString(),
+        ];
     }
 
     public function remember(): bool
