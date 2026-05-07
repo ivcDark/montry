@@ -4,7 +4,7 @@ namespace App\Modules\Sites\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Sites\Actions\CreateDefaultFolderForOrganization;
-use App\Modules\Sites\Actions\CreateSite;
+use App\Modules\Sites\Actions\CreateSiteAction;
 use App\Modules\Sites\Actions\GetCurrentOrganization;
 use App\Modules\Sites\Http\Requests\StoreSiteRequest;
 use App\Modules\Sites\Models\Site;
@@ -51,7 +51,7 @@ final class IndexController extends Controller
         StoreSiteRequest $request,
         GetCurrentOrganization $getCurrentOrganization,
         CreateDefaultFolderForOrganization $createDefaultFolderForOrganization,
-        CreateSite $createSite
+        CreateSiteAction $createSite
     ): RedirectResponse
     {
         $organization = $getCurrentOrganization->handle($request->user());
@@ -77,6 +77,7 @@ final class IndexController extends Controller
     ): Response
     {
         $organization = $getCurrentOrganization->handle($request->user());
+        $site->load('monitors');
 
         if ($site->organization_id !== $organization->id) {
             throw new NotFoundHttpException();
@@ -98,6 +99,15 @@ final class IndexController extends Controller
                 'path' => $site->path,
                 'status' => $site->status,
                 'created_at' => $site->created_at?->toISOString(),
+                'monitors' => $site->monitors->map(fn ($monitor) => [
+                    'id' => $monitor->id,
+                    'name' => $monitor->name,
+                    'type' => $monitor->type,
+                    'is_enabled' => $monitor->is_enabled,
+                    'interval_seconds' => $monitor->interval_seconds,
+                    'timeout_ms' => $monitor->timeout_ms,
+                    'settings' => $monitor->settings,
+                ]),
             ],
         ]);
     }

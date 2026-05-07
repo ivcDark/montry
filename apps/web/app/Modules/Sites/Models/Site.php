@@ -7,6 +7,7 @@ use App\Modules\Sites\Enums\SiteStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Query\Builder;
 
 /**
@@ -23,8 +24,9 @@ use Illuminate\Database\Query\Builder;
  * @property SiteStatus $status
  * @property string $notes
  * @method static Builder|Organization whereName($value)
- * @property-read Organization organization Связанный пользователь
- * @property-read Folder folder Связанный пользователь
+ * @property-read Organization organization Организация
+ * @property-read Folder folder Папка/проект
+ * @property-read SiteMonitor monitors Типы проверок сайта
  */
 class Site extends Model
 {
@@ -60,5 +62,10 @@ class Site extends Model
     public function folder(): BelongsTo
     {
         return $this->belongsTo(Folder::class, 'folder_id');
+    }
+
+    public function monitors(): HasMany
+    {
+        return $this->hasMany(SiteMonitor::class, 'site_id');
     }
 }
