@@ -26,7 +26,7 @@ final readonly class CreateDefaultHttpMonitorAction
                 timeoutMs: 10000,
                 settings: [
                     'method' => 'GET',
-                    'path' => '/',
+                    'path' => $site->path,
                     'expected_status_min' => 200,
                     'expected_status_max' => 399,
                     'follow_redirects' => true,

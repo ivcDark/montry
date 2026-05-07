@@ -13,12 +13,20 @@ return new class extends Migration
     {
         Schema::create('organization_users', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('organization_id')->index();
-            $table->unsignedBigInteger('user_id')->index();
+            $table->foreignId('organization_id')
+                ->constrained('organizations')
+                ->cascadeOnDelete();
+
+            $table->foreignId('user_id')
+                ->constrained('users')
+                ->cascadeOnDelete();
+
             $table->string('role')->nullable();
             $table->timestamp('invited_at')->nullable();
             $table->timestamp('joined_at')->nullable();
             $table->timestamps();
+
+            $table->unique(['organization_id', 'user_id']);
         });
     }
 

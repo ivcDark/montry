@@ -94,6 +94,10 @@ final class StoreSiteRequest extends FormRequest
             $path = '/';
         }
 
+        if (isset($parts['query'])) {
+            $path .= '?' . $parts['query'];
+        }
+
         $normalizedUrl = $scheme . '://' . $host;
 
         if ($port !== null) {
@@ -101,10 +105,6 @@ final class StoreSiteRequest extends FormRequest
         }
 
         $normalizedUrl .= $path;
-
-        if (isset($parts['query'])) {
-            $normalizedUrl .= '?' . $parts['query'];
-        }
 
         return [
             'url' => $normalizedUrl,

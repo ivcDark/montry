@@ -13,9 +13,19 @@ return new class extends Migration
     {
         Schema::create('sites', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('organization_id')->index();
-            $table->unsignedBigInteger('folder_id')->index();
-            $table->unsignedBigInteger('created_user_id')->index();
+
+            $table->foreignId('organization_id')
+                ->constrained('organizations')
+                ->cascadeOnDelete();
+
+            $table->foreignId('folder_id')
+                ->constrained('folders')
+                ->restrictOnDelete();
+
+            $table->foreignId('created_user_id')
+                ->constrained('users')
+                ->restrictOnDelete();
+
             $table->string('name');
             $table->string('url');
             $table->string('scheme', 16)->default('https');
