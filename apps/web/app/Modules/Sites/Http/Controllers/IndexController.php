@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class IndexController extends Controller
 {
@@ -67,5 +68,37 @@ final class IndexController extends Controller
         return redirect()
             ->route('sites.index')
             ->with('success', 'Site added.');
+    }
+
+    public function show(
+        Request $request,
+        Site $site,
+        GetCurrentOrganization $getCurrentOrganization,
+    ): Response
+    {
+        $organization = $getCurrentOrganization->handle($request->user());
+
+        if ($site->organization_id !== $organization->id) {
+            throw new NotFoundHttpException();
+        }
+
+        return Inertia::render('Sites/Show', [
+            'organization' => [
+                'id' => $organization->id,
+                'name' => $organization->name,
+            ],
+
+            'site' => [
+                'id' => $site->id,
+                'name' => $site->name,
+                'url' => $site->url,
+                'scheme' => $site->scheme,
+                'host' => $site->host,
+                'port' => $site->port,
+                'path' => $site->path,
+                'status' => $site->status,
+                'created_at' => $site->created_at?->toISOString(),
+            ],
+        ]);
     }
 }

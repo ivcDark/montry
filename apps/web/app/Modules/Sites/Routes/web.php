@@ -11,4 +11,7 @@ Route::middleware('auth')->group(function (): void {
 
     Route::post('/sites', [\App\Modules\Sites\Http\Controllers\IndexController::class, 'store'])
         ->name('sites.store');
+
+    Route::get('/sites/{site}', [\App\Modules\Sites\Http\Controllers\IndexController::class, 'show'])
+        ->name('sites.show');
 });

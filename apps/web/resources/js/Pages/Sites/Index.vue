@@ -90,7 +90,13 @@ function statusLabel(status: string): string {
                         class="border-b border-white/5 last:border-0"
                     >
                         <td class="px-5 py-4">
-                            <div class="font-medium">{{ site.name }}</div>
+                            <Link
+                                :href="`/sites/${site.id}`"
+                                class="font-medium hover:text-emerald-400"
+                            >
+                                {{ site.name }}
+                            </Link>
+
                             <div class="text-xs text-neutral-500">{{ site.host }}</div>
                         </td>
 
