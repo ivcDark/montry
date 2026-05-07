@@ -3,6 +3,9 @@
 namespace App\Modules\Organizations\Actions;
 
 use App\Models\User;
+use App\Modules\Organizations\Enums\OrganizationPlan;
+use App\Modules\Organizations\Enums\OrganizationRole;
+use App\Modules\Organizations\Enums\OrganizationStatus;
 use App\Modules\Organizations\Models\Organization;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
@@ -17,12 +20,12 @@ final class CreateOrganizationForUser
             'name' => $name,
             'slug' => $this->uniqueSlug($name),
             'timezone' => '+3',
-            'plan' => Organization::PLAN_FREE,
-            'status' => Organization::STATUS_ACTIVE,
+            'plan' => OrganizationPlan::Free,
+            'status' => OrganizationStatus::Active,
         ]);
 
         $organization->users()->attach($user->id, [
-            'role' => Organization::ROLE_OWNER,
+            'role' => OrganizationRole::Owner->value,
             'invited_at' => Carbon::now()->format('Y-m-d H:i:s'),
             'joined_at' => Carbon::now()->format('Y-m-d H:i:s'),
         ]);

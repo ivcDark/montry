@@ -3,7 +3,7 @@
 namespace App\Modules\Auth\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Auth\Actions\CreateAccount;
+use App\Application\Onboarding\Actions\CreateAccount;
 use App\Modules\Auth\Http\Requests\RegisterRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;

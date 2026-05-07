@@ -3,6 +3,7 @@
 namespace Tests\Feature\Auth;
 
 use App\Models\User;
+use App\Modules\Organizations\Enums\OrganizationRole;
 use App\Modules\Organizations\Models\Organization;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -30,7 +31,7 @@ class RegisterTest extends TestCase
         $this->assertDatabaseHas('organization_users', [
             'organization_id' => $organization->id,
             'user_id' => $user->id,
-            'role' => Organization::ROLE_OWNER,
+            'role' => OrganizationRole::Owner->value,
         ]);
     }
 }

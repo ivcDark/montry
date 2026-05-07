@@ -3,6 +3,8 @@
 namespace App\Modules\Organizations\Models;
 
 use App\Models\User;
+use App\Modules\Organizations\Enums\OrganizationPlan;
+use App\Modules\Organizations\Enums\OrganizationStatus;
 use App\Modules\Sites\Models\Folder;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,21 +19,14 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $name
  * @property string $slug
  * @property string $timezone
- * @property string $plan План подписки на сервис
- * @property string $status Статус организации
+ * @property OrganizationPlan $plan План подписки на сервис
+ * @property OrganizationStatus $status Статус организации
  * @method static Builder|Organization whereName($value)
  * @property-read User user Связанный пользователь
  */
 class Organization extends Model
 {
     use HasFactory, SoftDeletes;
-
-    public const ROLE_OWNER = 'owner';
-    public const ROLE_ADMIN = 'admin';
-    public const ROLE_MEMBER = 'member';
-
-    public const PLAN_FREE = 'free';
-    public const STATUS_ACTIVE = 'active';
 
     protected $fillable = [
         'name',
@@ -40,6 +35,14 @@ class Organization extends Model
         'plan',
         'status',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'plan' => OrganizationPlan::class,
+            'status' => OrganizationStatus::class,
+        ];
+    }
 
     public function users(): BelongsToMany
     {
