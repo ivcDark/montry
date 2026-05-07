@@ -3,10 +3,13 @@
 namespace App\Modules\Organizations\Models;
 
 use App\Models\User;
+use App\Modules\Sites\Models\Folder;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -45,5 +48,15 @@ class Organization extends Model
             ->withPivot('invited_at')
             ->withPivot('joined_at')
             ->withTimestamps();
+    }
+
+    public function siteFolders(): HasMany
+    {
+        return $this->hasMany(Folder::class);
+    }
+
+    public function defaultSiteFolder(): HasOne
+    {
+        return $this->hasOne(Folder::class)->where('is_default', true);
     }
 }

@@ -16,6 +16,7 @@ return new class extends Migration
             $table->unsignedBigInteger('organization_id')->index();
             $table->string('name');
             $table->string('color')->nullable();
+            $table->boolean('is_default')->default(true);
             $table->integer('sort_order');
             $table->timestamps();
         });
