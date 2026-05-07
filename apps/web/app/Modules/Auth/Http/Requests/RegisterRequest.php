@@ -2,6 +2,7 @@
 
 namespace app\Modules\Auth\Http\Requests;
 
+use app\Modules\Auth\DTO\RegisterUserData;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 
@@ -30,5 +31,14 @@ final class RegisterRequest extends FormRequest
                 Password::min(6),
             ],
         ];
+    }
+
+    public function data($key = null, $default = null): RegisterUserData
+    {
+        return new RegisterUserData(
+            name: $this->string('name')->toString(),
+            email: $this->string('email')->toString(),
+            password: $this->string('password')->toString(),
+        );
     }
 }

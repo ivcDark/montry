@@ -3,6 +3,7 @@
 namespace app\Modules\Auth\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use app\Modules\Auth\Actions\LoginUser;
 use App\Modules\Auth\Http\Requests\LoginRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
@@ -17,13 +18,9 @@ final class LoginController extends Controller
         return Inertia::render('Auth/Login');
     }
 
-    public function store(LoginRequest $request): RedirectResponse
+    public function store(LoginRequest $request, LoginUser $loginUser): RedirectResponse
     {
-        if (! Auth::attempt($request->credentials(), $request->remember())) {
-            throw ValidationException::withMessages([
-                'email' => __('auth.failed'),
-            ]);
-        }
+        $loginUser->handle($request->data());
 
         $request->session()->regenerate();
 

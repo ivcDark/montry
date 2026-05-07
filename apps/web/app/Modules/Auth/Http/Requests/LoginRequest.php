@@ -2,6 +2,7 @@
 
 namespace App\Modules\Auth\Http\Requests;
 
+use app\Modules\Auth\DTO\LoginUserData;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class LoginRequest extends FormRequest
@@ -20,16 +21,12 @@ final class LoginRequest extends FormRequest
         ];
     }
 
-    public function credentials(): array
+    public function data($key = null, $default = null): LoginUserData
     {
-        return [
-            'email' => $this->string('email')->lower()->toString(),
-            'password' => $this->string('password')->toString(),
-        ];
-    }
-
-    public function remember(): bool
-    {
-        return $this->boolean('remember');
+        return new LoginUserData(
+            email: $this->string('email')->toString(),
+            password: $this->string('password')->toString(),
+            remember: $this->boolean('remember'),
+        );
     }
 }

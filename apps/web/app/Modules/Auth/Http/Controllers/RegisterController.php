@@ -3,12 +3,10 @@
 namespace app\Modules\Auth\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use app\Modules\Auth\Actions\RegisterUser;
 use app\Modules\Auth\Http\Requests\RegisterRequest;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -19,15 +17,9 @@ final class RegisterController extends Controller
         return Inertia::render('Auth/Register');
     }
 
-    public function store(RegisterRequest $request): RedirectResponse
+    public function store(RegisterRequest $request, RegisterUser $registerUser): RedirectResponse
     {
-        $user = User::query()->create([
-            'name' => $request->string('name')->toString(),
-            'email' => $request->string('email')->lower()->toString(),
-            'password' => Hash::make($request->string('password')->toString()),
-        ]);
-
-        event(new Registered($user));
+        $user = $registerUser->handle($request->data());
 
         Auth::login($user);
 
