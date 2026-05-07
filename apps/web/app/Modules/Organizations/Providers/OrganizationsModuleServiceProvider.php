@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Modules\Auth\Providers;
+namespace App\Modules\Organizations\Providers;
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
-final class AuthModuleServiceProvider extends ServiceProvider
+final class OrganizationsModuleServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {

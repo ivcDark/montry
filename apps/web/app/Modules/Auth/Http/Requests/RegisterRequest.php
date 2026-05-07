@@ -1,8 +1,8 @@
 <?php
 
-namespace app\Modules\Auth\Http\Requests;
+namespace App\Modules\Auth\Http\Requests;
 
-use app\Modules\Auth\DTO\RegisterUserData;
+use App\Modules\Auth\DTO\RegisterUserData;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 
@@ -33,7 +33,7 @@ final class RegisterRequest extends FormRequest
         ];
     }
 
-    public function data($key = null, $default = null): RegisterUserData
+    public function toData(): RegisterUserData
     {
         return new RegisterUserData(
             name: $this->string('name')->toString(),

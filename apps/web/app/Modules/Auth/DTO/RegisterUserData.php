@@ -1,6 +1,6 @@
 <?php
 
-namespace app\Modules\Auth\DTO;
+namespace App\Modules\Auth\DTO;
 
 final class RegisterUserData
 {

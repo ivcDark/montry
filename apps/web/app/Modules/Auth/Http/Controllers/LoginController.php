@@ -1,13 +1,11 @@
 <?php
 
-namespace app\Modules\Auth\Http\Controllers;
+namespace App\Modules\Auth\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use app\Modules\Auth\Actions\LoginUser;
+use App\Modules\Auth\Actions\LoginUser;
 use App\Modules\Auth\Http\Requests\LoginRequest;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -20,7 +18,7 @@ final class LoginController extends Controller
 
     public function store(LoginRequest $request, LoginUser $loginUser): RedirectResponse
     {
-        $loginUser->handle($request->data());
+        $loginUser->handle($request->toData());
 
         $request->session()->regenerate();
 

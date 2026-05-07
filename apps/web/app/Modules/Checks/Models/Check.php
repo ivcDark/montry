@@ -1,6 +1,6 @@
 <?php
 
-namespace app\Modules\Checks\Models;
+namespace App\Modules\Checks\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;

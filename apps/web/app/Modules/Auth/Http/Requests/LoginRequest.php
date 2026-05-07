@@ -2,7 +2,7 @@
 
 namespace App\Modules\Auth\Http\Requests;
 
-use app\Modules\Auth\DTO\LoginUserData;
+use App\Modules\Auth\DTO\LoginUserData;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class LoginRequest extends FormRequest
@@ -21,7 +21,7 @@ final class LoginRequest extends FormRequest
         ];
     }
 
-    public function data($key = null, $default = null): LoginUserData
+    public function toData(): LoginUserData
     {
         return new LoginUserData(
             email: $this->string('email')->toString(),

@@ -1,8 +1,8 @@
 <?php
 
-namespace app\Modules\Auth\Actions;
+namespace App\Modules\Auth\Actions;
 
-use app\Modules\Auth\DTO\LoginUserData;
+use App\Modules\Auth\DTO\LoginUserData;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
