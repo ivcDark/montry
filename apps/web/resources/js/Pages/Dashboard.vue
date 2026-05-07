@@ -29,6 +29,13 @@ const user = page.props.auth.user
                 </div>
 
                 <Link
+                    href="/sites"
+                    class="mt-6 inline-flex rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-neutral-950 hover:bg-emerald-400"
+                >
+                    Open sites
+                </Link>
+
+                <Link
                     href="/logout"
                     method="post"
                     as="button"

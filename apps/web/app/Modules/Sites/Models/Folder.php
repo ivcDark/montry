@@ -6,6 +6,7 @@ use App\Modules\Organizations\Models\Organization;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Folder extends Model
 {
@@ -30,5 +31,10 @@ class Folder extends Model
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    public function sites(): HasMany
+    {
+        return $this->hasMany(Site::class, 'folder_id');
     }
 }
