@@ -206,13 +206,12 @@ function httpPath(settings: MonitorSettings | null): string {
                         </p>
                     </div>
 
-                    <button
-                        type="button"
-                        disabled
-                        class="rounded-xl border border-white/10 px-4 py-2 text-sm text-neutral-500"
+                    <Link
+                        :href="`/sites/${site.id}/monitors/create`"
+                        class="rounded-xl border border-white/10 px-4 py-2 text-sm text-neutral-300 hover:bg-white/5"
                     >
-                        Add monitor soon
-                    </button>
+                        Add monitor
+                    </Link>
                 </div>
 
                 <div
@@ -254,6 +253,12 @@ function httpPath(settings: MonitorSettings | null): string {
                                     {{ formatTimeout(monitor.timeout_ms) }}
                                 </p>
                             </div>
+                            <Link
+                                :href="`/sites/${site.id}/monitors/${monitor.id}/edit`"
+                                class="rounded-xl border border-white/10 px-3 py-2 text-sm text-neutral-300 hover:bg-white/5"
+                            >
+                                Edit
+                            </Link>
                         </div>
 
                         <div
@@ -297,6 +302,41 @@ function httpPath(settings: MonitorSettings | null): string {
 
                                 <p class="mt-1 text-sm font-medium text-neutral-200">
                                     {{ monitor.settings?.follow_redirects ? 'Follow' : 'Do not follow' }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div
+                            v-if="monitor.type === 'ssl'"
+                            class="mt-5 grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-3"
+                        >
+                            <div>
+                                <p class="text-xs uppercase tracking-wide text-neutral-500">
+                                    Host
+                                </p>
+
+                                <p class="mt-1 truncate text-sm font-medium text-neutral-200">
+                                    {{ monitor.settings?.host ?? site.host }}
+                                </p>
+                            </div>
+
+                            <div>
+                                <p class="text-xs uppercase tracking-wide text-neutral-500">
+                                    Port
+                                </p>
+
+                                <p class="mt-1 text-sm font-medium text-neutral-200">
+                                    {{ monitor.settings?.port ?? 443 }}
+                                </p>
+                            </div>
+
+                            <div>
+                                <p class="text-xs uppercase tracking-wide text-neutral-500">
+                                    Warning
+                                </p>
+
+                                <p class="mt-1 text-sm font-medium text-neutral-200">
+                                    {{ monitor.settings?.warning_days ?? 14 }} days before expiry
                                 </p>
                             </div>
                         </div>

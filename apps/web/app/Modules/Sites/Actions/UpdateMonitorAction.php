@@ -2,21 +2,21 @@
 
 namespace App\Modules\Sites\Actions;
 
-use App\Modules\Sites\DTO\CreateMonitorData;
+use App\Modules\Sites\DTO\UpdateMonitorData;
 use App\Modules\Sites\Models\SiteMonitor;
-use App\Modules\Sites\Models\Site;
 
-final class CreateMonitorAction
+final class UpdateMonitorAction
 {
-    public function handle(Site $site, CreateMonitorData $data): SiteMonitor
+    public function handle(SiteMonitor $monitor, UpdateMonitorData $data): SiteMonitor
     {
-        return $site->monitors()->create([
+        $monitor->update([
             'name' => $data->name,
-            'type' => $data->type,
             'is_enabled' => $data->isEnabled,
             'interval_seconds' => $data->intervalSeconds,
             'timeout_ms' => $data->timeoutMs,
             'settings' => $data->settings,
         ]);
+
+        return $monitor->refresh();
     }
 }
