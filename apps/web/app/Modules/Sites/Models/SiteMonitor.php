@@ -6,6 +6,17 @@ use App\Modules\Sites\Enums\MonitorType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+
+/**
+ * @property integer site_id
+ * @property string name
+ * @property string type
+ * @property bool is_enabled
+ * @property integer internal_seconds
+ * @property integer timeout_ms
+ * @property string settings
+ * @property string last_checked_at
+ */
 class SiteMonitor extends Model
 {
     protected $fillable = [

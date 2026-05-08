@@ -7,6 +7,7 @@ use App\Modules\Sites\Actions\CreateDefaultFolderForOrganization;
 use App\Modules\Sites\Actions\CreateSiteAction;
 use App\Modules\Sites\Actions\GetCurrentOrganization;
 use App\Modules\Sites\Http\Requests\StoreSiteRequest;
+use App\Modules\Sites\Models\Folder;
 use App\Modules\Sites\Models\Site;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;

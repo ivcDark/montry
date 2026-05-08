@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
 
 type Organization = {
     id: string
@@ -41,7 +41,7 @@ type Site = {
     monitors: Monitor[]
 }
 
-defineProps<{
+const props = defineProps<{
     organization: Organization
     site: Site
 }>()
@@ -121,6 +121,22 @@ function httpMethod(settings: MonitorSettings | null): string {
 
 function httpPath(settings: MonitorSettings | null): string {
     return settings?.path ?? '/'
+}
+
+function toggleMonitor(monitor: Monitor): void {
+    router.patch(`/sites/${props.site.id}/monitors/${monitor.id}/toggle`, {}, {
+        preserveScroll: true,
+    })
+}
+
+function deleteMonitor(monitor: Monitor): void {
+    if (!confirm(`Delete monitor "${monitor.name}"?`)) {
+        return
+    }
+
+    router.delete(`/sites/${props.site.id}/monitors/${monitor.id}`, {
+        preserveScroll: true,
+    })
 }
 </script>
 
@@ -253,12 +269,30 @@ function httpPath(settings: MonitorSettings | null): string {
                                     {{ formatTimeout(monitor.timeout_ms) }}
                                 </p>
                             </div>
-                            <Link
-                                :href="`/sites/${site.id}/monitors/${monitor.id}/edit`"
-                                class="rounded-xl border border-white/10 px-3 py-2 text-sm text-neutral-300 hover:bg-white/5"
-                            >
-                                Edit
-                            </Link>
+                            <div class="flex shrink-0 items-center gap-2">
+                                <button
+                                    type="button"
+                                    class="rounded-xl border border-white/10 px-3 py-2 text-sm text-neutral-300 hover:bg-white/5"
+                                    @click="toggleMonitor(monitor)"
+                                >
+                                    {{ monitor.is_enabled ? 'Pause' : 'Resume' }}
+                                </button>
+
+                                <Link
+                                    :href="`/sites/${site.id}/monitors/${monitor.id}/edit`"
+                                    class="rounded-xl border border-white/10 px-3 py-2 text-sm text-neutral-300 hover:bg-white/5"
+                                >
+                                    Edit
+                                </Link>
+
+                                <button
+                                    type="button"
+                                    class="rounded-xl border border-red-500/20 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
+                                    @click="deleteMonitor(monitor)"
+                                >
+                                    Delete
+                                </button>
+                            </div>
                         </div>
 
                         <div

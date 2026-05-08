@@ -21,9 +21,21 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/sites/{site}/monitors', [\App\Modules\Sites\Http\Controllers\SiteMonitorController::class, 'store'])
         ->name('sites.monitors.store');
 
-    Route::get('/sites/{site}/monitors/{monitor}/edit', [\App\Modules\Sites\Http\Controllers\SiteMonitorController::class, 'edit'])
+    Route::get('/sites/{site}/monitors/{site_monitor}/edit', [\App\Modules\Sites\Http\Controllers\SiteMonitorController::class, 'edit'])
         ->name('sites.monitors.edit');
 
-    Route::put('/sites/{site}/monitors/{monitor}', [\App\Modules\Sites\Http\Controllers\SiteMonitorController::class, 'update'])
+    Route::put('/sites/{site}/monitors/{site_monitor}', [\App\Modules\Sites\Http\Controllers\SiteMonitorController::class, 'update'])
         ->name('sites.monitors.update');
+
+    Route::patch('/sites/{site}/monitors/{site_monitor}/toggle', [\App\Modules\Sites\Http\Controllers\SiteMonitorController::class, 'toggle'])
+        ->name('sites.monitors.toggle');
+
+    Route::delete('/sites/{site}/monitors/{site_monitor}', [\App\Modules\Sites\Http\Controllers\SiteMonitorController::class, 'destroy'])
+        ->name('sites.monitors.destroy');
+
+    Route::get('/sites/folders/create', [\App\Modules\Sites\Http\Controllers\FolderController::class, 'create'])
+        ->name('sites.folders.create');
+
+    Route::post('/sites/folders', [\App\Modules\Sites\Http\Controllers\FolderController::class, 'store'])
+        ->name('sites.folders.store');
 });

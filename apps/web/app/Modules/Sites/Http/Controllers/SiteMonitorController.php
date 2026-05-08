@@ -4,7 +4,9 @@ namespace App\Modules\Sites\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Sites\Actions\CreateMonitorAction;
+use App\Modules\Sites\Actions\DeleteMonitorAction;
 use App\Modules\Sites\Actions\GetCurrentOrganization;
+use App\Modules\Sites\Actions\ToggleMonitorAction;
 use App\Modules\Sites\Actions\UpdateMonitorAction;
 use App\Modules\Sites\DTO\CreateMonitorData;
 use App\Modules\Sites\DTO\UpdateMonitorData;
@@ -20,18 +22,20 @@ use Inertia\Response;
 final class SiteMonitorController extends Controller
 {
     public function __construct(
-        private CreateMonitorAction $createMonitorAction,
-        private UpdateMonitorAction $updateMonitorAction,
+        private readonly CreateMonitorAction $createMonitorAction,
+        private readonly UpdateMonitorAction $updateMonitorAction,
+        private readonly ToggleMonitorAction $toggleMonitorAction,
+        private readonly DeleteMonitorAction $deleteMonitorAction,
+        private readonly GetCurrentOrganization $getCurrentOrganization,
     ) {
     }
 
     public function create(
         Request $request,
-        Site $site,
-        GetCurrentOrganization $getCurrentOrganization,
+        Site $site
     ): Response
     {
-        $organization = $getCurrentOrganization->handle($request->user());
+        $organization = $this->getCurrentOrganization->handle($request->user());
 
         abort_unless(
             $site->organization_id === $organization->id,
@@ -63,16 +67,12 @@ final class SiteMonitorController extends Controller
 
     public function store(
         SaveMonitorRequest     $request,
-        Site                   $site,
-        GetCurrentOrganization $getCurrentOrganization,
+        Site                   $site
     ): RedirectResponse
     {
-        $organization = $getCurrentOrganization->handle($request->user());
+        $organization = $this->getCurrentOrganization->handle($request->user());
 
-        abort_unless(
-            $site->organization_id === $organization->id,
-            404,
-        );
+        abort_unless($site->organization_id === $organization->id, 404);
 
         $validated = $request->validated();
 
@@ -94,14 +94,13 @@ final class SiteMonitorController extends Controller
     public function edit(
         Request $request,
         Site $site,
-        SiteMonitor $monitor,
-        GetCurrentOrganization $getCurrentOrganization,
+        SiteMonitor $siteMonitor
     ): Response
     {
-        $organization = $getCurrentOrganization->handle($request->user());
+        $organization = $this->getCurrentOrganization->handle($request->user());
 
         abort_unless($site->organization_id === $organization->id, 404);
-        abort_unless($monitor->site_id === $site->id, 404);
+        abort_unless($siteMonitor->site_id === $site->id, 404);
 
         return Inertia::render('Sites/Monitors/Edit', [
             'organization' => [
@@ -118,15 +117,15 @@ final class SiteMonitorController extends Controller
                 'path' => $site->path,
             ],
             'monitor' => [
-                'id' => $monitor->id,
-                'type' => $monitor->type instanceof MonitorType
-                    ? $monitor->type->value
-                    : $monitor->type,
-                'name' => $monitor->name,
-                'is_enabled' => $monitor->is_enabled,
-                'interval_seconds' => $monitor->interval_seconds,
-                'timeout_ms' => $monitor->timeout_ms,
-                'settings' => $monitor->settings ?? [],
+                'id' => $siteMonitor->id,
+                'type' => $siteMonitor->type instanceof MonitorType
+                    ? $siteMonitor->type->value
+                    : $siteMonitor->type,
+                'name' => $siteMonitor->name,
+                'is_enabled' => $siteMonitor->is_enabled,
+                'interval_seconds' => $siteMonitor->interval_seconds,
+                'timeout_ms' => $siteMonitor->timeout_ms,
+                'settings' => $siteMonitor->settings ?? [],
             ],
             'monitorTypes' => $this->monitorTypes(),
         ]);
@@ -135,20 +134,19 @@ final class SiteMonitorController extends Controller
     public function update(
         SaveMonitorRequest $request,
         Site $site,
-        SiteMonitor $monitor,
-        GetCurrentOrganization $getCurrentOrganization,
+        SiteMonitor $siteMonitor
     ): RedirectResponse
     {
-        $organization = $getCurrentOrganization->handle($request->user());
+        $organization = $this->getCurrentOrganization->handle($request->user());
 
         abort_unless($site->organization_id === $organization->id, 404);
-        abort_unless($monitor->site_id === $site->id, 404);
+        abort_unless($siteMonitor->site_id === $site->id, 404);
 
         $validated = $request->validated();
 
-        $currentType = $monitor->type instanceof MonitorType
-            ? $monitor->type->value
-            : $monitor->type;
+        $currentType = $siteMonitor->type instanceof MonitorType
+            ? $siteMonitor->type->value
+            : $siteMonitor->type;
 
         /**
          * MVP decision:
@@ -157,7 +155,7 @@ final class SiteMonitorController extends Controller
         abort_unless($validated['type'] === $currentType, 422);
 
         $this->updateMonitorAction->handle(
-            monitor: $monitor,
+            monitor: $siteMonitor,
             data: new UpdateMonitorData(
                 name: $validated['name'],
                 isEnabled: $validated['is_enabled'],
@@ -166,6 +164,30 @@ final class SiteMonitorController extends Controller
                 settings: $validated['settings'],
             ),
         );
+
+        return to_route('sites.show', $site);
+    }
+
+    public function toggle(Request $request, Site $site, SiteMonitor $siteMonitor): RedirectResponse
+    {
+        $organization = $this->getCurrentOrganization->handle($request->user());
+
+        abort_unless($site->organization_id === $organization->id, 404);
+        abort_unless($siteMonitor->site_id === $site->id, 404);
+
+        $this->toggleMonitorAction->handle($siteMonitor);
+
+        return to_route('sites.show', $site);
+    }
+
+    public function destroy(Request $request, Site $site, SiteMonitor $siteMonitor): RedirectResponse
+    {
+        $organization = $this->getCurrentOrganization->handle($request->user());
+
+        abort_unless($site->organization_id === $organization->id, 404);
+        abort_unless($siteMonitor->site_id === $site->id, 404);
+
+        $this->deleteMonitorAction->handle($siteMonitor);
 
         return to_route('sites.show', $site);
     }
