@@ -7,11 +7,9 @@ use App\Modules\Sites\Actions\CreateDefaultFolderForOrganization;
 use App\Modules\Sites\Actions\CreateSiteAction;
 use App\Modules\Sites\Actions\GetCurrentOrganization;
 use App\Modules\Sites\Http\Requests\StoreSiteRequest;
-use App\Modules\Sites\Models\Folder;
-use App\Modules\Sites\Models\Site;
+use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -25,11 +23,11 @@ final class IndexController extends Controller
     {
         $organization = $getCurrentOrganization->handle($request->user());
 
-        $sites = Site::query()
+        $sites = MonitoredResource::query()
             ->where('organization_id', $organization->id)
             ->latest()
             ->get()
-            ->map(fn (Site $site): array => [
+            ->map(fn (MonitoredResource $site): array => [
                 'id' => $site->id,
                 'name' => $site->name,
                 'url' => $site->url,
@@ -73,7 +71,7 @@ final class IndexController extends Controller
 
     public function show(
         Request $request,
-        Site $site,
+        MonitoredResource $site,
         GetCurrentOrganization $getCurrentOrganization,
     ): Response
     {

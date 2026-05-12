@@ -2,14 +2,14 @@
 
 namespace App\Modules\Sites\Actions;
 
-use App\Modules\Sites\Models\SiteMonitor;
+use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 
 final class ToggleMonitorAction
 {
-    public function handle(SiteMonitor $siteMonitor): SiteMonitor
+    public function handle(Monitor $siteMonitor): Monitor
     {
         $siteMonitor->update([
-            'is_enabled' => ! $siteMonitor->is_enabled,
+            'enabled' => ! $siteMonitor->enabled,
         ]);
 
         return $siteMonitor;

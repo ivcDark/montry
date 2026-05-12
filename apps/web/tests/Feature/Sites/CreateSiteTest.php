@@ -2,13 +2,12 @@
 
 namespace Tests\Feature\Sites;
 
-use App\Models\User;
-use App\Modules\Organizations\Enums\OrganizationPlan;
+use App\Modules\Identity\Infrastructure\Persistence\Models\User;
+use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
+use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Organizations\Enums\OrganizationRole;
 use App\Modules\Organizations\Enums\OrganizationStatus;
-use App\Modules\Organizations\Models\Organization;
-use App\Modules\Sites\Models\Folder;
-use App\Modules\Sites\Models\Site;
+use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -23,8 +22,7 @@ class CreateSiteTest extends TestCase
             'name' => 'Acme',
             'slug' => 'acme',
             'timezone' => '+3',
-            'plan' => OrganizationPlan::Free,
-            'status' => OrganizationStatus::Active,
+            'status' => OrganizationStatus::Active->value,
         ]);
 
         $organization->users()->attach($user->id, [
@@ -33,7 +31,7 @@ class CreateSiteTest extends TestCase
             'joined_at' => now(),
         ]);
 
-        Folder::query()->create([
+        Project::query()->create([
             'organization_id' => $organization->id,
             'name' => 'default',
             'color' => '#ffffff',
@@ -50,7 +48,7 @@ class CreateSiteTest extends TestCase
 
         $response->assertRedirect('/sites');
 
-        $site = Site::query()->where('host', 'example.com')->firstOrFail();
+        $site = MonitoredResource::query()->where('host', 'example.com')->firstOrFail();
         $monitor = $site->monitors()->firstOrFail();
 
         $this->assertSame('/health?ready=1', $site->path);

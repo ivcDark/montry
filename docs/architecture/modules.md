@@ -1,0 +1,50 @@
+# Laravel Modules
+
+Дата обновления: 2026-05-12.
+
+`apps/web` развивается как modular monolith с DDD-lite границами. Новая целевая структура создана рядом с существующими рабочими модулями, чтобы не ломать текущие routes, controllers и Inertia/Vue страницы во время поэтапного рефакторинга.
+
+## Базовая структура модуля
+
+Каждый целевой модуль имеет одинаковую структуру:
+
+```text
+ModuleName/
+  Domain/
+  Application/
+  Infrastructure/
+    Providers/
+  Presentation/
+```
+
+- `Domain` - сущности, value objects, domain events, policies и contracts модуля.
+- `Application` - commands, handlers, queries, DTO и application services.
+- `Infrastructure` - Eloquent models/repositories, providers, integrations и технические adapters.
+- `Presentation` - HTTP controllers, form requests, resources, routes и другой входной слой.
+
+## Целевые модули
+
+- `Identity` - пользователи, аутентификация, организации, membership и текущая организация пользователя.
+- `Billing` - планы, лимиты, подписки, платежи и `LimitChecker`.
+- `Projects` - группы monitored resources, текущая замена старого понятия `Folder`.
+- `MonitoredResources` - сайты, домены и другие объекты мониторинга.
+- `Monitoring` - generic monitors, состояние проверок, история результатов и orchestration вокруг мониторинга.
+- `CheckTypes` - registry и definitions для `http`, `ssl`, `domain` и будущих типов проверок.
+- `Incidents` - открытие/закрытие инцидентов и история деградаций.
+- `Notifications` - каналы, правила и журналы уведомлений.
+- `Reports` - будущие отчеты и выгрузки.
+- `WorkerGateway` - внутренние API/DTO contracts между Laravel и Go poller.
+
+## Текущие legacy-модули
+
+Пока остаются на месте:
+
+- `Auth`
+- `Organizations`
+- `Sites`
+
+Они будут переноситься маленькими этапами согласно `docs/refactoring/architecture-refactor-plan.md`. До переноса их service providers остаются зарегистрированными, чтобы текущие страницы `/login`, `/register`, `/sites` и связанные actions продолжили работать.
+
+`Organizations\Models\Organization`, `Organizations\Models\OrganizationUser`, `Sites\Models\Folder`, `Sites\Models\Site` и `Sites\Models\SiteMonitor` являются временными совместимыми классами поверх новых моделей `Identity`, `Projects`, `MonitoredResources` и `Monitoring`. Новые use cases должны импортировать модели из целевых модулей, а legacy-классы нужны только для текущих routes/controllers до их отдельного переноса.
+
+Пустые старые каталоги `Dashboard`, `RabbitMQ`, `Users` не развиваются дальше. Новые изменения нужно вносить в целевые модули, если задача явно не требует правки существующего legacy-кода.

@@ -3,35 +3,20 @@ import { Head, Link } from '@inertiajs/vue3'
 </script>
 
 <template>
-    <Head title="Welcome" />
+    <Head title="Montri" />
 
-    <main class="min-h-screen bg-neutral-950 text-white">
-        <section class="mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center px-6 text-center">
-            <p class="text-sm font-medium text-emerald-400">Montri</p>
-
-            <h1 class="mt-4 text-4xl font-semibold tracking-tight">
-                Monitoring for apps, APIs and services.
+    <main class="flex min-h-screen items-center justify-center bg-neutral-950 px-6 text-white">
+        <section class="flex w-full max-w-sm flex-col items-center text-center">
+            <h1 class="text-5xl font-semibold tracking-normal">
+                Montri
             </h1>
 
-            <p class="mt-4 max-w-2xl text-neutral-400">
-                Modular monolith backend, Vue frontend and Go pollers for checks.
-            </p>
-
-            <div class="mt-8 flex gap-3">
-                <Link
-                    href="/login"
-                    class="rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-neutral-950"
-                >
-                    Sign in
-                </Link>
-
-                <Link
-                    href="/register"
-                    class="rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-neutral-200"
-                >
-                    Create account
-                </Link>
-            </div>
+            <Link
+                href="/login"
+                class="mt-8 inline-flex h-11 items-center justify-center rounded-lg bg-emerald-500 px-6 text-sm font-semibold text-neutral-950 hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:ring-offset-2 focus:ring-offset-neutral-950"
+            >
+                Войти
+            </Link>
         </section>
     </main>
 </template>

@@ -2,8 +2,7 @@
 
 namespace App\Modules\Sites\Models;
 
-use App\Modules\Sites\Enums\MonitorType;
-use Illuminate\Database\Eloquent\Model;
+use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 
@@ -17,31 +16,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string settings
  * @property string last_checked_at
  */
-class SiteMonitor extends Model
+class SiteMonitor extends Monitor
 {
-    protected $fillable = [
-        'site_id',
-        'name',
-        'type',
-        'is_enabled',
-        'interval_seconds',
-        'timeout_ms',
-        'settings',
-        'last_checked_at',
-    ];
-
-    protected $casts = [
-        'type' => MonitorType::class,
-        'is_enabled' => 'boolean',
-        'interval_seconds' => 'integer',
-        'timeout_ms' => 'integer',
-        'settings' => 'array',
-        'last_checked_at' => 'datetime',
-    ];
-
     public function site(): BelongsTo
     {
-        return $this->belongsTo(Site::class);
+        return $this->belongsTo(Site::class, 'monitored_resource_id');
     }
-
 }

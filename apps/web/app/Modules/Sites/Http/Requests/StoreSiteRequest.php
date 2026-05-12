@@ -4,7 +4,7 @@ namespace App\Modules\Sites\Http\Requests;
 
 use App\Modules\Sites\DTO\CreateSiteData;
 use App\Modules\Sites\Enums\SiteStatus;
-use App\Modules\Sites\Models\Folder;
+use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\ValidationException;
 
@@ -23,7 +23,7 @@ final class StoreSiteRequest extends FormRequest
         ];
     }
 
-    public function toData(string $organizationId, Folder $folder): CreateSiteData
+    public function toData(string $organizationId, Project $folder): CreateSiteData
     {
         $parsedUrl = $this->normalizeUrl(
             $this->string('url')->trim()->toString()

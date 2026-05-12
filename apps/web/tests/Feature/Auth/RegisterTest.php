@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Auth;
 
-use App\Models\User;
+use App\Modules\Identity\Infrastructure\Persistence\Models\User;
+use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Organizations\Enums\OrganizationRole;
-use App\Modules\Organizations\Models\Organization;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

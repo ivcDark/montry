@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    'poller' => [
+        'base_url' => env('POLLER_BASE_URL'),
+        'token' => env('POLLER_TOKEN'),
+        'internal_token' => env('POLLER_INTERNAL_TOKEN'),
+        'mock' => env('POLLER_MOCK', true),
+    ],
+
+    'telegram' => [
+        'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+    ],
+
 ];

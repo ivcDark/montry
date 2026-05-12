@@ -2,19 +2,20 @@
 
 namespace App\Modules\Sites\Actions;
 
+use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Sites\DTO\UpdateMonitorData;
-use App\Modules\Sites\Models\SiteMonitor;
 
 final class UpdateMonitorAction
 {
-    public function handle(SiteMonitor $monitor, UpdateMonitorData $data): SiteMonitor
+    public function handle(Monitor $monitor, UpdateMonitorData $data): Monitor
     {
         $monitor->update([
             'name' => $data->name,
-            'is_enabled' => $data->isEnabled,
+            'enabled' => $data->isEnabled,
             'interval_seconds' => $data->intervalSeconds,
             'timeout_ms' => $data->timeoutMs,
             'settings' => $data->settings,
+            'expected' => $data->expected ?: ($monitor->expected ?? []),
         ]);
 
         return $monitor->refresh();

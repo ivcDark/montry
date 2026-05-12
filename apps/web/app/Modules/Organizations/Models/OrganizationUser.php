@@ -2,18 +2,8 @@
 
 namespace App\Modules\Organizations\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use App\Modules\Identity\Infrastructure\Persistence\Models\OrganizationUser as IdentityOrganizationUser;
 
-class OrganizationUser extends Model
+class OrganizationUser extends IdentityOrganizationUser
 {
-    use HasFactory;
-
-    protected $fillable = [
-        'organization_id',
-        'user_id',
-        'role',
-        'invited_at',
-        'joined_at',
-    ];
 }

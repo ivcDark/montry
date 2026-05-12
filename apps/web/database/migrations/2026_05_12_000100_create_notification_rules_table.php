@@ -1,0 +1,29 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('notification_rules', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('organization_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('notification_channel_id')->constrained()->cascadeOnDelete();
+            $table->string('event_type', 64);
+            $table->boolean('enabled')->default(true);
+            $table->jsonb('conditions')->nullable();
+            $table->timestamps();
+
+            $table->index(['organization_id', 'event_type']);
+            $table->index(['notification_channel_id', 'enabled']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('notification_rules');
+    }
+};

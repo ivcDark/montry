@@ -13,6 +13,7 @@ final readonly class CreateMonitorData
         public int $intervalSeconds,
         public int $timeoutMs,
         public array $settings = [],
+        public array $expected = [],
     ) {
     }
 }

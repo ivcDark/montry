@@ -3,13 +3,13 @@
 namespace App\Modules\Sites\Actions;
 
 use App\Modules\Sites\DTO\CreateFolderData;
-use App\Modules\Sites\Models\Folder;
+use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
 
 final class CreateFolderAction
 {
-    public function handle(CreateFolderData $data): Folder
+    public function handle(CreateFolderData $data): Project
     {
-        return Folder::query()->create([
+        return Project::query()->create([
             'organization_id' => $data->organizationId,
             'name' => $data->name,
             'color' => $data->color,

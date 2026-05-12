@@ -15,22 +15,28 @@ function submit() {
 </script>
 
 <template>
-    <Head title="Sign in" />
+    <Head title="Вход" />
 
-    <main class="min-h-screen bg-neutral-950 text-white flex items-center justify-center px-6">
-        <section class="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 shadow-2xl">
+    <main class="flex min-h-screen items-center justify-center bg-neutral-950 px-4 py-10 text-white sm:px-6">
+        <section class="w-full max-w-md rounded-lg border border-white/10 bg-neutral-900 p-6 shadow-2xl sm:p-8">
             <div class="mb-8">
-                <p class="text-sm font-medium text-emerald-400">Montri</p>
-                <h1 class="mt-2 text-2xl font-semibold">Sign in</h1>
+                <Link href="/" class="text-sm font-semibold text-emerald-400 hover:text-emerald-300">
+                    Montri
+                </Link>
+
+                <h1 class="mt-3 text-2xl font-semibold tracking-normal">
+                    Войти в аккаунт
+                </h1>
+
                 <p class="mt-2 text-sm text-neutral-400">
-                    Continue monitoring your services.
+                    Используйте email и пароль, указанные при регистрации.
                 </p>
             </div>
 
             <form class="space-y-5" @submit.prevent="submit">
                 <div>
-                    <label for="email" class="mb-2 block text-sm font-medium">
-                        Email
+                    <label for="email" class="mb-2 block text-sm font-medium text-neutral-200">
+                        Email <span class="text-red-300">*</span>
                     </label>
 
                     <input
@@ -39,17 +45,21 @@ function submit() {
                         type="email"
                         autocomplete="email"
                         autofocus
-                        class="w-full rounded-xl border border-white/10 bg-neutral-900 px-4 py-3 text-sm outline-none focus:border-emerald-400"
-                    />
+                        required
+                        inputmode="email"
+                        :aria-invalid="Boolean(form.errors.email)"
+                        aria-describedby="email-error"
+                        class="h-11 w-full rounded-lg border border-white/10 bg-neutral-950 px-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
+                    >
 
-                    <p v-if="form.errors.email" class="mt-2 text-sm text-red-400">
+                    <p id="email-error" v-if="form.errors.email" class="mt-2 text-sm text-red-300">
                         {{ form.errors.email }}
                     </p>
                 </div>
 
                 <div>
-                    <label for="password" class="mb-2 block text-sm font-medium">
-                        Password
+                    <label for="password" class="mb-2 block text-sm font-medium text-neutral-200">
+                        Пароль <span class="text-red-300">*</span>
                     </label>
 
                     <input
@@ -57,38 +67,41 @@ function submit() {
                         v-model="form.password"
                         type="password"
                         autocomplete="current-password"
-                        class="w-full rounded-xl border border-white/10 bg-neutral-900 px-4 py-3 text-sm outline-none focus:border-emerald-400"
-                    />
+                        required
+                        :aria-invalid="Boolean(form.errors.password)"
+                        aria-describedby="password-error"
+                        class="h-11 w-full rounded-lg border border-white/10 bg-neutral-950 px-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
+                    >
 
-                    <p v-if="form.errors.password" class="mt-2 text-sm text-red-400">
+                    <p id="password-error" v-if="form.errors.password" class="mt-2 text-sm text-red-300">
                         {{ form.errors.password }}
                     </p>
                 </div>
 
-                <label class="flex items-center gap-3 text-sm text-neutral-300">
+                <label class="flex items-center gap-3 rounded-lg border border-white/10 bg-neutral-950 px-3 py-3 text-sm text-neutral-300">
                     <input
                         v-model="form.remember"
                         type="checkbox"
-                        class="rounded border-white/10 bg-neutral-900"
-                    />
+                        class="rounded border-white/10 bg-neutral-900 text-emerald-500"
+                    >
 
-                    Remember me
+                    Запомнить меня
                 </label>
 
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-neutral-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    class="flex h-11 w-full items-center justify-center rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-neutral-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                    <span v-if="form.processing">Signing in...</span>
-                    <span v-else>Sign in</span>
+                    <span v-if="form.processing">Входим...</span>
+                    <span v-else>Войти</span>
                 </button>
             </form>
 
             <p class="mt-6 text-sm text-neutral-400">
-                No account yet?
-                <Link href="/register" class="text-emerald-400 hover:text-emerald-300">
-                    Create one
+                Нет аккаунта?
+                <Link href="/register" class="font-medium text-emerald-400 hover:text-emerald-300">
+                    Создать аккаунт
                 </Link>
             </p>
         </section>

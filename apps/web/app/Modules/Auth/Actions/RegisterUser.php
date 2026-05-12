@@ -2,8 +2,8 @@
 
 namespace App\Modules\Auth\Actions;
 
-use App\Models\User;
 use App\Modules\Auth\DTO\RegisterUserData;
+use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Hash;
 

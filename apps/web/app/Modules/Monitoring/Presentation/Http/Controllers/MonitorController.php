@@ -1,0 +1,181 @@
+<?php
+
+namespace App\Modules\Monitoring\Presentation\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
+use App\Modules\Monitoring\Application\Commands\CreateMonitorCommand;
+use App\Modules\Monitoring\Application\Commands\PauseMonitorCommand;
+use App\Modules\Monitoring\Application\Commands\ResumeMonitorCommand;
+use App\Modules\Monitoring\Application\Commands\UpdateMonitorCommand;
+use App\Modules\Monitoring\Application\Handlers\CreateMonitorHandler;
+use App\Modules\Monitoring\Application\Handlers\PauseMonitorHandler;
+use App\Modules\Monitoring\Application\Handlers\ResumeMonitorHandler;
+use App\Modules\Monitoring\Application\Handlers\UpdateMonitorHandler;
+use App\Modules\Monitoring\Application\Services\CheckTypeRegistry;
+use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
+use App\Modules\Monitoring\Presentation\Http\Requests\SaveMonitorRequest;
+use App\Modules\Sites\Actions\DeleteMonitorAction;
+use App\Modules\Sites\Actions\GetCurrentOrganization;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
+
+final class MonitorController extends Controller
+{
+    public function __construct(
+        private readonly GetCurrentOrganization $getCurrentOrganization,
+    ) {
+    }
+
+    public function create(Request $request, MonitoredResource $site, CheckTypeRegistry $checkTypes): Response
+    {
+        $organization = $this->getCurrentOrganization->handle($request->user());
+        abort_unless($site->organization_id === $organization->id, 404);
+
+        return Inertia::render('Sites/Monitors/Create', [
+            'organization' => ['id' => $organization->id, 'name' => $organization->name],
+            'site' => $this->sitePayload($site),
+            'monitorTypes' => $this->monitorTypes($checkTypes),
+        ]);
+    }
+
+    public function store(
+        SaveMonitorRequest $request,
+        MonitoredResource $site,
+        CreateMonitorHandler $createMonitor,
+    ): RedirectResponse {
+        $organization = $this->getCurrentOrganization->handle($request->user());
+        abort_unless($site->organization_id === $organization->id, 404);
+
+        $validated = $request->validated();
+
+        $createMonitor->handle(new CreateMonitorCommand(
+            organizationId: $organization->id,
+            projectId: $site->project_id,
+            monitoredResourceId: $site->id,
+            type: $validated['type'],
+            name: $validated['name'],
+            enabled: $validated['is_enabled'],
+            intervalSeconds: $validated['interval_seconds'],
+            timeoutMs: $validated['timeout_ms'],
+            settings: $validated['settings'],
+            expected: $validated['expected'] ?? [],
+        ));
+
+        return redirect()->route('sites.show', $site);
+    }
+
+    public function edit(
+        Request $request,
+        MonitoredResource $site,
+        Monitor $siteMonitor,
+        CheckTypeRegistry $checkTypes,
+    ): Response {
+        $organization = $this->getCurrentOrganization->handle($request->user());
+        abort_unless($site->organization_id === $organization->id, 404);
+        abort_unless($siteMonitor->monitored_resource_id === $site->id, 404);
+
+        return Inertia::render('Sites/Monitors/Edit', [
+            'organization' => ['id' => $organization->id, 'name' => $organization->name],
+            'site' => $this->sitePayload($site),
+            'monitor' => [
+                'id' => $siteMonitor->id,
+                'type' => $siteMonitor->type,
+                'name' => $siteMonitor->name,
+                'is_enabled' => $siteMonitor->is_enabled,
+                'interval_seconds' => $siteMonitor->interval_seconds,
+                'timeout_ms' => $siteMonitor->timeout_ms,
+                'settings' => $siteMonitor->settings ?? [],
+                'expected' => $siteMonitor->expected ?? [],
+            ],
+            'monitorTypes' => $this->monitorTypes($checkTypes),
+        ]);
+    }
+
+    public function update(
+        SaveMonitorRequest $request,
+        MonitoredResource $site,
+        Monitor $siteMonitor,
+        UpdateMonitorHandler $updateMonitor,
+    ): RedirectResponse {
+        $organization = $this->getCurrentOrganization->handle($request->user());
+        abort_unless($site->organization_id === $organization->id, 404);
+        abort_unless($siteMonitor->monitored_resource_id === $site->id, 404);
+        abort_unless($request->validated('type') === $siteMonitor->type, 422);
+
+        $validated = $request->validated();
+
+        $updateMonitor->handle(new UpdateMonitorCommand(
+            monitorId: $siteMonitor->id,
+            name: $validated['name'],
+            enabled: $validated['is_enabled'],
+            intervalSeconds: $validated['interval_seconds'],
+            timeoutMs: $validated['timeout_ms'],
+            settings: $validated['settings'],
+            expected: $validated['expected'] ?? [],
+        ));
+
+        return to_route('sites.show', $site);
+    }
+
+    public function toggle(
+        Request $request,
+        MonitoredResource $site,
+        Monitor $siteMonitor,
+        PauseMonitorHandler $pauseMonitor,
+        ResumeMonitorHandler $resumeMonitor,
+    ): RedirectResponse {
+        $organization = $this->getCurrentOrganization->handle($request->user());
+        abort_unless($site->organization_id === $organization->id, 404);
+        abort_unless($siteMonitor->monitored_resource_id === $site->id, 404);
+
+        if ($siteMonitor->enabled) {
+            $pauseMonitor->handle(new PauseMonitorCommand($siteMonitor->id));
+        } else {
+            $resumeMonitor->handle(new ResumeMonitorCommand($siteMonitor->id));
+        }
+
+        return to_route('sites.show', $site);
+    }
+
+    public function destroy(
+        Request $request,
+        MonitoredResource $site,
+        Monitor $siteMonitor,
+        DeleteMonitorAction $deleteMonitor,
+    ): RedirectResponse {
+        $organization = $this->getCurrentOrganization->handle($request->user());
+        abort_unless($site->organization_id === $organization->id, 404);
+        abort_unless($siteMonitor->monitored_resource_id === $site->id, 404);
+
+        $deleteMonitor->handle($siteMonitor);
+
+        return to_route('sites.show', $site);
+    }
+
+    private function sitePayload(MonitoredResource $site): array
+    {
+        return [
+            'id' => $site->id,
+            'name' => $site->name,
+            'url' => $site->url,
+            'scheme' => $site->scheme,
+            'host' => $site->host,
+            'port' => $site->port,
+            'path' => $site->path,
+        ];
+    }
+
+    private function monitorTypes(CheckTypeRegistry $checkTypes): array
+    {
+        return collect($checkTypes->all())
+            ->map(fn ($definition) => [
+                'value' => $definition->type(),
+                'label' => $definition->label(),
+            ])
+            ->values()
+            ->all();
+    }
+}

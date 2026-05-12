@@ -2,11 +2,10 @@
 
 namespace App\Modules\Organizations\Actions;
 
-use App\Models\User;
-use App\Modules\Organizations\Enums\OrganizationPlan;
+use App\Modules\Identity\Infrastructure\Persistence\Models\User;
+use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Organizations\Enums\OrganizationRole;
 use App\Modules\Organizations\Enums\OrganizationStatus;
-use App\Modules\Organizations\Models\Organization;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 
@@ -20,8 +19,7 @@ final class CreateOrganizationForUser
             'name' => $name,
             'slug' => $this->uniqueSlug($name),
             'timezone' => '+3',
-            'plan' => OrganizationPlan::Free,
-            'status' => OrganizationStatus::Active,
+            'status' => OrganizationStatus::Active->value,
         ]);
 
         $organization->users()->attach($user->id, [

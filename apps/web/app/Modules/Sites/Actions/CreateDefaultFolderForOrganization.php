@@ -2,16 +2,16 @@
 
 namespace App\Modules\Sites\Actions;
 
-use App\Modules\Organizations\Models\Organization;
-use App\Modules\Sites\Models\Folder;
+use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
+use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
 use Illuminate\Database\QueryException;
 
 final class CreateDefaultFolderForOrganization
 {
-    public function handle(Organization $organization): Folder
+    public function handle(Organization $organization): Project
     {
         try {
-            return Folder::query()->firstOrCreate(
+            return Project::query()->firstOrCreate(
                 [
                     'organization_id' => $organization->id,
                     'is_default' => true,
@@ -23,7 +23,7 @@ final class CreateDefaultFolderForOrganization
                 ],
             );
         } catch (QueryException) {
-            return Folder::query()
+            return Project::query()
                 ->where('organization_id', $organization->id)
                 ->where('is_default', true)
                 ->firstOrFail();

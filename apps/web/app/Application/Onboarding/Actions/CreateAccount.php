@@ -2,9 +2,9 @@
 
 namespace App\Application\Onboarding\Actions;
 
-use App\Models\User;
 use App\Modules\Auth\Actions\RegisterUser;
 use App\Modules\Auth\DTO\RegisterUserData;
+use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Organizations\Actions\CreateOrganizationForUser;
 use App\Modules\Sites\Actions\CreateDefaultFolderForOrganization;
 use Illuminate\Support\Facades\DB;

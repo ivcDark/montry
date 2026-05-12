@@ -2,8 +2,8 @@
 
 namespace App\Modules\Sites\Actions;
 
-use App\Models\User;
-use App\Modules\Organizations\Models\Organization;
+use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
+use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use RuntimeException;
 
 final class GetCurrentOrganization

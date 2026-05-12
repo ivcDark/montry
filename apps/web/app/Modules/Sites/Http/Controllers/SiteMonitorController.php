@@ -12,8 +12,8 @@ use App\Modules\Sites\DTO\CreateMonitorData;
 use App\Modules\Sites\DTO\UpdateMonitorData;
 use App\Modules\Sites\Enums\MonitorType;
 use App\Modules\Sites\Http\Requests\SaveMonitorRequest;
-use App\Modules\Sites\Models\Site;
-use App\Modules\Sites\Models\SiteMonitor;
+use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
+use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -32,7 +32,7 @@ final class SiteMonitorController extends Controller
 
     public function create(
         Request $request,
-        Site $site
+        MonitoredResource $site
     ): Response
     {
         $organization = $this->getCurrentOrganization->handle($request->user());
@@ -67,7 +67,7 @@ final class SiteMonitorController extends Controller
 
     public function store(
         SaveMonitorRequest     $request,
-        Site                   $site
+        MonitoredResource      $site
     ): RedirectResponse
     {
         $organization = $this->getCurrentOrganization->handle($request->user());
@@ -93,8 +93,8 @@ final class SiteMonitorController extends Controller
 
     public function edit(
         Request $request,
-        Site $site,
-        SiteMonitor $siteMonitor
+        MonitoredResource $site,
+        Monitor $siteMonitor
     ): Response
     {
         $organization = $this->getCurrentOrganization->handle($request->user());
@@ -133,8 +133,8 @@ final class SiteMonitorController extends Controller
 
     public function update(
         SaveMonitorRequest $request,
-        Site $site,
-        SiteMonitor $siteMonitor
+        MonitoredResource $site,
+        Monitor $siteMonitor
     ): RedirectResponse
     {
         $organization = $this->getCurrentOrganization->handle($request->user());
@@ -168,7 +168,7 @@ final class SiteMonitorController extends Controller
         return to_route('sites.show', $site);
     }
 
-    public function toggle(Request $request, Site $site, SiteMonitor $siteMonitor): RedirectResponse
+    public function toggle(Request $request, MonitoredResource $site, Monitor $siteMonitor): RedirectResponse
     {
         $organization = $this->getCurrentOrganization->handle($request->user());
 
@@ -180,7 +180,7 @@ final class SiteMonitorController extends Controller
         return to_route('sites.show', $site);
     }
 
-    public function destroy(Request $request, Site $site, SiteMonitor $siteMonitor): RedirectResponse
+    public function destroy(Request $request, MonitoredResource $site, Monitor $siteMonitor): RedirectResponse
     {
         $organization = $this->getCurrentOrganization->handle($request->user());
 

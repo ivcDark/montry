@@ -1,7 +1,7 @@
 import './bootstrap'
 import '../css/app.css'
 
-import { createApp, h } from 'vue'
+import { createApp, h, type DefineComponent } from 'vue'
 import { createInertiaApp } from '@inertiajs/vue3'
 
 createInertiaApp({
@@ -12,7 +12,7 @@ createInertiaApp({
             eager: true,
         })
 
-        const page = pages[`./Pages/${name}.vue`] as { default: unknown } | undefined
+        const page = pages[`./Pages/${name}.vue`] as { default: DefineComponent } | undefined
 
         if (!page) {
             console.error('Available Inertia pages:', Object.keys(pages))

@@ -2,11 +2,11 @@
 
 namespace App\Modules\Sites\Actions;
 
-use App\Modules\Sites\Models\SiteMonitor;
+use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 
 final class DeleteMonitorAction
 {
-    public function handle(SiteMonitor $siteMonitor): void
+    public function handle(Monitor $siteMonitor): void
     {
         $siteMonitor->delete();
     }

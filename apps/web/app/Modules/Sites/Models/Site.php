@@ -2,13 +2,9 @@
 
 namespace App\Modules\Sites\Models;
 
-use App\Modules\Organizations\Models\Organization;
-use App\Modules\Sites\Enums\SiteStatus;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Query\Builder;
 
 /**
  * @property integer $id
@@ -28,44 +24,15 @@ use Illuminate\Database\Query\Builder;
  * @property-read Folder folder Папка/проект
  * @property-read SiteMonitor monitors Типы проверок сайта
  */
-class Site extends Model
+class Site extends MonitoredResource
 {
-    use HasFactory;
-
-    protected $fillable = [
-        'organization_id',
-        'folder_id',
-        'created_user_id',
-        'name',
-        'url',
-        'scheme',
-        'host',
-        'port',
-        'path',
-        'status',
-        'notes',
-    ];
-
-    protected function casts(): array
-    {
-        return [
-            'port' => 'integer',
-            'last_checked_at' => 'datetime',
-        ];
-    }
-
-    public function organization(): BelongsTo
-    {
-        return $this->belongsTo(Organization::class);
-    }
-
     public function folder(): BelongsTo
     {
-        return $this->belongsTo(Folder::class, 'folder_id');
+        return $this->belongsTo(Folder::class, 'project_id');
     }
 
     public function monitors(): HasMany
     {
-        return $this->hasMany(SiteMonitor::class, 'site_id');
+        return $this->hasMany(SiteMonitor::class, 'monitored_resource_id');
     }
 }
