@@ -13,11 +13,127 @@ Go poller не должен:
 
 ## Authentication
 
-Для локального MVP `POLLER_INTERNAL_TOKEN` может быть пустым. Если token задан, Go должен отправлять:
+Для локального MVP internal token может быть пустым. Если token задан, Go должен отправлять:
 
 ```http
-Authorization: Bearer <POLLER_INTERNAL_TOKEN>
+Authorization: Bearer <LARAVEL_INTERNAL_API_TOKEN>
 ```
+
+В Laravel это значение может соответствовать `POLLER_INTERNAL_TOKEN`, пока названия env не унифицированы.
+
+## GET `/internal/monitors/due`
+
+Ожидаемый MVP endpoint для получения плановых проверок. Если endpoint еще не реализован в Laravel, Go client уже должен считать этот контракт целевым, но Laravel-код в рамках задач poller не меняется.
+
+Request:
+
+```http
+GET /internal/monitors/due?limit=100
+Authorization: Bearer <LARAVEL_INTERNAL_API_TOKEN>
+Accept: application/json
+```
+
+Response:
+
+```json
+{
+  "data": [
+    {
+      "id": "job-uuid",
+      "event_id": "event-uuid",
+      "event_type": "scheduled_check_due",
+      "monitor_id": 1,
+      "check_type": "http",
+      "target": "https://example.ru",
+      "settings": {
+        "method": "GET",
+        "follow_redirects": true,
+        "verify_ssl": true
+      },
+      "expected": {
+        "status_codes": [200],
+        "max_response_time_ms": 5000
+      },
+      "timeout_ms": 5000,
+      "requested_at": "2026-05-13T10:00:00+04:00"
+    }
+  ]
+}
+```
+
+Laravel flow:
+
+1. Select enabled monitors where `next_check_at <= now()`.
+2. Build stable worker payloads.
+3. Return generic check jobs without exposing PHP classes.
+4. Keep ownership of monitor scheduling and state transitions inside Laravel.
+
+## POST poller `/internal/manual-checks`
+
+MVP endpoint owned by the Go poller. Laravel uses it after the user clicks
+“Check now”. Laravel must validate user permissions and billing limits before
+calling this endpoint.
+
+Request:
+
+```http
+POST {POLLER_BASE_URL}/internal/manual-checks
+Authorization: Bearer <POLLER_TOKEN>
+Content-Type: application/json
+Accept: application/json
+```
+
+Payload:
+
+```json
+{
+  "event_id": "uuid",
+  "event_type": "manual_check_requested",
+  "monitor_id": 1,
+  "check_type": "http",
+  "target": "https://example.ru",
+  "settings": {
+    "method": "GET",
+    "follow_redirects": true,
+    "verify_ssl": true
+  },
+  "expected": {
+    "status_codes": [200],
+    "max_response_time_ms": 5000
+  },
+  "timeout_ms": 5000,
+  "requested_at": "2026-05-13T10:00:00+04:00"
+}
+```
+
+Response:
+
+```json
+{
+  "accepted": true,
+  "event_id": "uuid"
+}
+```
+
+Statuses:
+
+- `202` - job accepted into the poller queue;
+- `400` - invalid JSON or missing required fields;
+- `401` - invalid or missing Bearer token when `POLLER_MANUAL_API_TOKEN` is set;
+- `422` - unknown `check_type`;
+- `503` - manual jobs queue is full or unavailable;
+- `408` - request context timed out before enqueue.
+
+Poller flow:
+
+1. Validate Bearer token if `POLLER_MANUAL_API_TOKEN` is set.
+2. Validate generic payload fields.
+3. Check `check_type` through the checker registry.
+4. Convert payload to `CheckJob` with `source = manual`.
+5. Enqueue into the shared bounded jobs channel.
+6. Worker pool executes the check and posts result to Laravel `/internal/check-results`.
+
+Go poller does not check tariffs, user permissions, incidents or notifications.
 
 ## POST `/internal/check-results`
 
