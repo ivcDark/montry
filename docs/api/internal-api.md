@@ -23,7 +23,7 @@ Authorization: Bearer <LARAVEL_INTERNAL_API_TOKEN>
 
 ## GET `/internal/monitors/due`
 
-Ожидаемый MVP endpoint для получения плановых проверок. Если endpoint еще не реализован в Laravel, Go client уже должен считать этот контракт целевым, но Laravel-код в рамках задач poller не меняется.
+MVP endpoint для получения плановых проверок.
 
 Request:
 
@@ -176,9 +176,10 @@ Laravel flow:
 2. Resolve monitor by `monitor_id`.
 3. Normalize worker result through `CheckTypeRegistry`.
 4. Save `check_results`.
-5. Update monitor status/counters.
-6. Emit Laravel event.
-7. Incidents module opens/closes incidents according to Laravel rules.
+5. If `event_id` was already processed, return the existing saved result without creating a duplicate.
+6. Update monitor status/counters and `next_check_at`.
+7. Emit Laravel event.
+8. Incidents module opens/closes incidents according to Laravel rules.
 
 ## POST `/monitors/{monitor}/check-now`
 

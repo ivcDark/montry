@@ -2,6 +2,7 @@
 
 namespace App\Modules\Monitoring\Application\Handlers;
 
+use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\Monitoring\Application\Commands\UpdateMonitorCommand;
 use App\Modules\Monitoring\Application\Services\CheckTypeRegistry;
 use App\Modules\Monitoring\Domain\Contracts\MonitorRepositoryInterface;
@@ -12,13 +13,14 @@ final readonly class UpdateMonitorHandler
     public function __construct(
         private CheckTypeRegistry $checkTypeRegistry,
         private MonitorRepositoryInterface $monitors,
-    ) {
-    }
+        private LimitChecker $limits,
+    ) {}
 
     public function handle(UpdateMonitorCommand $command): Monitor
     {
         $monitor = $this->monitors->getById($command->monitorId);
         $definition = $this->checkTypeRegistry->get($monitor->type);
+        $this->limits->assertCanUseInterval($monitor->organization_id, $command->intervalSeconds);
 
         $monitor->name = $command->name;
         $monitor->enabled = $command->enabled;

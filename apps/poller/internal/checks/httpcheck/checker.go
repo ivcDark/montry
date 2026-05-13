@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strings"
 	"time"
@@ -38,6 +39,14 @@ func (c Checker) Check(ctx context.Context, job jobs.CheckJob) (checks.CheckResu
 	if err != nil {
 		return failedResult(job, startedAt, "http_invalid_url", err.Error(), false), err
 	}
+	var remoteIP string
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			if tcpAddr, ok := info.Conn.RemoteAddr().(*net.TCPAddr); ok {
+				remoteIP = tcpAddr.IP.String()
+			}
+		},
+	}))
 
 	for key, value := range cfg.headers {
 		req.Header.Set(key, value)
@@ -63,6 +72,7 @@ func (c Checker) Check(ctx context.Context, job jobs.CheckJob) (checks.CheckResu
 	raw := map[string]any{
 		"status_code":      resp.StatusCode,
 		"response_time_ms": responseTime.Milliseconds(),
+		"ip":               remoteIP,
 		"headers":          basicHeaders(resp.Header),
 		"final_url":        resp.Request.URL.String(),
 	}

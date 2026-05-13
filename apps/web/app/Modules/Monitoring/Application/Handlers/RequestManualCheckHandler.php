@@ -2,6 +2,7 @@
 
 namespace App\Modules\Monitoring\Application\Handlers;
 
+use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\Monitoring\Application\Commands\RequestManualCheckCommand;
 use App\Modules\Monitoring\Application\Services\CheckTypeRegistry;
 use App\Modules\Monitoring\Domain\Contracts\MonitorRepositoryInterface;
@@ -18,8 +19,8 @@ final readonly class RequestManualCheckHandler
         private CheckTypeRegistry $checkTypeRegistry,
         private MonitorRepositoryInterface $monitors,
         private MonitoringWorkerClientInterface $workerClient,
-    ) {
-    }
+        private LimitChecker $limits,
+    ) {}
 
     public function handle(RequestManualCheckCommand $command): Monitor
     {
@@ -29,6 +30,7 @@ final readonly class RequestManualCheckHandler
             throw new DomainException('Cannot request a manual check for a paused monitor.');
         }
 
+        $this->limits->assertCanRequestManualCheck($monitor->organization_id);
         $this->checkTypeRegistry->get($monitor->type);
         $monitor->loadMissing('monitoredResource');
 

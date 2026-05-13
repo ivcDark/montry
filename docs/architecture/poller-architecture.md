@@ -361,9 +361,54 @@ Payload в Laravel:
   "result": {
     "status_code": 200,
     "response_time_ms": 341,
-    "ip": "1.2.3.4"
+    "ip": "1.2.3.4",
+    "headers": {
+      "server": "nginx"
+    }
   },
   "error": null
+}
+```
+
+Для HTTP `result` должен использовать контракт:
+
+```json
+{
+  "status_code": 200,
+  "response_time_ms": 341,
+  "ip": "1.2.3.4",
+  "headers": {
+    "server": "nginx"
+  }
+}
+```
+
+Для SSL `result` должен использовать контракт, который Laravel нормализует без
+переименований:
+
+```json
+{
+  "valid": true,
+  "issued_at": "2026-01-01T00:00:00Z",
+  "expires_at": "2026-06-01T00:00:00Z",
+  "days_until_expiration": 19,
+  "issuer": "CN=Test Issuer",
+  "subject": "CN=example.com",
+  "serial_number": "123",
+  "dns_names": ["example.com", "www.example.com"],
+  "chain_length": 2
+}
+```
+
+Для Domain `result` должен использовать контракт:
+
+```json
+{
+  "registered": true,
+  "domain": "example.com",
+  "expires_at": "2026-08-13T04:00:00Z",
+  "days_until_expiration": 92,
+  "registrar": "Example Registrar, Inc."
 }
 ```
 

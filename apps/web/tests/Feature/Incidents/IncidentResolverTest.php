@@ -79,7 +79,7 @@ final class IncidentResolverTest extends TestCase
 
         $organization = Organization::query()->create([
             'name' => 'Acme',
-            'slug' => 'acme-' . $user->id,
+            'slug' => 'acme-'.$user->id,
             'timezone' => '+3',
             'status' => 'active',
         ]);
@@ -130,7 +130,9 @@ final class IncidentResolverTest extends TestCase
     private function receiveHttpResult(Monitor $monitor, int $statusCode, string $checkedAt)
     {
         return app(ReceiveCheckResultHandler::class)->handle(new ReceiveCheckResultCommand(
+            eventId: null,
             monitorId: $monitor->id,
+            checkType: 'http',
             workerResult: [
                 'status_code' => $statusCode,
                 'response_time_ms' => 100,

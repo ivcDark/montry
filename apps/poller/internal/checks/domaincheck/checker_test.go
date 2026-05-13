@@ -95,6 +95,46 @@ func TestCheckerReturnsInvalidDomain(t *testing.T) {
 	}
 }
 
+func TestCheckerReturnsLaravelDomainResultContract(t *testing.T) {
+	checker := Checker{
+		lookup: func(context.Context, string) (string, error) {
+			return comWhoisFixture, nil
+		},
+	}
+
+	result, err := checker.Check(context.Background(), jobs.CheckJob{
+		EventID:   "event-1",
+		MonitorID: "monitor-1",
+		Type:      "domain",
+		Settings: map[string]any{
+			"domain":       "example.com",
+			"warning_days": []any{float64(30), float64(14), float64(7)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("check: %v", err)
+	}
+
+	if result.Raw["registered"] != true {
+		t.Fatalf("expected registered=true, got %#v", result.Raw["registered"])
+	}
+	if result.Raw["domain"] != "example.com" {
+		t.Fatalf("expected domain example.com, got %#v", result.Raw["domain"])
+	}
+	if result.Raw["expires_at"] != "2026-08-13T04:00:00Z" {
+		t.Fatalf("expected expires_at in Laravel contract, got %#v", result.Raw["expires_at"])
+	}
+	if result.Raw["days_until_expiration"] == nil {
+		t.Fatalf("expected days_until_expiration in raw result")
+	}
+	if result.Raw["registrar"] != "Example Registrar, Inc." {
+		t.Fatalf("expected registrar from WHOIS, got %#v", result.Raw["registrar"])
+	}
+	if _, exists := result.Raw["days_until_expiry"]; exists {
+		t.Fatalf("unexpected legacy days_until_expiry field")
+	}
+}
+
 func TestParseConfigUsesSettings(t *testing.T) {
 	cfg, err := parseConfig(jobs.CheckJob{
 		Target: "fallback.com",

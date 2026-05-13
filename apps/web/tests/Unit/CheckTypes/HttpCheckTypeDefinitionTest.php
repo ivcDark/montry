@@ -10,7 +10,7 @@ final class HttpCheckTypeDefinitionTest extends TestCase
 {
     public function test_it_normalizes_settings_and_expected_values(): void
     {
-        $definition = new HttpCheckTypeDefinition();
+        $definition = new HttpCheckTypeDefinition;
 
         $this->assertSame([
             'method' => 'HEAD',
@@ -34,7 +34,7 @@ final class HttpCheckTypeDefinitionTest extends TestCase
 
     public function test_it_resolves_http_status(): void
     {
-        $definition = new HttpCheckTypeDefinition();
+        $definition = new HttpCheckTypeDefinition;
 
         $result = $definition->normalizeWorkerResult([
             'status_code' => 200,
@@ -52,11 +52,34 @@ final class HttpCheckTypeDefinitionTest extends TestCase
         ]));
     }
 
+    public function test_it_normalizes_worker_result_contract(): void
+    {
+        $definition = new HttpCheckTypeDefinition;
+
+        $this->assertSame([
+            'status_code' => 200,
+            'response_time_ms' => 120,
+            'ip' => '127.0.0.1',
+            'headers' => [
+                'server' => 'nginx',
+            ],
+            'error_code' => null,
+            'error_message' => null,
+        ], $definition->normalizeWorkerResult([
+            'status_code' => 200,
+            'response_time_ms' => 120,
+            'ip' => '127.0.0.1',
+            'headers' => [
+                'server' => 'nginx',
+            ],
+        ]));
+    }
+
     public function test_it_rejects_invalid_method(): void
     {
         $this->expectException(InvalidArgumentException::class);
 
-        (new HttpCheckTypeDefinition())->validateSettings([
+        (new HttpCheckTypeDefinition)->validateSettings([
             'method' => 'DELETE',
         ]);
     }

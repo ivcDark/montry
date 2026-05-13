@@ -122,8 +122,17 @@ func TestCheckerConnectsToTLSServer(t *testing.T) {
 	if result.Status != checks.ResultStatusSuccess && result.Status != checks.ResultStatusWarning {
 		t.Fatalf("expected success or warning, got %q with error %#v", result.Status, result.Error)
 	}
-	if result.Raw["days_until_expiry"] == nil {
-		t.Fatalf("expected days_until_expiry in raw result")
+	if result.Raw["valid"] != true {
+		t.Fatalf("expected valid=true in raw result, got %#v", result.Raw["valid"])
+	}
+	if result.Raw["expires_at"] == nil {
+		t.Fatalf("expected expires_at in raw result")
+	}
+	if result.Raw["issued_at"] == nil {
+		t.Fatalf("expected issued_at in raw result")
+	}
+	if result.Raw["days_until_expiration"] == nil {
+		t.Fatalf("expected days_until_expiration in raw result")
 	}
 }
 

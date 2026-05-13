@@ -46,7 +46,10 @@ func (c Checker) Check(ctx context.Context, job jobs.CheckJob) (checks.CheckResu
 	expiresAt, err := parseWHOISExpiration(cfg.domain, whoisText)
 	if err != nil {
 		result := failedResult(job, startedAt, checkErrorCode(err), err.Error(), false)
-		result.Raw = map[string]any{"domain": cfg.domain}
+		result.Raw = map[string]any{
+			"registered": false,
+			"domain":     cfg.domain,
+		}
 		return result, err
 	}
 
@@ -59,14 +62,24 @@ func (c Checker) Check(ctx context.Context, job jobs.CheckJob) (checks.CheckResu
 		CheckedAt: startedAt,
 		Duration:  time.Since(startedAt),
 		Raw: map[string]any{
-			"domain":            cfg.domain,
-			"expires_at":        expiresAt.Format(time.RFC3339),
-			"days_until_expiry": int(time.Until(expiresAt).Hours() / 24),
+			"registered":            true,
+			"domain":                cfg.domain,
+			"expires_at":            expiresAt.Format(time.RFC3339),
+			"days_until_expiration": int(time.Until(expiresAt).Hours() / 24),
+			"registrar":             parseWHOISRegistrar(whoisText),
 		},
 		Error: status.err,
 	}
 
 	return result, errorForCheckError(status.err)
+}
+
+func parseWHOISRegistrar(whoisText string) string {
+	if value, ok := findWHOISField(whoisText, "Registrar"); ok {
+		return value
+	}
+
+	return ""
 }
 
 type config struct {

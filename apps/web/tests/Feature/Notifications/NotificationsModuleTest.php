@@ -128,13 +128,58 @@ final class NotificationsModuleTest extends TestCase
         ]);
     }
 
-    private function createMonitorContext(): array
+    public function test_ssl_expiring_check_result_emits_notification_event(): void
+    {
+        Mail::fake();
+        [$organization, $monitor] = $this->createMonitorContext([
+            'type' => 'ssl',
+            'settings' => [
+                'domain' => 'example.com',
+                'port' => 443,
+                'warning_days' => [30, 14, 7, 3, 1],
+            ],
+            'expected' => [
+                'valid' => true,
+            ],
+        ]);
+
+        NotificationChannel::query()->create([
+            'organization_id' => $organization->id,
+            'type' => 'email',
+            'name' => 'Primary email',
+            'enabled' => true,
+            'settings' => ['email' => 'ops@example.com'],
+        ]);
+
+        $this->postJson('/internal/check-results', [
+            'event_id' => 'ssl-expiring-event',
+            'monitor_id' => $monitor->id,
+            'check_type' => 'ssl',
+            'status' => 'success',
+            'checked_at' => now()->toAtomString(),
+            'duration_ms' => 80,
+            'result' => [
+                'valid' => true,
+                'expires_at' => '2026-05-26T12:00:00+03:00',
+                'days_until_expiration' => 14,
+            ],
+            'error' => null,
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('notification_logs', [
+            'organization_id' => $organization->id,
+            'event_type' => 'ssl.expiring',
+            'status' => 'sent',
+        ]);
+    }
+
+    private function createMonitorContext(array $monitorOverrides = []): array
     {
         $user = User::factory()->create();
 
         $organization = Organization::query()->create([
             'name' => 'Acme',
-            'slug' => 'acme-' . $user->id,
+            'slug' => 'acme-'.$user->id,
             'timezone' => '+3',
             'status' => 'active',
         ]);
@@ -179,6 +224,7 @@ final class NotificationsModuleTest extends TestCase
                 'status_codes' => [200],
                 'max_response_time_ms' => 5000,
             ],
+            ...$monitorOverrides,
         ]);
 
         return [$organization, $monitor];

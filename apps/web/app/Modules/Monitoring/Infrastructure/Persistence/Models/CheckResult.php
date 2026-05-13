@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CheckResult extends Model
 {
     protected $fillable = [
+        'event_id',
         'monitor_id',
         'organization_id',
         'check_type',

@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('check_results', function (Blueprint $table): void {
             $table->id();
+            $table->string('event_id')->nullable()->unique();
             $table->foreignId('monitor_id')->constrained()->cascadeOnDelete();
             $table->foreignId('organization_id')->constrained()->cascadeOnDelete();
             $table->string('check_type', 50);

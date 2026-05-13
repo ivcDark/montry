@@ -92,6 +92,13 @@ Supported expected values:
 - `status_codes` - allowed status codes, defaults to `[200]`.
 - `max_response_time_ms` - warning threshold.
 
+Raw result uses the same HTTP contract Laravel normalizes:
+
+- `status_code`
+- `response_time_ms`
+- `ip`
+- `headers`
+
 ## SSL checker
 
 Type: `ssl`.
@@ -104,9 +111,20 @@ Supported settings:
 - `server_name` - optional SNI/hostname override.
 - `verify_ssl` - certificate chain verification flag, defaults to `true`.
 
-Raw result includes certificate validity dates, `days_until_expiry`, issuer,
-subject, DNS names and chain length. Go only returns the technical result;
-Laravel decides whether to notify users or update incidents.
+Raw result uses the same SSL contract Laravel normalizes:
+
+- `valid`
+- `issued_at`
+- `expires_at`
+- `days_until_expiration`
+- `issuer`
+- `subject`
+- `serial_number`
+- `dns_names`
+- `chain_length`
+
+Go only returns the technical result; Laravel decides whether to notify users
+or update incidents.
 
 ## Domain checker
 
@@ -121,6 +139,14 @@ The MVP implementation uses WHOIS over port `43` and parses common expiration
 fields for `.ru`, `.рф`/`.xn--p1ai`, `.com`, `.net` and `.org`. Parsing is kept
 in separate functions so new TLD-specific rules can be added without changing
 the runner or scheduler.
+
+Raw result uses the same domain contract Laravel normalizes:
+
+- `registered`
+- `domain`
+- `expires_at`
+- `days_until_expiration`
+- `registrar`
 
 ## Manual Checks
 

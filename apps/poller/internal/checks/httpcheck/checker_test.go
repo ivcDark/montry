@@ -43,6 +43,41 @@ func TestCheckerReturnsSuccessForExpectedStatus(t *testing.T) {
 	}
 }
 
+func TestCheckerReturnsLaravelHTTPResultContract(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Server", "test-server")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	result, err := New().Check(context.Background(), jobs.CheckJob{
+		EventID:   "event-1",
+		MonitorID: "monitor-1",
+		Type:      "http",
+		Target:    server.URL,
+		Expected: map[string]any{
+			"status_codes": []any{float64(200)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("check: %v", err)
+	}
+
+	if result.Raw["status_code"] != http.StatusOK {
+		t.Fatalf("expected status_code=200, got %#v", result.Raw["status_code"])
+	}
+	if result.Raw["response_time_ms"] == nil {
+		t.Fatalf("expected response_time_ms in raw result")
+	}
+	if result.Raw["ip"] == nil || result.Raw["ip"] == "" {
+		t.Fatalf("expected ip in raw result, got %#v", result.Raw["ip"])
+	}
+	if _, ok := result.Raw["headers"].(map[string]any); !ok {
+		t.Fatalf("expected headers map in raw result, got %#v", result.Raw["headers"])
+	}
+}
+
 func TestCheckerReturnsFailedForUnexpectedStatus(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

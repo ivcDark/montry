@@ -10,7 +10,7 @@ final class DomainCheckTypeDefinitionTest extends TestCase
 {
     public function test_it_normalizes_settings(): void
     {
-        $definition = new DomainCheckTypeDefinition();
+        $definition = new DomainCheckTypeDefinition;
 
         $this->assertSame([
             'domain' => 'example.com',
@@ -23,7 +23,7 @@ final class DomainCheckTypeDefinitionTest extends TestCase
 
     public function test_it_resolves_domain_status(): void
     {
-        $definition = new DomainCheckTypeDefinition();
+        $definition = new DomainCheckTypeDefinition;
 
         $this->assertSame('success', $definition->resolveStatus([
             'registered' => true,
@@ -36,10 +36,31 @@ final class DomainCheckTypeDefinitionTest extends TestCase
         ], ['registered' => true]));
     }
 
+    public function test_it_normalizes_worker_result_contract(): void
+    {
+        $definition = new DomainCheckTypeDefinition;
+
+        $this->assertSame([
+            'registered' => true,
+            'domain' => 'example.com',
+            'expires_at' => '2026-08-13T04:00:00Z',
+            'days_until_expiration' => 92,
+            'registrar' => 'Example Registrar, Inc.',
+            'error_code' => null,
+            'error_message' => null,
+        ], $definition->normalizeWorkerResult([
+            'registered' => true,
+            'domain' => 'example.com',
+            'expires_at' => '2026-08-13T04:00:00Z',
+            'days_until_expiration' => 92,
+            'registrar' => 'Example Registrar, Inc.',
+        ]));
+    }
+
     public function test_it_requires_domain(): void
     {
         $this->expectException(InvalidArgumentException::class);
 
-        (new DomainCheckTypeDefinition())->validateSettings([]);
+        (new DomainCheckTypeDefinition)->validateSettings([]);
     }
 }

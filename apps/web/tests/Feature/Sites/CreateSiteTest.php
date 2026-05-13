@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Sites;
 
-use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
+use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Organizations\Enums\OrganizationRole;
 use App\Modules\Organizations\Enums\OrganizationStatus;
@@ -15,7 +15,7 @@ class CreateSiteTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_default_http_monitor_uses_the_created_site_path(): void
+    public function test_default_http_monitor_is_created_through_the_http_check_definition(): void
     {
         $user = User::factory()->create();
         $organization = Organization::query()->create([
@@ -52,6 +52,15 @@ class CreateSiteTest extends TestCase
         $monitor = $site->monitors()->firstOrFail();
 
         $this->assertSame('/health?ready=1', $site->path);
-        $this->assertSame('/health?ready=1', $monitor->settings['path']);
+        $this->assertSame([
+            'method' => 'GET',
+            'url' => 'https://example.com/health?ready=1',
+            'follow_redirects' => true,
+            'verify_ssl' => true,
+        ], $monitor->settings);
+        $this->assertSame([
+            'status_codes' => [200],
+            'max_response_time_ms' => 5000,
+        ], $monitor->expected);
     }
 }

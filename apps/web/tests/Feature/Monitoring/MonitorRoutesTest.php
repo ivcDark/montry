@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Monitoring;
 
+use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
-use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Organizations\Enums\OrganizationRole;
 use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -70,6 +70,69 @@ final class MonitorRoutesTest extends TestCase
             'type' => 'http',
             'name' => 'HTTP check',
             'enabled' => true,
+        ]);
+    }
+
+    public function test_monitor_creation_respects_plan_monitor_limit(): void
+    {
+        [$user, $organization, $project] = $this->createOrganizationContext();
+        $plan = Plan::query()->create([
+            'code' => 'free',
+            'name' => 'Free',
+            'price_cents' => 0,
+            'currency' => 'RUB',
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+
+        $plan->limits()->create([
+            'key' => 'max_monitors',
+            'value' => ['limit' => 0],
+        ]);
+
+        $plan->subscriptions()->create([
+            'organization_id' => $organization->id,
+            'status' => 'active',
+            'starts_at' => now()->subDay(),
+        ]);
+
+        $resource = MonitoredResource::query()->create([
+            'organization_id' => $organization->id,
+            'project_id' => $project->id,
+            'created_user_id' => $user->id,
+            'type' => 'website',
+            'name' => 'Example',
+            'target' => 'https://example.com',
+            'scheme' => 'https',
+            'host' => 'example.com',
+            'path' => '/',
+            'status' => 'unknown',
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post("/sites/{$resource->id}/monitors", [
+                'type' => 'http',
+                'name' => 'HTTP check',
+                'is_enabled' => true,
+                'interval_seconds' => 60,
+                'timeout_ms' => 10000,
+                'settings' => [
+                    'method' => 'GET',
+                    'url' => 'https://example.com',
+                    'follow_redirects' => true,
+                    'verify_ssl' => true,
+                ],
+                'expected' => [
+                    'status_codes' => [200],
+                    'max_response_time_ms' => 5000,
+                ],
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('monitors', [
+            'organization_id' => $organization->id,
+            'monitored_resource_id' => $resource->id,
         ]);
     }
 

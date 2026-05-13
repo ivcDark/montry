@@ -2,6 +2,7 @@
 
 namespace App\Modules\Monitoring\Application\Handlers;
 
+use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\Monitoring\Application\Commands\CreateMonitorCommand;
 use App\Modules\Monitoring\Application\Services\CheckTypeRegistry;
 use App\Modules\Monitoring\Domain\Contracts\MonitorRepositoryInterface;
@@ -12,12 +13,14 @@ final readonly class CreateMonitorHandler
     public function __construct(
         private CheckTypeRegistry $checkTypeRegistry,
         private MonitorRepositoryInterface $monitors,
-    ) {
-    }
+        private LimitChecker $limits,
+    ) {}
 
     public function handle(CreateMonitorCommand $command): Monitor
     {
         $definition = $this->checkTypeRegistry->get($command->type);
+        $this->limits->assertCanCreateMonitor($command->organizationId);
+        $this->limits->assertCanUseInterval($command->organizationId, $command->intervalSeconds);
 
         return $this->monitors->create([
             'organization_id' => $command->organizationId,

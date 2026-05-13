@@ -65,6 +65,7 @@ final class DomainCheckTypeDefinition implements CheckTypeDefinitionInterface
     {
         return [
             'registered' => (bool) ($result['registered'] ?? false),
+            'domain' => $result['domain'] ?? null,
             'expires_at' => $result['expires_at'] ?? null,
             'days_until_expiration' => isset($result['days_until_expiration']) ? (int) $result['days_until_expiration'] : null,
             'registrar' => $result['registrar'] ?? null,

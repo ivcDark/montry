@@ -18,7 +18,9 @@ final class InternalCheckResultController extends Controller
         $payload = WorkerCheckResultPayload::fromArray($request->validated());
 
         $checkResult = $receiveCheckResult->handle(new ReceiveCheckResultCommand(
+            eventId: $payload->eventId,
             monitorId: $payload->monitorId,
+            checkType: $payload->checkType,
             workerResult: $payload->toWorkerResult(),
             checkedAt: $payload->checkedAt,
         ));
@@ -26,6 +28,6 @@ final class InternalCheckResultController extends Controller
         return response()->json([
             'id' => $checkResult->id,
             'status' => $checkResult->status,
-        ], 201);
+        ], $checkResult->wasRecentlyCreated ? 201 : 200);
     }
 }

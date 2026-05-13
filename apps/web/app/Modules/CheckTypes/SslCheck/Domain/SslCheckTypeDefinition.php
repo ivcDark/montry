@@ -73,10 +73,14 @@ final class SslCheckTypeDefinition implements CheckTypeDefinitionInterface
     {
         return [
             'valid' => (bool) ($result['valid'] ?? false),
+            'issued_at' => $result['issued_at'] ?? null,
             'expires_at' => $result['expires_at'] ?? null,
             'days_until_expiration' => isset($result['days_until_expiration']) ? (int) $result['days_until_expiration'] : null,
             'issuer' => $result['issuer'] ?? null,
             'subject' => $result['subject'] ?? null,
+            'serial_number' => isset($result['serial_number']) ? (string) $result['serial_number'] : null,
+            'dns_names' => is_array($result['dns_names'] ?? null) ? array_values($result['dns_names']) : [],
+            'chain_length' => isset($result['chain_length']) ? (int) $result['chain_length'] : null,
             'error_code' => $result['error']['code'] ?? $result['error_code'] ?? null,
             'error_message' => $result['error']['message'] ?? $result['error_message'] ?? null,
         ];

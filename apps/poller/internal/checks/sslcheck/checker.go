@@ -75,7 +75,7 @@ func (c Checker) Check(ctx context.Context, job jobs.CheckJob) (checks.CheckResu
 		Status:    status.status,
 		CheckedAt: startedAt,
 		Duration:  time.Since(startedAt),
-		Raw:       rawResult(leaf, state.PeerCertificates),
+		Raw:       rawResult(leaf, state.PeerCertificates, status.err == nil),
 		Error:     status.err,
 	}
 
@@ -201,15 +201,17 @@ func baseResult(job jobs.CheckJob, checkedAt time.Time) checks.CheckResult {
 	}
 }
 
-func rawResult(cert *x509.Certificate, chain []*x509.Certificate) map[string]any {
+func rawResult(cert *x509.Certificate, chain []*x509.Certificate, valid bool) map[string]any {
 	return map[string]any{
-		"not_before":        cert.NotBefore.Format(time.RFC3339),
-		"not_after":         cert.NotAfter.Format(time.RFC3339),
-		"days_until_expiry": int(time.Until(cert.NotAfter).Hours() / 24),
-		"issuer":            cert.Issuer.String(),
-		"subject":           cert.Subject.String(),
-		"dns_names":         cert.DNSNames,
-		"chain_length":      len(chain),
+		"valid":                 valid,
+		"issued_at":             cert.NotBefore.Format(time.RFC3339),
+		"expires_at":            cert.NotAfter.Format(time.RFC3339),
+		"days_until_expiration": int(time.Until(cert.NotAfter).Hours() / 24),
+		"issuer":                cert.Issuer.String(),
+		"subject":               cert.Subject.String(),
+		"serial_number":         cert.SerialNumber.String(),
+		"dns_names":             cert.DNSNames,
+		"chain_length":          len(chain),
 	}
 }
 
