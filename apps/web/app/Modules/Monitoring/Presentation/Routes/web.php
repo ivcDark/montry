@@ -1,10 +1,14 @@
 <?php
 
 use App\Modules\Monitoring\Presentation\Http\Controllers\MonitorController;
+use App\Modules\Monitoring\Presentation\Http\Controllers\MonitorIndexController;
 use App\Modules\WorkerGateway\Presentation\Http\Controllers\ManualCheckController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->group(function (): void {
+    Route::get('/monitors', MonitorIndexController::class)
+        ->name('monitors.index');
+
     Route::post('/monitors/{monitor}/check-now', [ManualCheckController::class, 'store'])
         ->name('monitors.check-now');
 

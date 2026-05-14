@@ -4,6 +4,7 @@ namespace App\Modules\Projects\Infrastructure\Persistence\Models;
 
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
+use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -40,5 +41,10 @@ class Project extends Model
     public function monitoredResources(): HasMany
     {
         return $this->hasMany(MonitoredResource::class);
+    }
+
+    public function monitors(): HasMany
+    {
+        return $this->hasMany(Monitor::class);
     }
 }

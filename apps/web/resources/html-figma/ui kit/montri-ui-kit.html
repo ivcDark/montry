@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Montri UI Kit</title>
+  <style>
+    :root{
+      --bg:#F6F8FB; --surface:#FFFFFF; --surface-muted:#F8FAFC; --border:#E5E7EB;
+      --text:#111827; --muted:#667085; --primary:#0F6BFF; --primary-hover:#0757D8; --teal:#12B3A8;
+      --ok:#16A34A; --ok-soft:#ECFDF3; --warning:#F59E0B; --warning-soft:#FFF7E8;
+      --down:#EF4444; --down-soft:#FEECEC; --paused:#64748B; --paused-soft:#F1F5F9;
+      --unknown:#7C3AED; --unknown-soft:#F3E8FF;
+      --shadow:0 10px 28px rgba(15,23,42,.06); --modal-shadow:0 24px 64px rgba(15,23,42,.18);
+      --r-sm:8px; --r-md:12px; --r-lg:16px; --r-xl:20px; --r-2xl:24px; --r-full:999px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;line-height:1.55}
+    .layout{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:100vh}
+    aside{position:sticky;top:0;height:100vh;background:#0B1220;color:#fff;padding:28px 20px}
+    .logo{display:flex;gap:12px;align-items:center;margin-bottom:34px}
+    .logo-mark{width:42px;height:42px;border-radius:12px;background:var(--primary);display:grid;place-items:center;font-weight:800}
+    .nav a{display:block;color:#94A3B8;text-decoration:none;padding:12px 14px;border-radius:12px;margin-bottom:6px;font-weight:600}
+    .nav a.active{background:#17233A;color:#fff}
+    main{padding:40px 48px 72px}
+    .hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:32px}
+    h1{font-size:40px;line-height:48px;margin:0 0 8px;font-weight:800;letter-spacing:-.02em}
+    h2{font-size:28px;line-height:36px;margin:0 0 18px;font-weight:800;letter-spacing:-.015em}
+    h3{font-size:20px;line-height:28px;margin:0 0 12px;font-weight:700}
+    p{margin:0;color:var(--muted)}
+    .section{margin-top:34px}
+    .grid{display:grid;gap:16px}
+    .grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .grid-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-2xl);box-shadow:var(--shadow);padding:22px}
+    .subtle{background:var(--surface-muted)}
+    .muted{color:var(--muted)}
+    .small{font-size:12px;line-height:18px}
+    .token{height:96px;border-radius:18px;padding:14px;border:1px solid rgba(15,23,42,.08);display:flex;flex-direction:column;justify-content:space-between}
+    .token strong{display:block}
+    .token span{font-size:12px;color:var(--muted)}
+    .btn{border:0;border-radius:12px;height:42px;padding:0 18px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:default;white-space:nowrap}
+    .btn-primary{background:var(--primary);color:#fff}
+    .btn-primary:hover{background:var(--primary-hover)}
+    .btn-secondary{background:#fff;color:var(--text);border:1px solid var(--border)}
+    .btn-danger{background:var(--down);color:#fff}
+    .btn-ghost{background:transparent;color:var(--primary)}
+    .btn-disabled{background:#EEF2F7;color:#98A2B3}
+    .btn-row{display:flex;gap:12px;flex-wrap:wrap}
+    .badge{display:inline-flex;align-items:center;justify-content:center;height:28px;padding:0 10px;border-radius:var(--r-full);font-size:12px;font-weight:800;white-space:nowrap}
+    .ok{background:var(--ok-soft);color:var(--ok)}
+    .warning{background:var(--warning-soft);color:var(--warning)}
+    .down{background:var(--down-soft);color:var(--down)}
+    .paused{background:var(--paused-soft);color:var(--paused)}
+    .unknown{background:var(--unknown-soft);color:var(--unknown)}
+    .status-card{display:flex;gap:14px;align-items:flex-start}
+    .status-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-weight:900}
+    .metric{font-size:32px;line-height:38px;font-weight:800;margin-top:10px}
+    .problem-card{border-color:#FECACA;background:linear-gradient(180deg,#fff 0,#FFF8F8 100%)}
+    .pricing-card.featured{border:2px solid var(--primary)}
+    .price{font-size:34px;line-height:42px;font-weight:800;margin:16px 0}
+    .features{padding:0;margin:18px 0 0;list-style:none}
+    .features li{margin:10px 0;color:var(--muted)}
+    .features li:before{content:"✓";color:var(--ok);font-weight:800;margin-right:8px}
+    table{width:100%;border-collapse:separate;border-spacing:0;background:#fff;border:1px solid var(--border);border-radius:18px;overflow:hidden}
+    th,td{text-align:left;padding:14px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+    th{background:var(--surface-muted);font-size:12px;color:var(--muted);font-weight:800}
+    tr:last-child td{border-bottom:0}
+    td strong{display:block;font-weight:800}
+    .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+    label{display:block;font-weight:700;margin-bottom:7px}
+    input,select,textarea{width:100%;border:1px solid var(--border);background:#fff;color:var(--text);border-radius:12px;padding:12px 14px;font:inherit;outline:none}
+    textarea{min-height:96px;resize:vertical}
+    .field-error input{border-color:var(--down)}
+    .error-text{margin-top:6px;color:var(--down);font-size:12px;font-weight:600}
+    .checkbox,.toggle-row{display:flex;align-items:center;gap:10px}
+    .checkbox-box{width:18px;height:18px;border-radius:5px;border:1px solid var(--border);display:grid;place-items:center;color:#fff;background:var(--primary);font-size:12px;font-weight:900}
+    .toggle{width:44px;height:26px;background:var(--primary);border-radius:999px;padding:3px;display:flex;justify-content:flex-end}
+    .toggle span{width:20px;height:20px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+    .modal-wrap{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+    .modal{background:#fff;border:1px solid var(--border);border-radius:24px;box-shadow:var(--modal-shadow);padding:24px}
+    .modal-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px}
+    .close{width:34px;height:34px;border-radius:10px;background:var(--surface-muted);display:grid;place-items:center;color:var(--muted)}
+    .empty{min-height:210px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:1px dashed #CBD5E1;border-radius:24px;background:#fff;padding:24px}
+    .empty-icon{width:54px;height:54px;border-radius:18px;background:var(--soft, var(--soft-blue));display:grid;place-items:center;font-weight:900;margin-bottom:14px}
+    .toast-stack{display:grid;gap:12px}
+    .toast{display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:14px 16px}
+    .toast .status-icon{width:32px;height:32px;border-radius:10px}
+    .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#0B1220;color:#DCEAFE;padding:18px;border-radius:18px;overflow:auto;font-size:12px}
+    @media(max-width:1100px){.layout{grid-template-columns:1fr}aside{position:relative;height:auto}.grid-3,.grid-4,.grid-5,.modal-wrap,.form-grid{grid-template-columns:1fr}.hero{display:block}}
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside>
+      <div class="logo">
+        <div class="logo-mark">M</div>
+        <div>
+          <strong style="font-size:22px">Montri</strong>
+          <div class="small" style="color:#94A3B8">UI-kit для SaaS</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="active" href="#colors">Палитра</a>
+        <a href="#typography">Типографика</a>
+        <a href="#buttons">Кнопки</a>
+        <a href="#cards">Карточки</a>
+        <a href="#badges">Бейджи</a>
+        <a href="#tables">Таблицы</a>
+        <a href="#forms">Формы</a>
+        <a href="#modals">Модальные окна</a>
+        <a href="#empty">Empty states</a>
+        <a href="#toasts">Toast</a>
+      </nav>
+    </aside>
+
+    <main>
+      <div class="hero">
+        <div>
+          <h1>Montri UI-kit</h1>
+          <p>Компоненты для SaaS-сервиса мониторинга сайтов, SSL и доменов. Светлая тема, спокойная палитра, русский язык и Tailwind-like структура.</p>
+        </div>
+        <span class="badge ok">Готово для верстки</span>
+      </div>
+
+      <section class="section" id="colors">
+        <h2>1. Цветовая палитра</h2>
+        <div class="grid grid-5">
+          <div class="token" style="background:#0F6BFF;color:#fff"><strong>Primary</strong><span style="color:#DCEAFE">#0F6BFF</span></div>
+          <div class="token" style="background:#12B3A8;color:#fff"><strong>Teal</strong><span style="color:#E9FBF9">#12B3A8</span></div>
+          <div class="token" style="background:#16A34A;color:#fff"><strong>OK</strong><span style="color:#ECFDF3">#16A34A</span></div>
+          <div class="token" style="background:#F59E0B;color:#fff"><strong>Warning</strong><span style="color:#FFF7E8">#F59E0B</span></div>
+          <div class="token" style="background:#EF4444;color:#fff"><strong>Down</strong><span style="color:#FEECEC">#EF4444</span></div>
+          <div class="token" style="background:#F6F8FB"><strong>Background</strong><span>#F6F8FB</span></div>
+          <div class="token" style="background:#FFFFFF"><strong>Surface</strong><span>#FFFFFF</span></div>
+          <div class="token" style="background:#E5E7EB"><strong>Border</strong><span>#E5E7EB</span></div>
+          <div class="token" style="background:#111827;color:#fff"><strong>Text</strong><span style="color:#CBD5E1">#111827</span></div>
+          <div class="token" style="background:#667085;color:#fff"><strong>Muted</strong><span style="color:#E5E7EB">#667085</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="typography">
+        <h2>2. Типографика</h2>
+        <div class="card">
+          <h1 style="margin-bottom:12px">H1 — Следите за сайтами, SSL и доменами</h1>
+          <h2>H2 — Проблемы сейчас</h2>
+          <h3>H3 — Последние инциденты</h3>
+          <p>Body — Montri предупредит вас в Telegram и на email, если сайт упал, SSL скоро истекает или домен пора продлить.</p>
+          <p class="small">Small — Последняя проверка 2 минуты назад.</p>
+        </div>
+      </section>
+
+      <section class="section" id="buttons">
+        <h2>3. Кнопки</h2>
+        <div class="card btn-row">
+          <button class="btn btn-primary">Начать бесплатно</button>
+          <button class="btn btn-secondary">Посмотреть возможности</button>
+          <button class="btn btn-danger">Удалить сайт</button>
+          <button class="btn btn-ghost">Отмена</button>
+          <button class="btn btn-disabled">Недоступно</button>
+        </div>
+      </section>
+
+      <section class="section" id="cards">
+        <h2>4. Карточки</h2>
+        <div class="grid grid-4">
+          <div class="card"><h3>Обычная карточка</h3><p>Базовый контейнер для разделов кабинета.</p></div>
+          <div class="card status-card"><div class="status-icon ok">✓</div><div><h3>Работают</h3><div class="metric">24</div><p>Сайты без проблем</p></div></div>
+          <div class="card problem-card"><span class="badge down">Down</span><h3 style="margin-top:14px">client-shop.ru</h3><p>Сайт недоступен. Последняя проверка 2 минуты назад.</p></div>
+          <div class="card pricing-card featured"><span class="badge ok">Популярный</span><h3 style="margin-top:14px">Studio</h3><div class="price">1490 ₽</div><p>Для веб-студий и фрилансеров.</p><ul class="features"><li>Проекты и клиенты</li><li>Telegram-уведомления</li><li>История инцидентов</li></ul></div>
+        </div>
+      </section>
+
+      <section class="section" id="badges">
+        <h2>5. Бейджи статусов</h2>
+        <div class="card btn-row">
+          <span class="badge ok">OK</span>
+          <span class="badge warning">Warning</span>
+          <span class="badge down">Down</span>
+          <span class="badge paused">Paused</span>
+          <span class="badge unknown">Unknown</span>
+        </div>
+      </section>
+
+      <section class="section" id="tables">
+        <h2>6. Таблицы</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Список сайтов</h3>
+            <table><thead><tr><th>Сайт</th><th>Проект</th><th>Статус</th><th>SSL</th><th>Домен</th><th>Действие</th></tr></thead>
+              <tbody><tr><td><strong>client-shop.ru</strong><span class="muted small">Интернет-магазин</span></td><td>Клиент A</td><td><span class="badge down">Down</span></td><td><span class="badge ok">42 дня</span></td><td><span class="badge warning">24 дня</span></td><td>Открыть</td></tr>
+              <tr><td><strong>studio-site.ru</strong></td><td>Студия</td><td><span class="badge ok">OK</span></td><td><span class="badge warning">9 дней</span></td><td><span class="badge ok">128 дней</span></td><td>Открыть</td></tr></tbody></table>
+          </div>
+
+          <div class="card">
+            <h3>Список мониторингов</h3>
+            <table><thead><tr><th>Мониторинг</th><th>Тип</th><th>Интервал</th><th>Результат</th><th>Последняя проверка</th></tr></thead>
+              <tbody><tr><td>client-shop.ru</td><td>HTTP/HTTPS</td><td>5 минут</td><td><span class="badge down">502</span></td><td>2 мин назад</td></tr>
+              <tr><td>studio-site.ru</td><td>SSL</td><td>1 раз в день</td><td><span class="badge warning">9 дней</span></td><td>12 мин назад</td></tr></tbody></table>
+          </div>
+
+          <div class="card">
+            <h3>Список инцидентов</h3>
+            <table><thead><tr><th>Сайт</th><th>Причина</th><th>Длительность</th><th>Статус</th><th>Дата</th></tr></thead>
+              <tbody><tr><td>client-shop.ru</td><td>502 Bad Gateway</td><td>18 минут</td><td><span class="badge ok">Закрыт</span></td><td>12 мая</td></tr>
+              <tr><td>studio-site.ru</td><td>SSL warning</td><td>—</td><td><span class="badge warning">Открыт</span></td><td>11 мая</td></tr></tbody></table>
+          </div>
+
+          <div class="card">
+            <h3>История проверок</h3>
+            <table><thead><tr><th>Сайт</th><th>Тип проверки</th><th>Результат</th><th>Ответ</th><th>Время</th></tr></thead>
+              <tbody><tr><td>montri-demo.ru</td><td>HTTP</td><td><span class="badge ok">200 OK</span></td><td>184 мс</td><td>14:22</td></tr>
+              <tr><td>client-shop.ru</td><td>HTTP</td><td><span class="badge down">Down</span></td><td>—</td><td>14:21</td></tr></tbody></table>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="forms">
+        <h2>7. Формы</h2>
+        <div class="card form-grid">
+          <div><label>Адрес сайта</label><input value="https://client-shop.ru"></div>
+          <div><label>Тип мониторинга</label><select><option>HTTP/HTTPS</option><option>SSL</option><option>Домен</option></select></div>
+          <div class="checkbox"><div class="checkbox-box">✓</div><span>Отправлять уведомления в Telegram</span></div>
+          <div class="toggle-row"><div class="toggle"><span></span></div><span>Мониторинг включён</span></div>
+          <div style="grid-column:1/-1"><label>Комментарий</label><textarea>Основной сайт клиента. Проверять каждые 5 минут.</textarea></div>
+          <div class="field-error"><label>URL с ошибкой</label><input value="client shop"><div class="error-text">Введите корректный URL, например https://client-shop.ru</div></div>
+        </div>
+      </section>
+
+      <section class="section" id="modals">
+        <h2>8. Модальные окна</h2>
+        <div class="modal-wrap">
+          <div class="modal"><div class="modal-head"><div><h3>Добавить сайт</h3><p>Укажите адрес сайта и типы проверок.</p></div><div class="close">×</div></div><label>URL сайта</label><input value="https://example.ru"><div style="height:12px"></div><button class="btn btn-primary">Добавить сайт</button></div>
+          <div class="modal"><div class="modal-head"><div><h3>Подтвердить удаление</h3><p>Мониторинг и история проверок будут удалены.</p></div><div class="close">×</div></div><button class="btn btn-danger">Удалить</button> <button class="btn btn-secondary">Отмена</button></div>
+          <div class="modal"><div class="modal-head"><div><h3>Ручная проверка</h3><p>Запустите внеочередную проверку сайта.</p></div><div class="close">×</div></div><span class="badge warning">Ожидает запуска</span><div style="height:16px"></div><button class="btn btn-primary">Проверить сейчас</button></div>
+          <div class="modal"><div class="modal-head"><div><h3>Подключить Telegram</h3><p>Получайте срочные уведомления в Telegram.</p></div><div class="close">×</div></div><input value="@montri_alerts_bot"><div style="height:12px"></div><button class="btn btn-primary">Подключить Telegram</button></div>
+        </div>
+      </section>
+
+      <section class="section" id="empty">
+        <h2>9. Empty states</h2>
+        <div class="grid grid-4">
+          <div class="empty"><div class="empty-icon" style="background:var(--softBlue,#EAF2FF);color:var(--primary)">＋</div><h3>У вас пока нет сайтов</h3><p>Добавьте первый сайт и включите мониторинг.</p></div>
+          <div class="empty"><div class="empty-icon" style="background:var(--unknown-soft);color:var(--unknown)">□</div><h3>Нет проектов</h3><p>Создайте проект для сайтов клиента.</p></div>
+          <div class="empty"><div class="empty-icon" style="background:var(--ok-soft);color:var(--ok)">✓</div><h3>Нет инцидентов</h3><p>Отлично, проблем пока не было.</p></div>
+          <div class="empty"><div class="empty-icon" style="background:var(--warning-soft);color:var(--warning)">✉</div><h3>Нет уведомлений</h3><p>Настройте Telegram или email.</p></div>
+        </div>
+      </section>
+
+      <section class="section" id="toasts">
+        <h2>10. Toast notifications</h2>
+        <div class="toast-stack">
+          <div class="toast"><div class="status-icon ok">✓</div><div><strong>Проверка завершена</strong><p>client-shop.ru снова доступен.</p></div></div>
+          <div class="toast"><div class="status-icon ok">＋</div><div><strong>Сайт добавлен</strong><p>Мы начнём проверку в течение минуты.</p></div></div>
+          <div class="toast"><div class="status-icon down">!</div><div><strong>Ошибка проверки</strong><p>Не удалось получить ответ от сайта.</p></div></div>
+          <div class="toast"><div class="status-icon ok">✓</div><div><strong>Настройки сохранены</strong><p>Уведомления Telegram обновлены.</p></div></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Tailwind-like токены</h2>
+        <pre class="code">colors: {
+  montri: {
+    bg: '#F6F8FB',
+    surface: '#FFFFFF',
+    text: '#111827',
+    muted: '#667085',
+    border: '#E5E7EB',
+    primary: '#0F6BFF',
+    ok: '#16A34A',
+    warning: '#F59E0B',
+    down: '#EF4444',
+    paused: '#64748B',
+    unknown: '#7C3AED'
+  }
+}</pre>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

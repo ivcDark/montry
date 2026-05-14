@@ -7,6 +7,7 @@ use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredRe
 use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Monitor extends Model
@@ -75,5 +76,10 @@ class Monitor extends Model
     public function monitoredResource(): BelongsTo
     {
         return $this->belongsTo(MonitoredResource::class);
+    }
+
+    public function latestCheckResult(): HasOne
+    {
+        return $this->hasOne(CheckResult::class)->latestOfMany('checked_at');
     }
 }
