@@ -22,6 +22,6 @@ final class LoginController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('monitors.index', absolute: false));
+        return redirect()->intended(route('dashboard.index', absolute: false));
     }
 }

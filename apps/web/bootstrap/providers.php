@@ -8,6 +8,7 @@ return [
     \App\Modules\Identity\Infrastructure\Providers\IdentityModuleServiceProvider::class,
     \App\Modules\Billing\Infrastructure\Providers\BillingModuleServiceProvider::class,
     \App\Modules\Projects\Infrastructure\Providers\ProjectsModuleServiceProvider::class,
+    \App\Modules\Dashboard\Infrastructure\Providers\DashboardModuleServiceProvider::class,
     \App\Modules\MonitoredResources\Infrastructure\Providers\MonitoredResourcesModuleServiceProvider::class,
     \App\Modules\Monitoring\Infrastructure\Providers\MonitoringModuleServiceProvider::class,
     \App\Modules\CheckTypes\Infrastructure\Providers\CheckTypesModuleServiceProvider::class,

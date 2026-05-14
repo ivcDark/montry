@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Modules\Dashboard\Presentation\Http;
 
+use App\Http\Controllers\Controller;
 use App\Modules\Incidents\Infrastructure\Persistence\Models\Incident;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\CheckResult;
@@ -14,7 +15,7 @@ use Inertia\Response;
 
 final class DashboardController extends Controller
 {
-    public function __invoke(Request $request, GetCurrentOrganization $getCurrentOrganization): Response
+    public function index(Request $request, GetCurrentOrganization $getCurrentOrganization): Response
     {
         $organization = $getCurrentOrganization->handle($request->user());
 
