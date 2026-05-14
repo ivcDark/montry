@@ -136,7 +136,7 @@ function formatTime(value: string | null): string {
                     href="/sites/create"
                     class="inline-flex h-11 items-center justify-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-extrabold text-white shadow-[0_10px_28px_rgba(15,107,255,0.18)] transition hover:bg-[#0757D8]"
                 >
-                    + Добавить мониторинг
+                    + Добавить сайт
                 </Link>
             </div>
         </template>
