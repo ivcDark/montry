@@ -212,7 +212,7 @@ final class NotificationsModuleTest extends TestCase
             'name' => 'HTTP check',
             'enabled' => true,
             'status' => 'unknown',
-            'interval_seconds' => 60,
+            'interval_seconds' => 300,
             'timeout_ms' => 10000,
             'settings' => [
                 'method' => 'GET',

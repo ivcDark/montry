@@ -41,6 +41,7 @@ const props = withDefaults(defineProps<{
 const navigation: NavigationItem[] = [
     { key: 'dashboard', label: 'Обзор', href: '/dashboard', icon: '●' },
     { key: 'projects', label: 'Проекты', href: '/projects', icon: '□' },
+    { key: 'sites', label: 'Сайты', href: '/sites', icon: '◇' },
     { key: 'monitors', label: 'Мониторинги', href: '/monitors', icon: '◌' },
     { key: 'incidents', label: 'Инциденты', icon: '!' },
     { key: 'notifications', label: 'Уведомления', icon: '✉' },

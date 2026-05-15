@@ -2,10 +2,12 @@
 
 namespace App\Modules\MonitoredResources\Presentation\Http\Requests;
 
+use App\Modules\Monitoring\Application\Services\CheckTypeRegistry;
 use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
 use App\Modules\Sites\DTO\CreateSiteData;
 use App\Modules\Sites\Enums\SiteStatus;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 final class StoreMonitoredResourceRequest extends FormRequest
@@ -17,9 +19,19 @@ final class StoreMonitoredResourceRequest extends FormRequest
 
     public function rules(): array
     {
+        $types = array_keys(app(CheckTypeRegistry::class)->all());
+
         return [
             'name' => ['nullable', 'string', 'max:255'],
             'url' => ['required', 'string', 'max:2048'],
+            'monitors' => ['sometimes', 'array'],
+            'monitors.*.type' => ['required_with:monitors', 'string', Rule::in($types)],
+            'monitors.*.name' => ['required_with:monitors', 'string', 'max:255'],
+            'monitors.*.is_enabled' => ['required_with:monitors', 'boolean'],
+            'monitors.*.interval_seconds' => ['required_with:monitors', 'integer', 'min:300', 'max:86400', 'multiple_of:60'],
+            'monitors.*.timeout_ms' => ['required_with:monitors', 'integer', 'min:1000', 'max:60000'],
+            'monitors.*.settings' => ['required_with:monitors', 'array'],
+            'monitors.*.expected' => ['sometimes', 'array'],
         ];
     }
 
@@ -42,6 +54,87 @@ final class StoreMonitoredResourceRequest extends FormRequest
             notes: $this->string('note')->trim()->toString(),
             port: $parsedUrl['port'],
         );
+    }
+
+    public function monitorPayloads(array $site): array
+    {
+        $submitted = collect($this->validated('monitors', []))
+            ->keyBy('type');
+
+        return collect(['http', 'ssl', 'domain'])
+            ->map(fn (string $type): array => $this->mergeMonitorPayload(
+                $this->defaultMonitorPayload($type, $site),
+                $submitted->get($type, []),
+            ))
+            ->values()
+            ->all();
+    }
+
+    private function mergeMonitorPayload(array $defaults, array $submitted): array
+    {
+        return array_replace($defaults, $submitted, [
+            'settings' => array_replace($defaults['settings'], $submitted['settings'] ?? []),
+            'expected' => array_replace($defaults['expected'], $submitted['expected'] ?? []),
+        ]);
+    }
+
+    /**
+     * @param array{url: string, host: string, port: int|null} $site
+     */
+    private function defaultMonitorPayload(string $type, array $site): array
+    {
+        if ($type === 'http') {
+            return [
+                'type' => 'http',
+                'name' => 'HTTP availability',
+                'is_enabled' => true,
+                'interval_seconds' => 300,
+                'timeout_ms' => 10000,
+                'settings' => [
+                    'method' => 'GET',
+                    'url' => $site['url'],
+                    'follow_redirects' => true,
+                    'verify_ssl' => true,
+                ],
+                'expected' => [
+                    'status_codes' => [200],
+                    'max_response_time_ms' => 5000,
+                ],
+            ];
+        }
+
+        if ($type === 'ssl') {
+            return [
+                'type' => 'ssl',
+                'name' => 'SSL certificate',
+                'is_enabled' => false,
+                'interval_seconds' => 86400,
+                'timeout_ms' => 10000,
+                'settings' => [
+                    'domain' => $site['host'],
+                    'port' => $site['port'] ?? 443,
+                    'warning_days' => [30, 14, 7, 3, 1],
+                ],
+                'expected' => [
+                    'valid' => true,
+                ],
+            ];
+        }
+
+        return [
+            'type' => 'domain',
+            'name' => 'Domain expiration',
+            'is_enabled' => false,
+            'interval_seconds' => 86400,
+            'timeout_ms' => 10000,
+            'settings' => [
+                'domain' => $site['host'],
+                'warning_days' => [30, 14, 7, 3, 1],
+            ],
+            'expected' => [
+                'registered' => true,
+            ],
+        ];
     }
 
     private function siteName(string $host): string

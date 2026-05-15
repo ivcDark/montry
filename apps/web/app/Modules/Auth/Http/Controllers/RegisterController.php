@@ -2,8 +2,8 @@
 
 namespace App\Modules\Auth\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Application\Onboarding\Actions\CreateAccount;
+use App\Http\Controllers\Controller;
 use App\Modules\Auth\Http\Requests\RegisterRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
@@ -20,14 +20,13 @@ final class RegisterController extends Controller
     public function store(
         RegisterRequest $request,
         CreateAccount $createAccount,
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         $user = $createAccount->handle($request->toData());
 
         Auth::login($user);
 
         $request->session()->regenerate();
 
-        return redirect()->route('dashboard');
+        return redirect()->route('dashboard.index');
     }
 }

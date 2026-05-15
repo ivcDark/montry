@@ -15,4 +15,7 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('/sites/{site}', [MonitoredResourceController::class, 'show'])
         ->name('sites.show');
+
+    Route::delete('/sites/{site}', [MonitoredResourceController::class, 'destroy'])
+        ->name('sites.destroy');
 });

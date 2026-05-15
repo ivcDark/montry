@@ -26,15 +26,14 @@ final class MonitorController extends Controller
 {
     public function __construct(
         private readonly GetCurrentOrganization $getCurrentOrganization,
-    ) {
-    }
+    ) {}
 
     public function create(Request $request, MonitoredResource $site, CheckTypeRegistry $checkTypes): Response
     {
         $organization = $this->getCurrentOrganization->handle($request->user());
         abort_unless($site->organization_id === $organization->id, 404);
 
-        return Inertia::render('Sites/Monitors/Create', [
+        return Inertia::render('Monitors/Create', [
             'organization' => ['id' => $organization->id, 'name' => $organization->name],
             'site' => $this->sitePayload($site),
             'monitorTypes' => $this->monitorTypes($checkTypes),
