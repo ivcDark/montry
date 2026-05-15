@@ -1,98 +1,170 @@
 # Montri Poller
 
-Go service for technical monitoring checks. Laravel remains the source of
-business state: users, billing, monitor status, incidents and notifications.
+Poller - это Go-сервис, который выполняет технические проверки мониторинга и
+отправляет результаты обратно в Laravel.
 
-Current state:
+Laravel остается источником бизнес-состояния: пользователи, тарифы, статусы
+мониторов, инциденты, уведомления и лимиты живут в Laravel. Poller только
+получает задания, выполняет проверки и возвращает технический результат.
 
-- app bootstrap loads config from env and creates the logger;
-- `/health` HTTP endpoint is available;
-- graceful shutdown handles `SIGINT` and `SIGTERM`;
-- scheduler fetches due checks from Laravel;
-- worker pool executes generic `CheckJob` values through registered checkers;
-- results are published back to Laravel with retry/backoff;
-- HTTP/HTTPS checker is implemented;
-- SSL checker is implemented;
-- Domain expiration checker is implemented.
+## Текущее состояние
 
-## Structure
+- сервис загружает конфигурацию из env-переменных;
+- есть HTTP endpoint `/health`;
+- есть graceful shutdown по `SIGINT` и `SIGTERM`;
+- scheduler забирает из Laravel мониторы, которым пора выполниться;
+- worker pool выполняет проверки через зарегистрированные checker-ы;
+- результаты отправляются обратно в Laravel с retry/backoff;
+- реализованы HTTP/HTTPS проверки;
+- реализованы SSL проверки;
+- реализованы проверки срока действия домена;
+- реализованы ручные проверки через `POST /internal/manual-checks`.
+
+## Структура
 
 ```text
-cmd/poller          thin entrypoint
-internal/app        config, logger, registry, worker pool, scheduler and lifecycle wiring
-internal/config     env config
-internal/logger     simple stdout logger
-internal/checks     checker interface, registry and result contracts
+cmd/poller          точка входа
+internal/app        сборка приложения, lifecycle, registry, scheduler, worker pool
+internal/config     конфигурация из env
+internal/logger     простой stdout logger
+internal/checks     интерфейсы checker-ов и общие контракты результата
 internal/checks/httpcheck
                     HTTP/HTTPS checker
 internal/checks/sslcheck
-                    SSL certificate checker
+                    SSL checker
 internal/checks/domaincheck
                     Domain expiration checker
-internal/jobs       generic job contracts
-internal/runner     worker pool, workers, dispatcher and result publisher
-internal/scheduler  scheduler placeholders
-internal/laravel    Laravel client placeholders
-internal/transport  HTTP transport
+internal/jobs       общие контракты заданий
+internal/runner     worker pool, workers, dispatcher, публикация результатов
+internal/scheduler  получение due-мониторов из Laravel
+internal/laravel    HTTP client для Laravel internal API
+internal/transport  HTTP transport poller-а
 ```
 
-## Worker config
+## Как работает scheduler
 
-- `POLLER_WORKERS` - fixed worker goroutine count, default `10`.
-- `POLLER_CHECK_TIMEOUT_SECONDS` - per-check timeout, default `10`.
-- `POLLER_QUEUE_BUFFER` - planned jobs channel buffer size, default `100`.
-- `LARAVEL_INTERNAL_API_URL` - Laravel internal API base URL.
-- `LARAVEL_INTERNAL_API_TOKEN` - optional Bearer token for Laravel internal API.
-- `LARAVEL_INTERNAL_API_TIMEOUT_SECONDS` - Laravel client timeout, default `10`.
-- `POLLER_RESULT_RETRY_ATTEMPTS` - result submit attempts, default `3`.
-- `POLLER_RESULT_RETRY_DELAY_SECONDS` - linear backoff base delay, default `1`.
-- `POLLER_SCHEDULER_INTERVAL_SECONDS` - due checks polling interval, default `30`.
-- `POLLER_FETCH_DUE_LIMIT` - max due checks per fetch, default `100`.
-- `POLLER_MANUAL_API_TOKEN` - optional Bearer token for Laravel -> poller manual checks.
-- `POLLER_MANUAL_REQUEST_TIMEOUT_SECONDS` - manual endpoint request timeout, default `5`.
+Scheduler по таймеру вызывает Laravel endpoint:
 
-## Scheduler
+```text
+GET /internal/monitors/due
+```
 
-The scheduler calls Laravel `GET /internal/monitors/due` on a timer and enqueues
-returned `CheckJob` values into the shared worker pool jobs channel. It does not
-inspect or branch on check type. If Laravel is unavailable, it logs the error and
-continues on the next tick. If the jobs channel is full, it logs a warning and
-drops that fetched job; Laravel remains the source of truth and can return it
-again on a later due fetch.
+Laravel возвращает включенные мониторы, у которых `next_check_at` пустой или уже
+наступил. Poller преобразует ответ в `CheckJob` и кладет задания в общий worker
+pool.
 
-## Lifecycle
+Scheduler не знает деталей HTTP, SSL или domain проверок. Он работает только с
+универсальным заданием. Конкретный checker выбирается через registry по типу
+монитора.
 
-`cmd/poller/main.go` only creates a signal-aware context and calls
-`app.NewFromEnv()` plus `App.Run(ctx)`. The app bootstrap wires:
+Если Laravel временно недоступен, poller логирует ошибку и повторяет попытку на
+следующем тике. Если очередь заданий заполнена, задание пропускается; Laravel
+остается источником правды и сможет вернуть этот монитор повторно при следующем
+запросе.
 
-- env config;
-- logger;
-- checker registry with `http`, `ssl`, `domain`;
-- Laravel HTTP client;
-- shared jobs channel;
-- result publisher;
-- worker pool;
-- scheduler;
-- HTTP server with `/health` and `/internal/manual-checks`.
+## Как сохраняются результаты
+
+После выполнения проверки poller отправляет результат в Laravel:
+
+```text
+POST /internal/check-results
+```
+
+Laravel:
+
+- сохраняет запись в `check_results`;
+- обновляет статус монитора;
+- обновляет `last_check_at` и `next_check_at`;
+- обновляет счетчики успешных и неуспешных проверок;
+- решает, нужно ли открывать или закрывать инциденты;
+- решает, нужно ли отправлять уведомления.
+
+Poller не открывает инциденты, не отправляет уведомления и не проверяет тарифные
+ограничения.
+
+## Ручные проверки
+
+Ручная проверка работает в обратную сторону:
+
+1. Пользователь нажимает кнопку проверки в интерфейсе.
+2. Laravel проверяет права пользователя и тарифные ограничения.
+3. Laravel отправляет задание в poller:
+
+```text
+POST /internal/manual-checks
+```
+
+4. Poller проверяет payload и тип проверки.
+5. Poller кладет задание в worker pool как `SourceManual`.
+6. Worker выполняет проверку.
+7. Poller отправляет результат обратно в Laravel через `/internal/check-results`.
+
+`POLLER_MANUAL_API_TOKEN` в poller должен совпадать с `POLLER_TOKEN` в Laravel,
+если авторизация ручных проверок включена.
+
+## Конфигурация poller
+
+Основные переменные окружения:
+
+- `APP_ENV` - окружение приложения, например `local` или `production`.
+- `POLLER_HTTP_ADDR` - адрес HTTP-сервера poller-а, по умолчанию `:8090`.
+- `POLLER_WORKERS` - количество worker goroutine, по умолчанию `10`.
+- `POLLER_CHECK_TIMEOUT_SECONDS` - timeout одной проверки, по умолчанию `10`.
+- `POLLER_QUEUE_BUFFER` - размер буфера очереди заданий, по умолчанию `100`.
+- `LARAVEL_INTERNAL_API_URL` - base URL Laravel internal API.
+- `LARAVEL_INTERNAL_API_TOKEN` - Bearer token для запросов poller -> Laravel.
+- `LARAVEL_INTERNAL_API_TIMEOUT_SECONDS` - timeout HTTP-клиента Laravel, по умолчанию `10`.
+- `POLLER_RESULT_RETRY_ATTEMPTS` - количество попыток отправки результата, по умолчанию `3`.
+- `POLLER_RESULT_RETRY_DELAY_SECONDS` - базовая задержка retry, по умолчанию `1`.
+- `POLLER_SCHEDULER_INTERVAL_SECONDS` - интервал запроса due-мониторов, по умолчанию `30`.
+- `POLLER_FETCH_DUE_LIMIT` - максимум due-мониторов за один запрос, по умолчанию `100`.
+- `POLLER_MANUAL_API_TOKEN` - Bearer token для запросов Laravel -> poller.
+- `POLLER_MANUAL_REQUEST_TIMEOUT_SECONDS` - timeout ручного endpoint-а, по умолчанию `5`.
+- `POLLER_SHUTDOWN_TIMEOUT` - timeout graceful shutdown, по умолчанию `10s`.
+
+Для production `LARAVEL_INTERNAL_API_URL`, `LARAVEL_INTERNAL_API_TOKEN` и
+`POLLER_MANUAL_API_TOKEN` должны быть заданы явно.
+
+## Связанные переменные Laravel
+
+В `apps/web/.env` должны быть настроены переменные для связи Laravel с poller:
+
+```env
+POLLER_BASE_URL=http://127.0.0.1:8090
+POLLER_TOKEN=change-me-manual-token
+POLLER_INTERNAL_TOKEN=change-me-internal-token
+POLLER_MOCK=false
+```
+
+Соответствие токенов:
+
+```text
+Laravel POLLER_TOKEN           = Poller POLLER_MANUAL_API_TOKEN
+Laravel POLLER_INTERNAL_TOKEN  = Poller LARAVEL_INTERNAL_API_TOKEN
+```
+
+`POLLER_BASE_URL` нужен Laravel для ручных проверок. Если Laravel и poller
+работают на одном сервере, лучше держать poller на `127.0.0.1:8090` и не
+открывать этот порт наружу.
 
 ## HTTP checker
 
-Type: `http`.
+Тип: `http`.
 
-Supported settings:
+Поддерживаемые settings:
 
-- `method` - `GET` or `HEAD`, defaults to `GET`.
-- `url` - optional URL override; otherwise `CheckJob.Target` is used.
-- `follow_redirects` - defaults to `true`.
-- `verify_ssl` - defaults to `true`.
-- `headers` - optional string map.
+- `method` - `GET` или `HEAD`, по умолчанию `GET`.
+- `url` - опциональный URL; если не задан, используется `CheckJob.Target`.
+- `follow_redirects` - следовать редиректам, по умолчанию `true`.
+- `verify_ssl` - проверять SSL-сертификат, по умолчанию `true`.
+- `headers` - опциональная string map с HTTP-заголовками.
 
-Supported expected values:
+Поддерживаемые expected:
 
-- `status_codes` - allowed status codes, defaults to `[200]`.
-- `max_response_time_ms` - warning threshold.
+- `status_codes` - допустимые HTTP-статусы, по умолчанию `[200]`.
+- `max_response_time_ms` - порог времени ответа для warning.
 
-Raw result uses the same HTTP contract Laravel normalizes:
+Raw result:
 
 - `status_code`
 - `response_time_ms`
@@ -101,17 +173,17 @@ Raw result uses the same HTTP contract Laravel normalizes:
 
 ## SSL checker
 
-Type: `ssl`.
+Тип: `ssl`.
 
-Supported settings:
+Поддерживаемые settings:
 
-- `domain` - domain to connect to; otherwise `CheckJob.Target` is used.
-- `port` - TLS port, defaults to `443`.
-- `warning_days` - expiration warning thresholds, defaults to `[30, 14, 7, 3, 1]`.
-- `server_name` - optional SNI/hostname override.
-- `verify_ssl` - certificate chain verification flag, defaults to `true`.
+- `domain` - домен для подключения; если не задан, используется `CheckJob.Target`.
+- `port` - TLS-порт, по умолчанию `443`.
+- `warning_days` - пороги предупреждения об истечении сертификата, по умолчанию `[30, 14, 7, 3, 1]`.
+- `server_name` - опциональный SNI/hostname override.
+- `verify_ssl` - проверять цепочку сертификата, по умолчанию `true`.
 
-Raw result uses the same SSL contract Laravel normalizes:
+Raw result:
 
 - `valid`
 - `issued_at`
@@ -123,24 +195,22 @@ Raw result uses the same SSL contract Laravel normalizes:
 - `dns_names`
 - `chain_length`
 
-Go only returns the technical result; Laravel decides whether to notify users
-or update incidents.
+Go возвращает только технический результат. Laravel решает, является ли это
+проблемой, нужно ли менять статус монитора и отправлять уведомления.
 
 ## Domain checker
 
-Type: `domain`.
+Тип: `domain`.
 
-Supported settings:
+Поддерживаемые settings:
 
-- `domain` - domain name; otherwise `CheckJob.Target` is used.
-- `warning_days` - expiration warning thresholds, defaults to `[30, 14, 7, 3, 1]`.
+- `domain` - доменное имя; если не задано, используется `CheckJob.Target`.
+- `warning_days` - пороги предупреждения об истечении домена, по умолчанию `[30, 14, 7, 3, 1]`.
 
-The MVP implementation uses WHOIS over port `43` and parses common expiration
-fields for `.ru`, `.рф`/`.xn--p1ai`, `.com`, `.net` and `.org`. Parsing is kept
-in separate functions so new TLD-specific rules can be added without changing
-the runner or scheduler.
+MVP-реализация использует WHOIS через порт `43` и парсит распространенные поля
+даты истечения для `.ru`, `.рф`/`.xn--p1ai`, `.com`, `.net` и `.org`.
 
-Raw result uses the same domain contract Laravel normalizes:
+Raw result:
 
 - `registered`
 - `domain`
@@ -148,38 +218,129 @@ Raw result uses the same domain contract Laravel normalizes:
 - `days_until_expiration`
 - `registrar`
 
-## Manual Checks
+Для работы domain checker-а на сервере должен быть разрешен исходящий доступ к
+WHOIS-серверам по порту `43`.
 
-MVP manual flow is push-based:
+## Локальный запуск
 
-1. Laravel validates user permissions and billing limits.
-2. Laravel sends `POST /internal/manual-checks` to the poller.
-3. Poller validates the payload and check type.
-4. Poller enqueues the payload as `CheckJob` with `SourceManual`.
-5. Worker pool executes the checker and publishes the result back to Laravel.
-
-`POLLER_MANUAL_API_TOKEN` should match Laravel `POLLER_TOKEN` when auth is
-enabled. Go does not check user permissions, billing limits, incidents or
-notifications.
-
-## Commands
-
-Run locally:
+Из директории `apps/poller`:
 
 ```bash
 go run ./cmd/poller
 ```
 
-Run tests:
+Тесты:
 
 ```bash
 go test ./...
 ```
 
-Run through Docker Compose:
+Через Docker Compose из корня репозитория:
 
 ```bash
 make poller-run
 make poller-logs
 make poller-test
 ```
+
+Локально через Docker poller обычно использует Laravel URL внутри compose-сети:
+
+```env
+LARAVEL_INTERNAL_API_URL=http://nginx
+```
+
+## Запуск на сервере без Docker
+
+Для production без Docker poller лучше запускать как обычный systemd-сервис.
+
+Пример сборки на сервере:
+
+```bash
+cd /var/www/montri/apps/poller
+go test ./...
+go build -trimpath -ldflags="-s -w" -o /opt/montri/bin/montri-poller ./cmd/poller
+```
+
+Пример env-файла `/etc/montri/poller.env`:
+
+```env
+APP_ENV=production
+POLLER_HTTP_ADDR=127.0.0.1:8090
+
+LARAVEL_INTERNAL_API_URL=https://example.ru
+LARAVEL_INTERNAL_API_TOKEN=change-me-internal-token
+LARAVEL_INTERNAL_API_TIMEOUT_SECONDS=10
+
+POLLER_MANUAL_API_TOKEN=change-me-manual-token
+POLLER_WORKERS=10
+POLLER_CHECK_TIMEOUT_SECONDS=10
+POLLER_QUEUE_BUFFER=100
+POLLER_RESULT_RETRY_ATTEMPTS=3
+POLLER_RESULT_RETRY_DELAY_SECONDS=1
+POLLER_SCHEDULER_INTERVAL_SECONDS=30
+POLLER_FETCH_DUE_LIMIT=100
+POLLER_MANUAL_REQUEST_TIMEOUT_SECONDS=5
+POLLER_SHUTDOWN_TIMEOUT=10s
+```
+
+Пример systemd unit `/etc/systemd/system/montri-poller.service`:
+
+```ini
+[Unit]
+Description=Montri Poller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=montri
+Group=montri
+WorkingDirectory=/var/www/montri/apps/poller
+EnvironmentFile=/etc/montri/poller.env
+ExecStart=/opt/montri/bin/montri-poller
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Команды обслуживания:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable montri-poller
+sudo systemctl start montri-poller
+sudo systemctl status montri-poller
+sudo journalctl -u montri-poller -f
+```
+
+После `git pull` и новой сборки бинарника:
+
+```bash
+sudo systemctl restart montri-poller
+```
+
+## Production checklist
+
+- Go установлен на сервере или бинарник собирается в CI/CD.
+- Laravel `.env` содержит `POLLER_BASE_URL`, `POLLER_TOKEN`, `POLLER_INTERNAL_TOKEN`, `POLLER_MOCK=false`.
+- Poller env содержит `LARAVEL_INTERNAL_API_URL`, `LARAVEL_INTERNAL_API_TOKEN`, `POLLER_MANUAL_API_TOKEN`.
+- `POLLER_TOKEN` совпадает с `POLLER_MANUAL_API_TOKEN`.
+- `POLLER_INTERNAL_TOKEN` совпадает с `LARAVEL_INTERNAL_API_TOKEN`.
+- Poller слушает `127.0.0.1:8090`, если находится на том же сервере, что и Laravel.
+- Порт poller-а не открыт публично без необходимости.
+- Сервер имеет исходящий доступ к HTTP/HTTPS целям мониторинга.
+- Сервер имеет исходящий доступ к WHOIS по порту `43`, если включены domain checks.
+- В Laravel запущены необходимые фоновые процессы для очередей и планировщика, если уведомления или другие обработчики работают асинхронно.
+
+## Ограничения текущего MVP
+
+- Endpoint `/internal/monitors/due` сейчас отдает due-мониторы без отдельной
+  операции резервирования. Для одного poller-процесса это приемлемо на MVP, но
+  перед запуском нескольких poller-ов нужно добавить leasing/reservation, чтобы
+  один и тот же монитор не выполнялся параллельно несколько раз.
+- Domain checker использует простой WHOIS-парсер. Для новых TLD могут
+  потребоваться отдельные правила парсинга.
+- Poller не хранит очередь заданий между перезапусками. Если процесс
+  перезапустился, Laravel снова вернет due-мониторы при следующем запросе.
