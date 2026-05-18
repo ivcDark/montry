@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
+import { useAutoRefresh } from '../../Composables/useAutoRefresh'
 
 type Organization = {
     id: string
@@ -127,11 +128,31 @@ const props = defineProps<{
     site: Site
 }>()
 
+useAutoRefresh({
+    only: ['site'],
+    intervalMs: 10000,
+})
+
 const expandedMonitorId = ref<string | null>(null)
 const isDeleteModalOpen = ref(false)
 const intervalPresets = [5, 10, 15, 30, 60, 360, 720, 1440]
 const monitorDrafts = ref<Record<string, MonitorDraft>>(
     Object.fromEntries(props.site.monitors.map((monitor) => [monitor.id, draftFromMonitor(monitor)])),
+)
+
+watch(
+    () => props.site.monitors,
+    (monitors) => {
+        const nextDrafts: Record<string, MonitorDraft> = {}
+
+        monitors.forEach((monitor) => {
+            nextDrafts[monitor.id] = expandedMonitorId.value === monitor.id && monitorDrafts.value[monitor.id]
+                ? monitorDrafts.value[monitor.id]
+                : draftFromMonitor(monitor)
+        })
+
+        monitorDrafts.value = nextDrafts
+    },
 )
 
 const enabledCount = computed(() => props.site.monitors.filter((monitor) => monitor.is_enabled).length)

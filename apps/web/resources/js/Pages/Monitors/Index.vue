@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
+import { useAutoRefresh } from '../../Composables/useAutoRefresh'
 
 type Organization = {
     id: string
@@ -53,6 +54,11 @@ const props = defineProps<{
     organization: Organization
     monitors: Monitor[]
 }>()
+
+useAutoRefresh({
+    only: ['monitors'],
+    intervalMs: 20000,
+})
 
 const search = ref('')
 const typeFilter = ref('all')

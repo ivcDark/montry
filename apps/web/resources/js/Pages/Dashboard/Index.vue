@@ -2,6 +2,7 @@
 import { Head, Link } from '@inertiajs/vue3'
 import { computed, ref } from 'vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
+import { useAutoRefresh } from '../../Composables/useAutoRefresh'
 
 type Organization = {
     id: string
@@ -56,6 +57,11 @@ const props = defineProps<{
     incidents: Incident[]
     latest_checks: LatestCheck[]
 }>()
+
+useAutoRefresh({
+    only: ['summary', 'problems', 'incidents', 'latest_checks'],
+    intervalMs: 15000,
+})
 
 const search = ref('')
 
