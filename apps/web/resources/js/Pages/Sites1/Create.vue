@@ -20,7 +20,7 @@ function submit() {
         <header class="border-b border-white/10 px-6 py-4">
             <div class="mx-auto flex max-w-6xl items-center justify-between">
                 <div>
-                    <p class="text-sm font-medium text-emerald-400">Montri</p>
+                    <p class="text-sm font-medium text-emerald-400">Montry</p>
                     <h1 class="text-xl font-semibold">Add site</h1>
                 </div>
 
@@ -57,7 +57,7 @@ function submit() {
                         </p>
 
                         <p class="mt-2 text-sm text-neutral-500">
-                            You can enter example.com — Montri will assume HTTPS.
+                            You can enter example.com — Montry will assume HTTPS.
                         </p>
                     </div>
 

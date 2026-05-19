@@ -1,4 +1,4 @@
-# Montri: Next Session Handoff
+# Montry: Next Session Handoff
 
 ## Current state
 
@@ -71,8 +71,8 @@ make artisan cmd="route:list"
 
 ## RabbitMQ credentials
 
-- user: `montri`
-- password: `montri`
+- user: `montry`
+- password: `montry`
 
 ## Important queues
 

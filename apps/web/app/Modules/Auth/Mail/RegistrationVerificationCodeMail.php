@@ -17,7 +17,7 @@ final class RegistrationVerificationCodeMail extends Mailable
     public function build(): self
     {
         return $this
-            ->subject('Код подтверждения Montri')
+            ->subject('Код подтверждения Montry')
             ->view('emails.auth.registration-verification-code');
     }
 }

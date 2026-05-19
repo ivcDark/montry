@@ -29,7 +29,7 @@ function submit() {
                     Добавьте первый сайт и включите мониторинг за несколько минут
                 </h1>
                 <p class="mt-6 max-w-xl text-lg leading-8 text-[#667085]">
-                    Montri подойдет веб-студиям, фрилансерам и малому бизнесу, которым важно не пропускать падения сайтов, SSL и домены.
+                    Montry подойдет веб-студиям, фрилансерам и малому бизнесу, которым важно не пропускать падения сайтов, SSL и домены.
                 </p>
 
                 <div class="mt-10 grid max-w-xl gap-4 sm:grid-cols-3">
@@ -53,9 +53,9 @@ function submit() {
 
             <section class="rounded-3xl border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(15,23,42,0.12)] sm:p-8">
                 <div>
-                    <Link href="/" class="inline-flex items-center gap-3" aria-label="Montri">
+                    <Link href="/" class="inline-flex items-center gap-3" aria-label="Montry">
                         <span class="grid h-10 w-10 place-items-center rounded-xl bg-[#0F6BFF] text-lg font-extrabold text-white">M</span>
-                        <span class="text-2xl font-extrabold tracking-normal text-[#111827]">Montri</span>
+                        <span class="text-2xl font-extrabold tracking-normal text-[#111827]">Montry</span>
                     </Link>
 
                     <h1 class="mt-8 text-3xl font-extrabold tracking-normal text-[#111827]">

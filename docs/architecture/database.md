@@ -6,7 +6,7 @@
 
 ## Framework Tables
 
-Эти таблицы остаются как инфраструктура Laravel и не являются доменной моделью Montri:
+Эти таблицы остаются как инфраструктура Laravel и не являются доменной моделью Montry:
 
 - `users`
 - `password_reset_tokens`

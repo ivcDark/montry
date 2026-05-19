@@ -4,7 +4,7 @@
 
 ## 1. Цель Go poller
 
-Go poller выполняет технические проверки мониторинга для Montri:
+Go poller выполняет технические проверки мониторинга для Montry:
 
 - HTTP/HTTPS availability;
 - SSL certificate validity and expiration;

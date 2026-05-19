@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"montri/apps/poller/internal/checks"
-	"montri/apps/poller/internal/jobs"
-	"montri/apps/poller/internal/logger"
+	"montry/apps/poller/internal/checks"
+	"montry/apps/poller/internal/jobs"
+	"montry/apps/poller/internal/logger"
 )
 
 type Options struct {

@@ -1,12 +1,12 @@
-# Montri
+# Montry
 
-**Montri** — B2B SaaS-сервис для мониторинга клиентских сайтов, доменов, SSL-сертификатов, важных страниц, `robots.txt` и `sitemap.xml`.
+**Montry** — B2B SaaS-сервис для мониторинга клиентских сайтов, доменов, SSL-сертификатов, важных страниц, `robots.txt` и `sitemap.xml`.
 
 Проект ориентирован на веб-студии, SEO-агентства и команды поддержки сайтов.
 
-## Что делает Montri
+## Что делает Montry
 
-Montri помогает отслеживать:
+Montry помогает отслеживать:
 
 - актуальность SSL-сертификатов;
 - срок действия доменов;
@@ -24,7 +24,7 @@ Montri помогает отслеживать:
 .
 ├── apps
 │   ├── poller              # Go-приложение для выполнения проверок
-│   └── web                 # Laravel-приложение Montri
+│   └── web                 # Laravel-приложение Montry
 ├── docker
 │   ├── go                  # Dockerfile для Go poller
 │   ├── nginx               # Конфигурация Nginx
@@ -72,7 +72,7 @@ storage;
 bootstrap/cache.  
 Генерирует APP_KEY.  
 Запускает миграции.  
-Поднимает все остальные сервисы Montri:
+Поднимает все остальные сервисы Montry:
 - web-scheduler;
 - web-queue;
 - web-result-consumer;
@@ -116,7 +116,7 @@ make restart
 make ps
 ```
 
-**Показывает логи всех сервисов Montri**
+**Показывает логи всех сервисов Montry**
 ```
 make logs
 ```

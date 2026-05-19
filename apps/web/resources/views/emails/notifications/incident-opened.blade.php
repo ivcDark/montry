@@ -18,7 +18,7 @@
                                         M
                                     </td>
                                     <td style="padding-left:12px;font-size:24px;line-height:30px;font-weight:800;color:#111827;">
-                                        Montri
+                                        Montry
                                     </td>
                                 </tr>
                             </table>
@@ -78,7 +78,7 @@
                     <tr>
                         <td align="center" style="padding:20px 10px 0;">
                             <p style="margin:0;font-size:12px;line-height:20px;font-weight:600;color:#98A2B3;">
-                                Montri помогает следить за сайтами, SSL и доменами.
+                                Montry помогает следить за сайтами, SSL и доменами.
                             </p>
                         </td>
                     </tr>

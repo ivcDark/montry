@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title data-inertia>{{ config('app.name', 'Montri') }}</title>
+    <title data-inertia>{{ config('app.name', 'Montry') }}</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
     @vite(['resources/css/app.css', 'resources/js/app.ts'])

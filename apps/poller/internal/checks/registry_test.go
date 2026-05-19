@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"montri/apps/poller/internal/jobs"
+	"montry/apps/poller/internal/jobs"
 )
 
 type fakeChecker struct {

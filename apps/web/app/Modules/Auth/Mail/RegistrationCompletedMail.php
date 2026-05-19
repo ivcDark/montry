@@ -17,7 +17,7 @@ final class RegistrationCompletedMail extends Mailable
     public function build(): self
     {
         return $this
-            ->subject('Регистрация в Montri завершена')
+            ->subject('Регистрация в Montry завершена')
             ->view('emails.auth.registration-completed');
     }
 }

@@ -3,7 +3,7 @@ package runner
 import (
 	"context"
 
-	"montri/apps/poller/internal/jobs"
+	"montry/apps/poller/internal/jobs"
 )
 
 type Dispatcher struct {

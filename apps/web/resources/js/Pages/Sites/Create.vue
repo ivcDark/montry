@@ -263,7 +263,7 @@ function submit(): void {
                         <div class="mt-5 rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
                             <p class="text-xs font-extrabold uppercase text-[#667085]">Будет создано</p>
                             <p class="mt-2 truncate text-sm font-extrabold text-[#111827]">{{ normalizedSite?.host ?? 'Домен появится после ввода URL' }}</p>
-                            <p class="mt-1 truncate text-xs font-semibold text-[#667085]">{{ normalizedSite?.url ?? 'Montri автоматически добавит HTTPS, если схема не указана' }}</p>
+                            <p class="mt-1 truncate text-xs font-semibold text-[#667085]">{{ normalizedSite?.url ?? 'Montry автоматически добавит HTTPS, если схема не указана' }}</p>
                         </div>
                     </section>
 

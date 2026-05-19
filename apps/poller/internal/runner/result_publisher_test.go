@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"montri/apps/poller/internal/checks"
-	"montri/apps/poller/internal/jobs"
-	"montri/apps/poller/internal/laravel"
+	"montry/apps/poller/internal/checks"
+	"montry/apps/poller/internal/jobs"
+	"montry/apps/poller/internal/laravel"
 )
 
 type fakeLaravelClient struct {

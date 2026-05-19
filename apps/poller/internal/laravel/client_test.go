@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"montri/apps/poller/internal/checks"
+	"montry/apps/poller/internal/checks"
 )
 
 func TestClientFetchDueChecks(t *testing.T) {

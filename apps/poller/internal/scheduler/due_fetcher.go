@@ -3,8 +3,8 @@ package scheduler
 import (
 	"context"
 
-	"montri/apps/poller/internal/jobs"
-	"montri/apps/poller/internal/laravel"
+	"montry/apps/poller/internal/jobs"
+	"montry/apps/poller/internal/laravel"
 )
 
 type DueFetcher struct {

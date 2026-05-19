@@ -21,7 +21,7 @@ for the current architecture.
 
 ## Poller networking
 
-The poller and Laravel containers share the `montri-net` Docker network.
+The poller and Laravel containers share the `montry-net` Docker network.
 
 Inside Docker, the poller reaches Laravel through:
 

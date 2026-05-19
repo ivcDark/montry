@@ -3,7 +3,7 @@ package checks
 import (
 	"context"
 
-	"montri/apps/poller/internal/jobs"
+	"montry/apps/poller/internal/jobs"
 )
 
 type Checker interface {

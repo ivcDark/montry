@@ -5,7 +5,7 @@ import { createApp, h, type DefineComponent } from 'vue'
 import { createInertiaApp } from '@inertiajs/vue3'
 
 createInertiaApp({
-    title: (title) => title ? `${title} - Montri` : 'Montri',
+    title: (title) => title ? `${title} - Montry` : 'Montry',
 
     resolve: (name) => {
         const pages = import.meta.glob('./Pages/**/*.vue', {

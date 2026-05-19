@@ -3,17 +3,17 @@ package app
 import (
 	"fmt"
 
-	"montri/apps/poller/internal/checks"
-	"montri/apps/poller/internal/checks/domaincheck"
-	"montri/apps/poller/internal/checks/httpcheck"
-	"montri/apps/poller/internal/checks/sslcheck"
-	"montri/apps/poller/internal/config"
-	"montri/apps/poller/internal/jobs"
-	"montri/apps/poller/internal/laravel"
-	"montri/apps/poller/internal/logger"
-	"montri/apps/poller/internal/runner"
-	"montri/apps/poller/internal/scheduler"
-	transporthttp "montri/apps/poller/internal/transport/http"
+	"montry/apps/poller/internal/checks"
+	"montry/apps/poller/internal/checks/domaincheck"
+	"montry/apps/poller/internal/checks/httpcheck"
+	"montry/apps/poller/internal/checks/sslcheck"
+	"montry/apps/poller/internal/config"
+	"montry/apps/poller/internal/jobs"
+	"montry/apps/poller/internal/laravel"
+	"montry/apps/poller/internal/logger"
+	"montry/apps/poller/internal/runner"
+	"montry/apps/poller/internal/scheduler"
+	transporthttp "montry/apps/poller/internal/transport/http"
 )
 
 type App struct {

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Код подтверждения Montri</title>
+    <title>Код подтверждения Montry</title>
 </head>
 <body style="margin:0;padding:0;background:#F6F8FB;color:#111827;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#F6F8FB;margin:0;padding:0;">
@@ -18,7 +18,7 @@
                                         M
                                     </td>
                                     <td style="padding-left:12px;font-size:24px;line-height:30px;font-weight:800;color:#111827;">
-                                        Montri
+                                        Montry
                                     </td>
                                 </tr>
                             </table>
@@ -36,7 +36,7 @@
                             </h1>
 
                             <p style="margin:16px 0 0;font-size:16px;line-height:26px;font-weight:500;color:#667085;">
-                                Используйте этот код, чтобы завершить регистрацию и открыть личный кабинет Montri.
+                                Используйте этот код, чтобы завершить регистрацию и открыть личный кабинет Montry.
                             </p>
 
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0;width:100%;">
@@ -59,7 +59,7 @@
                                             Код действует 10 минут.
                                         </p>
                                         <p style="margin:6px 0 0;font-size:14px;line-height:22px;color:#667085;">
-                                            Если вы не регистрировались в Montri, просто проигнорируйте это письмо.
+                                            Если вы не регистрировались в Montry, просто проигнорируйте это письмо.
                                         </p>
                                     </td>
                                 </tr>
@@ -70,7 +70,7 @@
                     <tr>
                         <td align="center" style="padding:20px 10px 0;">
                             <p style="margin:0;font-size:12px;line-height:20px;font-weight:600;color:#98A2B3;">
-                                Montri помогает следить за сайтами, SSL и доменами.
+                                Montry помогает следить за сайтами, SSL и доменами.
                             </p>
                         </td>
                     </tr>

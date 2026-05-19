@@ -6,8 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"montri/apps/poller/internal/app"
-	"montri/apps/poller/internal/logger"
+	"montry/apps/poller/internal/app"
+	"montry/apps/poller/internal/logger"
 )
 
 func main() {

@@ -1,4 +1,4 @@
-# Montri Poller
+# Montry Poller
 
 Poller - это Go-сервис, который выполняет технические проверки мониторинга и
 отправляет результаты обратно в Laravel.
@@ -256,12 +256,12 @@ LARAVEL_INTERNAL_API_URL=http://nginx
 Пример сборки на сервере:
 
 ```bash
-cd /var/www/montri/apps/poller
+cd /var/www/montry/apps/poller
 go test ./...
-go build -trimpath -ldflags="-s -w" -o /opt/montri/bin/montri-poller ./cmd/poller
+go build -trimpath -ldflags="-s -w" -o /opt/montry/bin/montry-poller ./cmd/poller
 ```
 
-Пример env-файла `/etc/montri/poller.env`:
+Пример env-файла `/etc/montry/poller.env`:
 
 ```env
 APP_ENV=production
@@ -283,20 +283,20 @@ POLLER_MANUAL_REQUEST_TIMEOUT_SECONDS=5
 POLLER_SHUTDOWN_TIMEOUT=10s
 ```
 
-Пример systemd unit `/etc/systemd/system/montri-poller.service`:
+Пример systemd unit `/etc/systemd/system/montry-poller.service`:
 
 ```ini
 [Unit]
-Description=Montri Poller
+Description=Montry Poller
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-User=montri
-Group=montri
-WorkingDirectory=/var/www/montri/apps/poller
-EnvironmentFile=/etc/montri/poller.env
-ExecStart=/opt/montri/bin/montri-poller
+User=montry
+Group=montry
+WorkingDirectory=/var/www/montry/apps/poller
+EnvironmentFile=/etc/montry/poller.env
+ExecStart=/opt/montry/bin/montry-poller
 Restart=always
 RestartSec=5
 NoNewPrivileges=true
@@ -309,16 +309,16 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable montri-poller
-sudo systemctl start montri-poller
-sudo systemctl status montri-poller
-sudo journalctl -u montri-poller -f
+sudo systemctl enable montry-poller
+sudo systemctl start montry-poller
+sudo systemctl status montry-poller
+sudo journalctl -u montry-poller -f
 ```
 
 После `git pull` и новой сборки бинарника:
 
 ```bash
-sudo systemctl restart montri-poller
+sudo systemctl restart montry-poller
 ```
 
 ## Production checklist

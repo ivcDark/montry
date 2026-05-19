@@ -425,7 +425,7 @@ function toggleMonitor(monitor: Monitor): void {
                         <div class="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#EAF2FF] text-2xl font-extrabold text-[#0F6BFF]">＋</div>
                         <h3 class="mt-5 text-xl font-extrabold text-[#111827]">Мониторинги еще не добавлены</h3>
                         <p class="mx-auto mt-2 max-w-md leading-7 text-[#667085]">
-                            Добавьте первый сайт, чтобы Montri начал проверять доступность, SSL и срок домена.
+                            Добавьте первый сайт, чтобы Montry начал проверять доступность, SSL и срок домена.
                         </p>
                         <Link
                             href="/sites"

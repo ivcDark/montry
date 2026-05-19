@@ -1,4 +1,4 @@
-# Montri Architecture Notes
+# Montry Architecture Notes
 
 ## MVP scope
 

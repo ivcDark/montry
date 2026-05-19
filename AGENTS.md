@@ -1,8 +1,8 @@
-# Montri — project context for Codex
+# Montry — project context for Codex
 
 ## Project idea
 
-Montri is a small SaaS project for website, domain, SSL and infrastructure monitoring.
+Montry is a small SaaS project for website, domain, SSL and infrastructure monitoring.
 
 The goal is not to become a market leader. The goal is to build a stable micro-SaaS for small businesses, freelancers, SEO specialists and web studios with around 100–300 clients and roughly 50,000 RUB/month revenue.
 
@@ -19,7 +19,7 @@ Core value:
 
 The repository is a monorepo:
 
-/montri
+/montry
 ├── apps/
 │   ├── web/       # Laravel app: landing, admin panel, user dashboard, billing, incidents, notifications
 │   └── poller/    # Go service: performs monitoring checks

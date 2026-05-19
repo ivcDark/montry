@@ -61,7 +61,7 @@ const usagePercent = computed(() => Math.min((props.usageCurrent / props.usageLi
             <div>
                 <Link href="/" class="flex items-center gap-3">
                     <span class="grid h-10 w-10 place-items-center rounded-xl bg-[#0F6BFF] text-lg font-extrabold text-white">M</span>
-                    <span class="text-2xl font-extrabold tracking-normal">Montri</span>
+                    <span class="text-2xl font-extrabold tracking-normal">Montry</span>
                 </Link>
 
                 <p class="mt-1 text-sm font-semibold text-[#94A3B8]">Мониторинг сайтов</p>

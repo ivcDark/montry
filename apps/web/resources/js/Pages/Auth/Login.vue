@@ -23,7 +23,7 @@ function submit() {
 
         <section class="mx-auto grid min-h-[calc(100vh-80px)] max-w-7xl gap-10 px-5 py-12 sm:px-8 lg:grid-cols-[minmax(0,1fr)_460px] lg:items-center lg:py-16">
             <div class="hidden lg:block">
-                <p class="text-sm font-extrabold text-[#12B3A8]">Montri account</p>
+                <p class="text-sm font-extrabold text-[#12B3A8]">Montry account</p>
                 <h1 class="mt-4 max-w-2xl text-5xl font-extrabold leading-tight tracking-normal text-[#111827]">
                     Вернитесь к мониторингу сайтов, SSL и доменов
                 </h1>
@@ -56,9 +56,9 @@ function submit() {
 
             <section class="rounded-3xl border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(15,23,42,0.12)] sm:p-8">
                 <div>
-                    <Link href="/" class="inline-flex items-center gap-3" aria-label="Montri">
+                    <Link href="/" class="inline-flex items-center gap-3" aria-label="Montry">
                         <span class="grid h-10 w-10 place-items-center rounded-xl bg-[#0F6BFF] text-lg font-extrabold text-white">M</span>
-                        <span class="text-2xl font-extrabold tracking-normal text-[#111827]">Montri</span>
+                        <span class="text-2xl font-extrabold tracking-normal text-[#111827]">Montry</span>
                     </Link>
 
                     <h1 class="mt-8 text-3xl font-extrabold tracking-normal text-[#111827]">

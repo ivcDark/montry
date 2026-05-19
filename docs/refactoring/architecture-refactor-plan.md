@@ -1,4 +1,4 @@
-# Montri Laravel Architecture Refactor Plan
+# Montry Laravel Architecture Refactor Plan
 
 Дата анализа: 2026-05-12.
 

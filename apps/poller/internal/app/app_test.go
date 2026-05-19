@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"montri/apps/poller/internal/config"
-	"montri/apps/poller/internal/logger"
+	"montry/apps/poller/internal/config"
+	"montry/apps/poller/internal/logger"
 )
 
 func TestAppLifecycleFetchesDueChecksAndStops(t *testing.T) {
