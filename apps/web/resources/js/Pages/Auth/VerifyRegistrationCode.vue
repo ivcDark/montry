@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import MarketingHeader from '@/Components/MarketingHeader.vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
-defineProps<{
+const props = defineProps<{
     email: string
     resendCooldownSeconds: number
 }>()
@@ -12,13 +13,54 @@ const form = useForm({
 })
 
 const resendForm = useForm({})
+const secondsLeft = ref(Math.max(0, props.resendCooldownSeconds))
+const canResend = computed(() => secondsLeft.value === 0 && !resendForm.processing)
+
+let resendTimer: ReturnType<typeof setInterval> | null = null
+
+function stopResendTimer() {
+    if (!resendTimer) {
+        return
+    }
+
+    clearInterval(resendTimer)
+    resendTimer = null
+}
+
+function startResendTimer() {
+    stopResendTimer()
+
+    if (secondsLeft.value === 0) {
+        return
+    }
+
+    resendTimer = setInterval(() => {
+        secondsLeft.value = Math.max(0, secondsLeft.value - 1)
+
+        if (secondsLeft.value === 0) {
+            stopResendTimer()
+        }
+    }, 1000)
+}
+
+onMounted(startResendTimer)
+onUnmounted(stopResendTimer)
 
 function submit() {
     form.post('/register/verify-code')
 }
 
 function resend() {
-    resendForm.post('/register/verify-code/resend')
+    if (!canResend.value) {
+        return
+    }
+
+    resendForm.post('/register/verify-code/resend', {
+        onSuccess: () => {
+            secondsLeft.value = Math.max(0, props.resendCooldownSeconds)
+            startResendTimer()
+        },
+    })
 }
 </script>
 
@@ -93,16 +135,20 @@ function resend() {
                 <form class="mt-4" @submit.prevent="resend">
                     <button
                         type="submit"
-                        :disabled="resendForm.processing"
-                        class="inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#E5E7EB] bg-white px-5 text-sm font-bold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="!canResend"
+                        class="inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#E5E7EB] bg-white px-5 text-sm font-bold text-[#111827] transition enabled:hover:border-[#0F6BFF] enabled:hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-60"
                     >
                         <span v-if="resendForm.processing">Отправляем...</span>
                         <span v-else>Отправить код повторно</span>
                     </button>
                 </form>
 
-                <p class="mt-4 text-center text-xs font-semibold text-[#667085]">
-                    Повторная отправка доступна через {{ resendCooldownSeconds }} секунд.
+                <p v-if="secondsLeft > 0" class="mt-4 text-center text-xs font-semibold text-[#667085]">
+                    Повторная отправка доступна через {{ secondsLeft }} секунд.
+                </p>
+
+                <p v-else class="mt-4 text-center text-xs font-semibold text-[#667085]">
+                    Можно отправить новый код.
                 </p>
             </section>
         </section>
