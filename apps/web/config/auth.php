@@ -45,6 +45,13 @@ return [
         ],
     ],
 
+    'email_verification' => [
+        'code_length' => 5,
+        'ttl_minutes' => 10,
+        'max_attempts' => 5,
+        'resend_cooldown_seconds' => 120,
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | User Providers

@@ -3,6 +3,7 @@
 use App\Modules\Auth\Http\Controllers\LoginController;
 use App\Modules\Auth\Http\Controllers\LogoutController;
 use App\Modules\Auth\Http\Controllers\RegisterController;
+use App\Modules\Auth\Http\Controllers\RegisterVerificationController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function (): void {
@@ -17,6 +18,15 @@ Route::middleware('guest')->group(function (): void {
 
     Route::post('/register', [RegisterController::class, 'store'])
         ->name('register.store');
+
+    Route::get('/register/verify-code', [RegisterVerificationController::class, 'create'])
+        ->name('register.verify-code');
+
+    Route::post('/register/verify-code', [RegisterVerificationController::class, 'store'])
+        ->name('register.verify-code.store');
+
+    Route::post('/register/verify-code/resend', [RegisterVerificationController::class, 'resend'])
+        ->name('register.verify-code.resend');
 });
 
 Route::post('/logout', LogoutController::class)

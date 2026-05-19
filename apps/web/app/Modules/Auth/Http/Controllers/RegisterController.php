@@ -2,11 +2,10 @@
 
 namespace App\Modules\Auth\Http\Controllers;
 
-use App\Application\Onboarding\Actions\CreateAccount;
 use App\Http\Controllers\Controller;
+use App\Modules\Auth\Actions\StartRegistrationVerification;
 use App\Modules\Auth\Http\Requests\RegisterRequest;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -19,14 +18,12 @@ final class RegisterController extends Controller
 
     public function store(
         RegisterRequest $request,
-        CreateAccount $createAccount,
+        StartRegistrationVerification $startRegistrationVerification,
     ): RedirectResponse {
-        $user = $createAccount->handle($request->toData());
+        $user = $startRegistrationVerification->handle($request->toData());
 
-        Auth::login($user);
+        $request->session()->put('pending_registration_user_id', $user->id);
 
-        $request->session()->regenerate();
-
-        return redirect()->route('dashboard.index');
+        return redirect()->route('register.verify-code');
     }
 }
