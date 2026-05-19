@@ -105,7 +105,7 @@ const usagePercent = computed(() => Math.min((props.usageCurrent / props.usageLi
                     href="/logout"
                     method="post"
                     as="button"
-                    class="mt-4 flex h-10 w-full items-center justify-center rounded-xl border border-white/10 text-sm font-extrabold text-[#CBD5E1] transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+                    class="mt-4 flex h-10 w-full items-center justify-center rounded-xl border border-white/10 text-sm font-extrabold text-[#CBD5E1] transition hover:border-white/20 hover:bg-white/5 hover:text-white cursor-pointer"
                 >
                     Выйти
                 </Link>

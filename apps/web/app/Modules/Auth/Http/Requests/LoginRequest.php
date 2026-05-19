@@ -21,6 +21,14 @@ final class LoginRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'email.email' => "Неверный email",
+            'password.required' => 'Пароль не заполнен'
+        ];
+    }
+
     public function toData(): LoginUserData
     {
         return new LoginUserData(

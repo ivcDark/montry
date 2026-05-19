@@ -517,7 +517,7 @@ function deleteSite(): void {
                         <div class="flex flex-wrap gap-2">
                             <button
                                 type="button"
-                                class="h-9 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-50"
+                                class="h-9 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
                                 :disabled="!monitor.is_enabled"
                                 @click="checkNow(monitor)"
                             >
@@ -525,14 +525,14 @@ function deleteSite(): void {
                             </button>
                             <button
                                 type="button"
-                                class="h-9 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF]"
+                                class="h-9 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF] cursor-pointer"
                                 @click="toggleMonitor(monitor)"
                             >
                                 {{ monitor.is_enabled ? 'Пауза' : 'Включить' }}
                             </button>
                             <button
                                 type="button"
-                                class="h-9 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF]"
+                                class="h-9 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF] cursor-pointer"
                                 @click="toggleSettings(monitor)"
                             >
                                 {{ expandedMonitorId === monitor.id ? 'Скрыть настройки' : 'Настроить' }}

@@ -12,7 +12,7 @@ final class LoginUser
     {
         if (! Auth::attempt($data->credentials(), $data->remember)) {
             throw ValidationException::withMessages([
-                'email' => __('auth.failed'),
+                'email' => 'Неверная пара почта/пароль',
             ]);
         }
     }
