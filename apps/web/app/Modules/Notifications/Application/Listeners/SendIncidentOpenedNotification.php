@@ -24,11 +24,13 @@ final readonly class SendIncidentOpenedNotification
 
         $this->dispatcher->dispatch(new NotificationMessage(
             eventType: 'incident.opened',
-            subject: 'Incident opened: ' . $incident->title,
-            body: "Incident opened: {$incident->title}\n{$incident->summary}",
+            subject: 'Инцидент открыт: ' . $incident->title,
+            body: "Инцидент открыт: {$incident->title}\n{$incident->summary}",
             payload: [
                 'incident_id' => $incident->id,
                 'monitor_id' => $incident->monitor_id,
+                'title' => $incident->title,
+                'summary' => $incident->summary,
                 'status' => $incident->status,
                 'started_at' => $incident->started_at?->toIso8601String(),
             ],

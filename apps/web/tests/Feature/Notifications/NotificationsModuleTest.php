@@ -10,6 +10,7 @@ use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredRe
 use App\Modules\Monitoring\Domain\Events\DomainExpiring;
 use App\Modules\Monitoring\Domain\Events\SslExpiring;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
+use App\Modules\Notifications\Application\Mail\IncidentOpenedMail;
 use App\Modules\Notifications\Infrastructure\Persistence\Models\NotificationChannel;
 use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -44,6 +45,9 @@ final class NotificationsModuleTest extends TestCase
             'event_type' => 'incident.opened',
             'status' => 'sent',
         ]);
+        Mail::assertSent(IncidentOpenedMail::class, function (IncidentOpenedMail $mail): bool {
+            return $mail->hasTo('ops@example.com');
+        });
     }
 
     public function test_it_does_not_send_duplicate_incident_opened_notifications(): void

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Modules\Auth\Mail\RegistrationCompletedMail;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Organizations\Enums\OrganizationRole;
@@ -64,6 +65,7 @@ class RegisterTest extends TestCase
 
     public function test_valid_code_verifies_user_creates_account_and_logs_user_in(): void
     {
+        Mail::fake();
         Carbon::setTestNow('2026-05-18 12:00:00');
         $user = User::factory()->create([
             'name' => 'Ivan Petrov',
@@ -108,6 +110,9 @@ class RegisterTest extends TestCase
             'user_id' => $user->id,
             'consumed_at' => Carbon::now()->toDateTimeString(),
         ]);
+        Mail::assertSent(RegistrationCompletedMail::class, function (RegistrationCompletedMail $mail) use ($user): bool {
+            return $mail->hasTo($user->email);
+        });
     }
 
     public function test_expired_code_does_not_verify_user(): void

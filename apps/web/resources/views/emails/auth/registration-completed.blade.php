@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Код подтверждения Montri</title>
+    <title>Регистрация в Montri завершена</title>
 </head>
 <body style="margin:0;padding:0;background:#F6F8FB;color:#111827;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#F6F8FB;margin:0;padding:0;">
@@ -28,42 +28,43 @@
                     <tr>
                         <td style="border:1px solid #E5E7EB;border-radius:28px;background:#FFFFFF;padding:32px;box-shadow:0 24px 64px rgba(15,23,42,0.10);">
                             <p style="margin:0 0 12px;font-size:13px;line-height:18px;font-weight:800;color:#12B3A8;text-transform:uppercase;letter-spacing:0;">
-                                Подтверждение email
+                                Аккаунт готов
                             </p>
 
                             <h1 style="margin:0;font-size:28px;line-height:36px;font-weight:800;color:#111827;letter-spacing:0;">
-                                Введите одноразовый код
+                                {{ $userName }}, регистрация завершена
                             </h1>
 
                             <p style="margin:16px 0 0;font-size:16px;line-height:26px;font-weight:500;color:#667085;">
-                                Используйте этот код, чтобы завершить регистрацию и открыть личный кабинет Montri.
+                                Мы создали личный кабинет, организацию и стартовый проект. Теперь можно добавить первый сайт и включить мониторинг доступности, SSL и домена.
                             </p>
 
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0;width:100%;">
                                 <tr>
-                                    <td align="center" style="border:1px solid #D8E6FF;border-radius:20px;background:#EAF2FF;padding:24px 16px;">
-                                        <p style="margin:0 0 10px;font-size:13px;line-height:18px;font-weight:800;color:#0F6BFF;">
-                                            Код подтверждения
+                                    <td style="border:1px solid #D8E6FF;border-radius:20px;background:#EAF2FF;padding:20px;">
+                                        <p style="margin:0;font-size:15px;line-height:24px;font-weight:800;color:#111827;">
+                                            С чего начать
                                         </p>
-                                        <p style="margin:0;font-size:38px;line-height:46px;font-weight:800;color:#111827;letter-spacing:6px;">
-                                            {{ $code }}
+                                        <p style="margin:10px 0 0;font-size:14px;line-height:22px;color:#667085;">
+                                            Добавьте сайт, проверьте настройки HTTP/SSL/домена и подключите удобные уведомления.
                                         </p>
                                     </td>
                                 </tr>
                             </table>
 
-                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0;">
                                 <tr>
-                                    <td style="border-radius:16px;background:#F8FAFC;padding:16px;">
-                                        <p style="margin:0;font-size:14px;line-height:22px;font-weight:700;color:#111827;">
-                                            Код действует 10 минут.
-                                        </p>
-                                        <p style="margin:6px 0 0;font-size:14px;line-height:22px;color:#667085;">
-                                            Если вы не регистрировались в Montri, просто проигнорируйте это письмо.
-                                        </p>
+                                    <td style="border-radius:14px;background:#0F6BFF;">
+                                        <a href="{{ url('/dashboard') }}" style="display:inline-block;padding:13px 20px;font-size:14px;line-height:18px;font-weight:800;color:#FFFFFF;text-decoration:none;">
+                                            Открыть кабинет
+                                        </a>
                                     </td>
                                 </tr>
                             </table>
+
+                            <p style="margin:22px 0 0;font-size:13px;line-height:20px;color:#98A2B3;">
+                                Если кнопка не открывается, перейдите в кабинет вручную: {{ url('/dashboard') }}
+                            </p>
                         </td>
                     </tr>
 

@@ -4,10 +4,12 @@ namespace App\Modules\Auth\Actions;
 
 use App\Application\Onboarding\Actions\CompleteAccountRegistration;
 use App\Modules\Auth\Infrastructure\Persistence\Models\EmailVerificationCode;
+use App\Modules\Auth\Mail\RegistrationCompletedMail;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 final readonly class VerifyRegistrationEmailCode
@@ -67,6 +69,8 @@ final readonly class VerifyRegistrationEmailCode
 
             $this->completeAccountRegistration->handle($user);
         });
+
+        Mail::to($user->email)->send(new RegistrationCompletedMail($user->name));
 
         Auth::login($user);
     }
