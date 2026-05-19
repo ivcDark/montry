@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <title data-inertia>{{ config('app.name', 'Montri') }}</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
     @vite(['resources/css/app.css', 'resources/js/app.ts'])
     @inertiaHead
