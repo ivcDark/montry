@@ -43,6 +43,75 @@ final class WorkerGatewayTest extends TestCase
         $this->assertSame('http', $client->payload->checkType);
     }
 
+    public function test_user_can_request_manual_checks_for_all_enabled_site_monitors(): void
+    {
+        [$user, $organization, $resource, $httpMonitor] = $this->createMonitorContext();
+        $sslMonitor = Monitor::query()->create([
+            'organization_id' => $organization->id,
+            'project_id' => $httpMonitor->project_id,
+            'monitored_resource_id' => $resource->id,
+            'type' => 'ssl',
+            'name' => 'SSL check',
+            'enabled' => true,
+            'status' => 'unknown',
+            'interval_seconds' => 86400,
+            'timeout_ms' => 10000,
+            'settings' => [
+                'domain' => 'example.com',
+                'port' => 443,
+                'warning_days' => [30, 14, 7, 3, 1],
+            ],
+            'expected' => [
+                'valid' => true,
+            ],
+        ]);
+        Monitor::query()->create([
+            'organization_id' => $organization->id,
+            'project_id' => $httpMonitor->project_id,
+            'monitored_resource_id' => $resource->id,
+            'type' => 'domain',
+            'name' => 'Domain check',
+            'enabled' => false,
+            'status' => 'paused',
+            'interval_seconds' => 86400,
+            'timeout_ms' => 10000,
+            'settings' => [
+                'domain' => 'example.com',
+                'warning_days' => [30, 14, 7, 3, 1],
+            ],
+            'expected' => [
+                'registered' => true,
+            ],
+        ]);
+        $client = new class implements MonitoringWorkerClientInterface
+        {
+            /** @var list<WorkerCheckPayload> */
+            public array $payloads = [];
+
+            public function requestManualCheck(WorkerCheckPayload $payload): void
+            {
+                $this->payloads[] = $payload;
+            }
+        };
+
+        $this->app->instance(MonitoringWorkerClientInterface::class, $client);
+
+        $this
+            ->actingAs($user)
+            ->post("/sites/{$resource->id}/check-now")
+            ->assertRedirect();
+
+        $this->assertCount(2, $client->payloads);
+        $this->assertEqualsCanonicalizing(
+            [$httpMonitor->id, $sslMonitor->id],
+            array_map(fn (WorkerCheckPayload $payload): int => $payload->monitorId, $client->payloads),
+        );
+        $this->assertEqualsCanonicalizing(
+            ['http', 'ssl'],
+            array_map(fn (WorkerCheckPayload $payload): string => $payload->checkType, $client->payloads),
+        );
+    }
+
     public function test_manual_check_respects_plan_limit(): void
     {
         [$user, $organization, , $monitor] = $this->createMonitorContext();

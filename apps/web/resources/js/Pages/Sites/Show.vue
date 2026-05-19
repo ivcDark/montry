@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useAutoRefresh } from '../../Composables/useAutoRefresh'
@@ -135,6 +135,9 @@ useAutoRefresh({
 
 const expandedMonitorId = ref<string | null>(null)
 const isDeleteModalOpen = ref(false)
+const checkingMonitorIds = ref<string[]>([])
+const checkingStartedFrom = ref<Record<string, string | null>>({})
+const checkingTimeouts = ref<Record<string, ReturnType<typeof setTimeout>>>({})
 const intervalPresets = [5, 10, 15, 30, 60, 360, 720, 1440]
 const monitorDrafts = ref<Record<string, MonitorDraft>>(
     Object.fromEntries(props.site.monitors.map((monitor) => [monitor.id, draftFromMonitor(monitor)])),
@@ -152,8 +155,19 @@ watch(
         })
 
         monitorDrafts.value = nextDrafts
+        checkingMonitorIds.value.forEach((id) => {
+            const refreshedMonitor = monitors.find((monitor) => monitor.id === id)
+
+            if (!refreshedMonitor || refreshedMonitor.last_check_at !== checkingStartedFrom.value[id]) {
+                stopChecking(id)
+            }
+        })
     },
 )
+
+onUnmounted(() => {
+    Object.values(checkingTimeouts.value).forEach(clearTimeout)
+})
 
 const enabledCount = computed(() => props.site.monitors.filter((monitor) => monitor.is_enabled).length)
 const activeIncidentCount = computed(() => props.site.incidents.filter((incident) => incident.status === 'open').length)
@@ -418,9 +432,52 @@ function toggleMonitor(monitor: Monitor): void {
     })
 }
 
+function isChecking(monitor: Monitor): boolean {
+    return checkingMonitorIds.value.includes(monitor.id)
+}
+
+function stopChecking(monitorId: string): void {
+    checkingMonitorIds.value = checkingMonitorIds.value.filter((id) => id !== monitorId)
+
+    const nextStartedFrom = { ...checkingStartedFrom.value }
+    delete nextStartedFrom[monitorId]
+    checkingStartedFrom.value = nextStartedFrom
+
+    const timeout = checkingTimeouts.value[monitorId]
+
+    if (timeout) {
+        clearTimeout(timeout)
+    }
+
+    const nextTimeouts = { ...checkingTimeouts.value }
+    delete nextTimeouts[monitorId]
+    checkingTimeouts.value = nextTimeouts
+}
+
 function checkNow(monitor: Monitor): void {
+    if (!monitor.is_enabled || isChecking(monitor)) {
+        return
+    }
+
     router.post(`/monitors/${monitor.id}/check-now`, {}, {
         preserveScroll: true,
+        onStart: () => {
+            checkingMonitorIds.value = [...checkingMonitorIds.value, monitor.id]
+            checkingStartedFrom.value = {
+                ...checkingStartedFrom.value,
+                [monitor.id]: monitor.last_check_at,
+            }
+            checkingTimeouts.value = {
+                ...checkingTimeouts.value,
+                [monitor.id]: setTimeout(() => stopChecking(monitor.id), 30000),
+            }
+        },
+        onError: () => {
+            stopChecking(monitor.id)
+        },
+        onCancel: () => {
+            stopChecking(monitor.id)
+        },
     })
 }
 
@@ -517,11 +574,16 @@ function deleteSite(): void {
                         <div class="flex flex-wrap gap-2">
                             <button
                                 type="button"
-                                class="h-9 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
-                                :disabled="!monitor.is_enabled"
+                                class="inline-flex h-9 min-w-[104px] items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition enabled:hover:border-[#0F6BFF] enabled:hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-60"
+                                :disabled="!monitor.is_enabled || isChecking(monitor)"
                                 @click="checkNow(monitor)"
                             >
-                                Проверить
+                                <span
+                                    v-if="isChecking(monitor)"
+                                    class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#0F6BFF]/25 border-t-[#0F6BFF]"
+                                    aria-hidden="true"
+                                />
+                                <span>{{ isChecking(monitor) ? 'Проверяем...' : 'Проверить' }}</span>
                             </button>
                             <button
                                 type="button"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useAutoRefresh } from '../../Composables/useAutoRefresh'
@@ -63,6 +63,9 @@ useAutoRefresh({
 
 const search = ref('')
 const statusFilter = ref('all')
+const checkingSiteIds = ref<string[]>([])
+const checkingStartedFrom = ref<Record<string, string | null>>({})
+const checkingTimeouts = ref<Record<string, ReturnType<typeof setTimeout>>>({})
 
 const filters = [
     { value: 'all', label: 'Все' },
@@ -108,6 +111,23 @@ const stats = computed(() => {
         paused: sites.filter((site) => site.status === 'paused').length,
         empty: sites.filter((site) => site.status === 'empty').length,
     }
+})
+
+watch(
+    () => props.sites,
+    (sites) => {
+        checkingSiteIds.value.forEach((id) => {
+            const refreshedSite = sites.find((site) => site.id === id)
+
+            if (!refreshedSite || refreshedSite.last_checked_at !== checkingStartedFrom.value[id]) {
+                stopChecking(id)
+            }
+        })
+    },
+)
+
+onUnmounted(() => {
+    Object.values(checkingTimeouts.value).forEach(clearTimeout)
 })
 
 function statusLabel(status: string): string {
@@ -209,11 +229,50 @@ function dayWord(days: number): string {
     return 'дней'
 }
 
-function checkNow(monitor: Monitor | null): void {
-    if (!monitor || !monitor.is_enabled) return
+function isChecking(site: Site): boolean {
+    return checkingSiteIds.value.includes(site.id)
+}
 
-    router.post(`/monitors/${monitor.id}/check-now`, {}, {
+function stopChecking(siteId: string): void {
+    checkingSiteIds.value = checkingSiteIds.value.filter((id) => id !== siteId)
+
+    const nextStartedFrom = { ...checkingStartedFrom.value }
+    delete nextStartedFrom[siteId]
+    checkingStartedFrom.value = nextStartedFrom
+
+    const timeout = checkingTimeouts.value[siteId]
+
+    if (timeout) {
+        clearTimeout(timeout)
+    }
+
+    const nextTimeouts = { ...checkingTimeouts.value }
+    delete nextTimeouts[siteId]
+    checkingTimeouts.value = nextTimeouts
+}
+
+function checkNow(site: Site): void {
+    if (site.enabled_monitors_count === 0 || isChecking(site)) return
+
+    router.post(`/sites/${site.id}/check-now`, {}, {
         preserveScroll: true,
+        onStart: () => {
+            checkingSiteIds.value = [...checkingSiteIds.value, site.id]
+            checkingStartedFrom.value = {
+                ...checkingStartedFrom.value,
+                [site.id]: site.last_checked_at,
+            }
+            checkingTimeouts.value = {
+                ...checkingTimeouts.value,
+                [site.id]: setTimeout(() => stopChecking(site.id), 30000),
+            }
+        },
+        onError: () => {
+            stopChecking(site.id)
+        },
+        onCancel: () => {
+            stopChecking(site.id)
+        },
     })
 }
 </script>
@@ -367,11 +426,16 @@ function checkNow(monitor: Monitor | null): void {
                                 <div class="flex justify-end gap-2">
                                     <button
                                         type="button"
-                                        class="h-9 rounded-xl border border-[#E5E7EB] px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-50"
-                                        :disabled="!monitorByType(site, 'http')?.is_enabled"
-                                        @click="checkNow(monitorByType(site, 'http'))"
+                                        class="inline-flex h-9 min-w-[104px] items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] px-3 text-xs font-extrabold text-[#111827] transition enabled:hover:border-[#0F6BFF] enabled:hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-60"
+                                        :disabled="site.enabled_monitors_count === 0 || isChecking(site)"
+                                        @click="checkNow(site)"
                                     >
-                                        Проверить
+                                        <span
+                                            v-if="isChecking(site)"
+                                            class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#0F6BFF]/25 border-t-[#0F6BFF]"
+                                            aria-hidden="true"
+                                        />
+                                        <span>{{ isChecking(site) ? 'Проверяем...' : 'Проверить' }}</span>
                                     </button>
                                     <Link
                                         :href="`/sites/${site.id}`"
@@ -417,9 +481,24 @@ function checkNow(monitor: Monitor | null): void {
 
                         <div class="mt-4 flex items-center justify-between gap-3">
                             <p class="text-xs font-semibold text-[#667085]">{{ site.enabled_monitors_count }} / {{ site.monitors_count }} мониторов</p>
-                            <Link :href="`/sites/${site.id}`" class="text-sm font-extrabold text-[#0F6BFF] hover:text-[#0757D8]">
-                                Открыть
-                            </Link>
+                            <div class="flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    class="inline-flex h-9 min-w-[104px] items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition enabled:hover:border-[#0F6BFF] enabled:hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-60"
+                                    :disabled="site.enabled_monitors_count === 0 || isChecking(site)"
+                                    @click="checkNow(site)"
+                                >
+                                    <span
+                                        v-if="isChecking(site)"
+                                        class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#0F6BFF]/25 border-t-[#0F6BFF]"
+                                        aria-hidden="true"
+                                    />
+                                    <span>{{ isChecking(site) ? 'Проверяем...' : 'Проверить' }}</span>
+                                </button>
+                                <Link :href="`/sites/${site.id}`" class="text-sm font-extrabold text-[#0F6BFF] hover:text-[#0757D8]">
+                                    Открыть
+                                </Link>
+                            </div>
                         </div>
                     </article>
                 </div>
