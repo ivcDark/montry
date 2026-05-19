@@ -33,6 +33,21 @@ final class RegisterRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'name.max' => 'Имя должно быть меньше 255 символов',
+            'name.required' => 'Имя обязательно для заполнения',
+            'email.required' => 'Email обязательно для заполнения',
+            'email.email' => 'Email введен в неверном формате',
+            'email.max' => 'Email должно быть менее 255 символов',
+            'email.unique' => 'Данный Email уже занят',
+            'password.required' => 'Пароль обязателен для заполнения',
+            'password.min' => 'Длина пароля должна быть более 6 символов',
+            'password.confirmed' => 'Пароли не совпадают'
+        ];
+    }
+
     public function toData(): RegisterUserData
     {
         return new RegisterUserData(
