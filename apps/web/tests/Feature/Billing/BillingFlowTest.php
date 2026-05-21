@@ -48,8 +48,13 @@ final class BillingFlowTest extends TestCase
 
         $this
             ->actingAs($user)
+            ->get("/billing/payments/{$payment->id}/fake-bank")
+            ->assertOk();
+
+        $this
+            ->actingAs($user)
             ->post("/billing/payments/{$payment->id}/confirm")
-            ->assertRedirect('/billing');
+            ->assertRedirect('/dashboard');
 
         $payment->refresh();
         $pendingSubscription->refresh();
@@ -127,7 +132,7 @@ final class BillingFlowTest extends TestCase
         $this
             ->actingAs($user)
             ->post("/billing/payments/{$payment->id}/confirm")
-            ->assertRedirect('/billing');
+            ->assertRedirect('/dashboard');
 
         $subscription->refresh();
         $payment->refresh();
@@ -135,6 +140,32 @@ final class BillingFlowTest extends TestCase
         $this->assertSame($originalStartsAt, $subscription->starts_at->toDateTimeString());
         $this->assertSame($originalEndsAt, $subscription->ends_at->toDateTimeString());
         $this->assertSame($originalPaidAt, $payment->paid_at->toDateTimeString());
+    }
+
+    public function test_user_cannot_open_payment_from_another_organization(): void
+    {
+        [$user] = $this->createOrganizationContext();
+        [, $otherOrganization] = $this->createOrganizationContext();
+        $plan = $this->createPlan('studio', 299000);
+        $subscription = Subscription::query()->create([
+            'organization_id' => $otherOrganization->id,
+            'plan_id' => $plan->id,
+            'status' => 'pending',
+            'starts_at' => now(),
+        ]);
+        $payment = Payment::query()->create([
+            'organization_id' => $otherOrganization->id,
+            'subscription_id' => $subscription->id,
+            'provider' => 'fake_bank',
+            'status' => 'pending',
+            'amount_cents' => 299000,
+            'currency' => 'RUB',
+            'payload' => ['plan_code' => 'studio'],
+        ]);
+
+        $this->actingAs($user)->get("/billing/payments/{$payment->id}")->assertNotFound();
+        $this->actingAs($user)->get("/billing/payments/{$payment->id}/fake-bank")->assertNotFound();
+        $this->actingAs($user)->post("/billing/payments/{$payment->id}/confirm")->assertNotFound();
     }
 
     public function test_expiration_command_moves_active_subscription_to_past_due_then_expired(): void
