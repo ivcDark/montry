@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3'
-import { onMounted } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 
 type Plan = {
@@ -20,11 +20,20 @@ const props = defineProps<{
 }>()
 
 const amount = new Intl.NumberFormat('ru-RU').format(props.payment.amount_cents / 100)
+let autoConfirmTimer: ReturnType<typeof window.setTimeout> | null = null
 
 onMounted(() => {
-    window.setTimeout(() => {
-        router.post(`/billing/payments/${props.payment.id}/confirm`)
+    autoConfirmTimer = window.setTimeout(() => {
+        router.post(`/billing/payments/${props.payment.id}/confirm`, { replace: true })
+        autoConfirmTimer = null
     }, 1000)
+})
+
+onBeforeUnmount(() => {
+    if (autoConfirmTimer !== null) {
+        window.clearTimeout(autoConfirmTimer)
+        autoConfirmTimer = null
+    }
 })
 </script>
 

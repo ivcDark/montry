@@ -29,14 +29,15 @@ final class BillingFlowTest extends TestCase
             'starts_at' => now()->subMonth(),
         ]);
 
-        $this
+        $response = $this
             ->actingAs($user)
             ->post('/billing/checkout', [
                 'plan_code' => 'pro',
-            ])
-            ->assertRedirect('/billing/payments/1');
+            ]);
 
         $payment = Payment::query()->firstOrFail();
+        $response->assertRedirect("/billing/payments/{$payment->id}");
+
         $pendingSubscription = Subscription::query()
             ->where('organization_id', $organization->id)
             ->where('plan_id', $pro->id)
@@ -49,7 +50,14 @@ final class BillingFlowTest extends TestCase
         $this
             ->actingAs($user)
             ->get("/billing/payments/{$payment->id}/fake-bank")
-            ->assertOk();
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Billing/FakeBankPayment', false)
+                ->where('organization.id', $organization->id)
+                ->where('payment.id', $payment->id)
+                ->where('payment.amount_cents', 99000)
+                ->where('payment.plan.code', 'pro')
+            );
 
         $this
             ->actingAs($user)
