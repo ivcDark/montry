@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Auth\Actions\ResendRegistrationVerificationCode;
 use App\Modules\Auth\Actions\VerifyRegistrationEmailCode;
 use App\Modules\Auth\Http\Requests\VerifyRegistrationCodeRequest;
+use App\Modules\Billing\Application\Services\StartIntendedCheckout;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,6 +32,7 @@ final class RegisterVerificationController extends Controller
     public function store(
         VerifyRegistrationCodeRequest $request,
         VerifyRegistrationEmailCode $verifyRegistrationEmailCode,
+        StartIntendedCheckout $startIntendedCheckout,
     ): RedirectResponse {
         $user = $this->pendingUser($request);
 
@@ -43,7 +45,7 @@ final class RegisterVerificationController extends Controller
         $request->session()->forget('pending_registration_user_id');
         $request->session()->regenerate();
 
-        return redirect()->route('dashboard.index');
+        return $startIntendedCheckout->redirect($request, $user);
     }
 
     public function resend(

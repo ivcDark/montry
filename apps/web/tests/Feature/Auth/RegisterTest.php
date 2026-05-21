@@ -3,6 +3,9 @@
 namespace Tests\Feature\Auth;
 
 use App\Modules\Auth\Mail\RegistrationCompletedMail;
+use App\Modules\Billing\Infrastructure\Persistence\Models\Payment;
+use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
+use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Organizations\Enums\OrganizationRole;
@@ -67,6 +70,14 @@ class RegisterTest extends TestCase
     {
         Mail::fake();
         Carbon::setTestNow('2026-05-18 12:00:00');
+        $freePlan = Plan::query()->create([
+            'code' => 'free',
+            'name' => 'Free',
+            'price_cents' => 0,
+            'currency' => 'RUB',
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
         $user = User::factory()->create([
             'name' => 'Ivan Petrov',
             'email' => 'ivan@gmail.com',
@@ -106,6 +117,11 @@ class RegisterTest extends TestCase
             ->where('organization_id', $organization->id)
             ->where('is_default', true)
             ->exists());
+        $this->assertDatabaseHas('subscriptions', [
+            'organization_id' => $organization->id,
+            'plan_id' => $freePlan->id,
+            'status' => 'active',
+        ]);
         $this->assertDatabaseHas('email_verification_codes', [
             'user_id' => $user->id,
             'consumed_at' => Carbon::now()->toDateTimeString(),
@@ -235,5 +251,108 @@ class RegisterTest extends TestCase
         $this->assertSame(2, DB::table('email_verification_codes')->where('user_id', $user->id)->count());
         $this->assertSame(1, DB::table('email_verification_codes')->where('user_id', $user->id)->whereNotNull('consumed_at')->count());
         $this->assertSame(1, DB::table('email_verification_codes')->where('user_id', $user->id)->whereNull('consumed_at')->count());
+    }
+
+    public function test_valid_code_with_paid_plan_intent_creates_free_subscription_and_pending_payment(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow('2026-05-18 12:00:00');
+
+        $freePlan = Plan::query()->create([
+            'code' => 'free',
+            'name' => 'Free',
+            'price_cents' => 0,
+            'currency' => 'RUB',
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+        $studioPlan = Plan::query()->create([
+            'code' => 'studio',
+            'name' => 'Studio',
+            'price_cents' => 299000,
+            'currency' => 'RUB',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        $user = User::factory()->create([
+            'name' => 'Ivan Petrov',
+            'email' => 'ivan@gmail.com',
+            'email_verified_at' => null,
+        ]);
+        DB::table('email_verification_codes')->insert([
+            'user_id' => $user->id,
+            'code_hash' => Hash::make('12345'),
+            'expires_at' => Carbon::now()->addMinutes(10),
+            'consumed_at' => null,
+            'attempts' => 0,
+            'last_sent_at' => Carbon::now(),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        $response = $this
+            ->withSession([
+                'pending_registration_user_id' => $user->id,
+                'billing.intended_plan_code' => 'studio',
+            ])
+            ->post('/register/verify-code', ['code' => '12345']);
+
+        $payment = Payment::query()->firstOrFail();
+        $organization = Organization::query()->where('name', 'Ivan Petrov')->firstOrFail();
+
+        $response->assertRedirect("/billing/payments/{$payment->id}");
+        $this->assertNull(session('billing.intended_plan_code'));
+        $this->assertDatabaseHas('subscriptions', [
+            'organization_id' => $organization->id,
+            'plan_id' => $freePlan->id,
+            'status' => 'active',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'organization_id' => $organization->id,
+            'plan_id' => $studioPlan->id,
+            'status' => 'pending',
+        ]);
+        $this->assertSame(299000, $payment->amount_cents);
+        $this->assertSame('pending', $payment->status);
+    }
+
+    public function test_valid_code_with_free_plan_intent_does_not_create_payment(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow('2026-05-18 12:00:00');
+
+        Plan::query()->create([
+            'code' => 'free',
+            'name' => 'Free',
+            'price_cents' => 0,
+            'currency' => 'RUB',
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+        $user = User::factory()->create([
+            'name' => 'Ivan Petrov',
+            'email_verified_at' => null,
+        ]);
+        DB::table('email_verification_codes')->insert([
+            'user_id' => $user->id,
+            'code_hash' => Hash::make('12345'),
+            'expires_at' => Carbon::now()->addMinutes(10),
+            'consumed_at' => null,
+            'attempts' => 0,
+            'last_sent_at' => Carbon::now(),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        $this
+            ->withSession([
+                'pending_registration_user_id' => $user->id,
+                'billing.intended_plan_code' => 'free',
+            ])
+            ->post('/register/verify-code', ['code' => '12345'])
+            ->assertRedirect('/dashboard');
+
+        $this->assertDatabaseCount('payments', 0);
+        $this->assertNull(session('billing.intended_plan_code'));
     }
 }
