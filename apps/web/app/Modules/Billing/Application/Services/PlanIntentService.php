@@ -11,9 +11,15 @@ final class PlanIntentService
 
     public function captureFromRequest(Request $request): void
     {
+        if (! $request->query->has('plan')) {
+            return;
+        }
+
         $planCode = $request->query('plan');
 
         if (! is_string($planCode) || $planCode === '') {
+            $this->clear($request);
+
             return;
         }
 

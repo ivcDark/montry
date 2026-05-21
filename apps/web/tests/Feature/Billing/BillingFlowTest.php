@@ -9,6 +9,7 @@ use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Organizations\Enums\OrganizationRole;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 final class BillingFlowTest extends TestCase
@@ -96,7 +97,12 @@ final class BillingFlowTest extends TestCase
     {
         $this->createPlan('studio', 299000);
 
-        $this->get('/register?plan=studio')->assertOk();
+        $this
+            ->get('/register?plan=studio')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('intendedPlanCode', 'studio')
+            );
 
         $this->assertSame('studio', session('billing.intended_plan_code'));
     }
@@ -111,11 +117,36 @@ final class BillingFlowTest extends TestCase
         $this->assertNull(session('billing.intended_plan_code'));
     }
 
+    public function test_guest_register_page_clears_empty_plan_intent(): void
+    {
+        $this
+            ->withSession(['billing.intended_plan_code' => 'studio'])
+            ->get('/register?plan=')
+            ->assertOk();
+
+        $this->assertNull(session('billing.intended_plan_code'));
+    }
+
+    public function test_guest_register_page_clears_array_plan_intent(): void
+    {
+        $this
+            ->withSession(['billing.intended_plan_code' => 'studio'])
+            ->get('/register?plan[]=studio')
+            ->assertOk();
+
+        $this->assertNull(session('billing.intended_plan_code'));
+    }
+
     public function test_guest_login_page_stores_valid_plan_intent(): void
     {
         $this->createPlan('solo', 99000);
 
-        $this->get('/login?plan=solo')->assertOk();
+        $this
+            ->get('/login?plan=solo')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('intendedPlanCode', 'solo')
+            );
 
         $this->assertSame('solo', session('billing.intended_plan_code'));
     }
