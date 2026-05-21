@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import MarketingHeader from '@/Components/MarketingHeader.vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
+import { computed } from 'vue'
+
+const props = defineProps<{
+    intendedPlanCode?: string | null
+}>()
+
+const registerHref = computed(() => props.intendedPlanCode ? `/register?plan=${props.intendedPlanCode}` : '/register')
 
 const form = useForm({
     email: '',
@@ -139,7 +146,7 @@ function submit() {
 
                 <p class="mt-6 text-sm text-[#667085]">
                     Нет аккаунта?
-                    <Link href="/register" class="font-bold text-[#0F6BFF] hover:text-[#0757D8]">
+                    <Link :href="registerHref" class="font-bold text-[#0F6BFF] hover:text-[#0757D8]">
                         Создать аккаунт
                     </Link>
                 </p>

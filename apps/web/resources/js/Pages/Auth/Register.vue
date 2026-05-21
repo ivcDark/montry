@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import MarketingHeader from '@/Components/MarketingHeader.vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
+import { computed } from 'vue'
+
+const props = defineProps<{
+    intendedPlanCode?: string | null
+}>()
+
+const loginHref = computed(() => props.intendedPlanCode ? `/login?plan=${props.intendedPlanCode}` : '/login')
 
 const form = useForm({
     name: '',
@@ -166,7 +173,7 @@ function submit() {
 
                 <p class="mt-6 text-sm text-[#667085]">
                     Уже есть аккаунт?
-                    <Link href="/login" class="font-bold text-[#0F6BFF] hover:text-[#0757D8]">
+                    <Link :href="loginHref" class="font-bold text-[#0F6BFF] hover:text-[#0757D8]">
                         Войти
                     </Link>
                 </p>
