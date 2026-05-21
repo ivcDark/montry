@@ -98,6 +98,45 @@ final class BillingFlowTest extends TestCase
             ->count());
     }
 
+    public function test_confirming_paid_payment_is_idempotent(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $plan = $this->createPlan('studio', 299000);
+        $subscription = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+            'starts_at' => now()->subDays(5),
+            'ends_at' => now()->addDays(25),
+        ]);
+        $payment = Payment::query()->create([
+            'organization_id' => $organization->id,
+            'subscription_id' => $subscription->id,
+            'provider' => 'manual',
+            'status' => 'paid',
+            'amount_cents' => 299000,
+            'currency' => 'RUB',
+            'payload' => ['plan_code' => 'studio', 'period' => 'month'],
+            'paid_at' => now()->subDays(5),
+        ]);
+
+        $originalStartsAt = $subscription->starts_at->toDateTimeString();
+        $originalEndsAt = $subscription->ends_at->toDateTimeString();
+        $originalPaidAt = $payment->paid_at->toDateTimeString();
+
+        $this
+            ->actingAs($user)
+            ->post("/billing/payments/{$payment->id}/confirm")
+            ->assertRedirect('/billing');
+
+        $subscription->refresh();
+        $payment->refresh();
+
+        $this->assertSame($originalStartsAt, $subscription->starts_at->toDateTimeString());
+        $this->assertSame($originalEndsAt, $subscription->ends_at->toDateTimeString());
+        $this->assertSame($originalPaidAt, $payment->paid_at->toDateTimeString());
+    }
+
     public function test_expiration_command_moves_active_subscription_to_past_due_then_expired(): void
     {
         [$user, $organization] = $this->createOrganizationContext();

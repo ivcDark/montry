@@ -72,12 +72,18 @@ final class CheckoutService
                 throw new ModelNotFoundException('Payment has no subscription.');
             }
 
-            if ($payment->status !== 'paid') {
-                $payment->forceFill([
-                    'status' => 'paid',
-                    'paid_at' => now(),
-                ])->save();
+            Organization::query()
+                ->lockForUpdate()
+                ->findOrFail($payment->organization_id);
+
+            if ($payment->status === 'paid') {
+                return $payment->subscription;
             }
+
+            $payment->forceFill([
+                'status' => 'paid',
+                'paid_at' => now(),
+            ])->save();
 
             $subscription = $payment->subscription;
             $periodStart = now();
