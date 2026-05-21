@@ -25,24 +25,28 @@ final readonly class StartIntendedCheckout
             return redirect()->intended(route('dashboard.index', absolute: false));
         }
 
-        $this->planIntent->clear($request);
-
         $plan = Plan::query()
             ->where('code', $planCode)
             ->where('is_active', true)
             ->first();
 
         if ($plan === null || $plan->price_cents === 0) {
+            $this->planIntent->clear($request);
+
             return to_route('dashboard.index');
         }
 
         $organization = $this->getCurrentOrganization->handle($user);
 
         if ($this->hasActivePlan($organization->id, $plan->id)) {
+            $this->planIntent->clear($request);
+
             return to_route('billing.index');
         }
 
         $payment = $this->checkout->start($organization->id, $plan->code);
+
+        $this->planIntent->clear($request);
 
         return redirect()->route('billing.payments.show', $payment);
     }

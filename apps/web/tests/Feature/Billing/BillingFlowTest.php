@@ -65,6 +65,39 @@ final class BillingFlowTest extends TestCase
         ]);
     }
 
+    public function test_checkout_reuses_existing_pending_payment_for_same_plan(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $plan = $this->createPlan('studio', 299000);
+        $subscription = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plan->id,
+            'status' => 'pending',
+            'starts_at' => now()->subMinute(),
+        ]);
+        $payment = Payment::query()->create([
+            'organization_id' => $organization->id,
+            'subscription_id' => $subscription->id,
+            'provider' => 'manual',
+            'status' => 'pending',
+            'amount_cents' => 299000,
+            'currency' => 'RUB',
+            'payload' => ['plan_code' => 'studio', 'period' => 'month'],
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/billing/checkout', ['plan_code' => 'studio'])
+            ->assertRedirect("/billing/payments/{$payment->id}");
+
+        $this->assertDatabaseCount('payments', 1);
+        $this->assertSame(1, Subscription::query()
+            ->where('organization_id', $organization->id)
+            ->where('plan_id', $plan->id)
+            ->where('status', 'pending')
+            ->count());
+    }
+
     public function test_expiration_command_moves_active_subscription_to_past_due_then_expired(): void
     {
         [$user, $organization] = $this->createOrganizationContext();

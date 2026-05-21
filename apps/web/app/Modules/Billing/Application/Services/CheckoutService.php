@@ -5,6 +5,7 @@ namespace App\Modules\Billing\Application\Services;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Payment;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
+use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 
@@ -18,6 +19,10 @@ final class CheckoutService
             ->firstOrFail();
 
         return DB::transaction(function () use ($organizationId, $plan): Payment {
+            Organization::query()
+                ->lockForUpdate()
+                ->findOrFail($organizationId);
+
             $existingPayment = Payment::query()
                 ->where('organization_id', $organizationId)
                 ->where('status', 'pending')
