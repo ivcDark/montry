@@ -24,7 +24,7 @@ let autoConfirmTimer: ReturnType<typeof window.setTimeout> | null = null
 
 onMounted(() => {
     autoConfirmTimer = window.setTimeout(() => {
-        router.post(`/billing/payments/${props.payment.id}/confirm`, { replace: true })
+        router.post(`/billing/payments/${props.payment.id}/confirm`, {}, { replace: true })
         autoConfirmTimer = null
     }, 1000)
 })
