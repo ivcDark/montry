@@ -43,7 +43,7 @@ const navigation: NavigationItem[] = [
     { key: 'projects', label: 'Проекты', href: '/projects', icon: '□' },
     { key: 'sites', label: 'Сайты', href: '/sites', icon: '◇' },
     { key: 'monitors', label: 'Мониторинги', href: '/monitors', icon: '◌' },
-    { key: 'incidents', label: 'Инциденты', icon: '!' },
+    { key: 'incidents', label: 'Инциденты', href: '/incidents', icon: '!' },
     { key: 'notifications', label: 'Уведомления', icon: '✉' },
     { key: 'reports', label: 'Отчеты', icon: '▤' },
     { key: 'billing', label: 'Тариф', href: '/billing', icon: '₽' },
