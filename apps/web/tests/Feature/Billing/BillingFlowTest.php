@@ -7,7 +7,10 @@ use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
+use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Organizations\Enums\OrganizationRole;
+use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
+use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -176,6 +179,233 @@ final class BillingFlowTest extends TestCase
         $this->actingAs($user)->post("/billing/payments/{$payment->id}/confirm")->assertNotFound();
     }
 
+    public function test_authenticated_checkout_for_current_free_plan_does_not_create_payment(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $free = $this->createPlan('free', 0);
+
+        Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $free->id,
+            'status' => 'active',
+            'starts_at' => now()->subDay(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/billing/checkout', ['plan_code' => 'free'])
+            ->assertRedirect('/billing');
+
+        $this->assertDatabaseCount('payments', 0);
+    }
+
+    public function test_authenticated_checkout_for_lower_plan_schedules_downgrade_without_payment(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $free = $this->createPlan('free', 0, 10);
+        $pro = $this->createPlan('pro', 99000, 20);
+
+        Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $pro->id,
+            'status' => 'active',
+            'starts_at' => now()->subDays(10),
+            'ends_at' => now()->addDays(20),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/billing/checkout', ['plan_code' => 'free'])
+            ->assertRedirect('/billing');
+
+        $this->assertDatabaseCount('payments', 0);
+        $this->assertDatabaseHas('subscriptions', [
+            'organization_id' => $organization->id,
+            'plan_id' => $free->id,
+            'status' => 'scheduled',
+        ]);
+    }
+
+    public function test_authenticated_checkout_rejects_invalid_plan_code(): void
+    {
+        [$user] = $this->createOrganizationContext();
+
+        $this
+            ->actingAs($user)
+            ->from('/billing')
+            ->post('/billing/checkout', ['plan_code' => 'missing'])
+            ->assertRedirect('/billing')
+            ->assertSessionHasErrors('plan_code');
+
+        $this->assertDatabaseCount('payments', 0);
+    }
+
+    public function test_user_can_schedule_downgrade_after_current_paid_period(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $free = $this->createPlan('free', 0, 10);
+        $pro = $this->createPlan('pro', 99000, 20);
+        $periodEnd = now()->addDays(12);
+
+        $activeSubscription = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $pro->id,
+            'status' => 'active',
+            'starts_at' => now()->subDays(18),
+            'ends_at' => $periodEnd,
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/billing/schedule-downgrade', ['plan_code' => 'free'])
+            ->assertRedirect('/billing');
+
+        $activeSubscription->refresh();
+        $scheduledSubscription = Subscription::query()
+            ->where('organization_id', $organization->id)
+            ->where('plan_id', $free->id)
+            ->where('status', 'scheduled')
+            ->firstOrFail();
+
+        $this->assertSame('active', $activeSubscription->status);
+        $this->assertSame($periodEnd->toDateTimeString(), $scheduledSubscription->starts_at->toDateTimeString());
+        $this->assertNull($scheduledSubscription->ends_at);
+        $this->assertDatabaseCount('payments', 0);
+    }
+
+    public function test_scheduling_downgrade_replaces_previous_scheduled_downgrade(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $free = $this->createPlan('free', 0, 10);
+        $pro = $this->createPlan('pro', 99000, 20);
+        $plus = $this->createPlan('plus', 249000, 30);
+
+        Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plus->id,
+            'status' => 'active',
+            'starts_at' => now()->subDays(10),
+            'ends_at' => now()->addDays(20),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/billing/schedule-downgrade', ['plan_code' => 'pro'])
+            ->assertRedirect('/billing');
+
+        $this
+            ->actingAs($user)
+            ->post('/billing/schedule-downgrade', ['plan_code' => 'free'])
+            ->assertRedirect('/billing');
+
+        $this->assertSame(1, Subscription::query()
+            ->where('organization_id', $organization->id)
+            ->where('status', 'scheduled')
+            ->count());
+        $this->assertDatabaseHas('subscriptions', [
+            'organization_id' => $organization->id,
+            'plan_id' => $free->id,
+            'status' => 'scheduled',
+        ]);
+        $this->assertDatabaseHas('subscriptions', [
+            'organization_id' => $organization->id,
+            'plan_id' => $pro->id,
+            'status' => 'canceled',
+        ]);
+    }
+
+    public function test_paid_upgrade_cancels_scheduled_downgrade(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $free = $this->createPlan('free', 0, 10);
+        $pro = $this->createPlan('pro', 99000, 20);
+        $plus = $this->createPlan('plus', 249000, 30);
+        Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $pro->id,
+            'status' => 'active',
+            'starts_at' => now()->subDays(10),
+            'ends_at' => now()->addDays(20),
+        ]);
+        $scheduledDowngrade = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $free->id,
+            'status' => 'scheduled',
+            'starts_at' => now()->addDays(20),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/billing/checkout', ['plan_code' => 'plus'])
+            ->assertRedirect();
+
+        $payment = Payment::query()->firstOrFail();
+
+        $this
+            ->actingAs($user)
+            ->post("/billing/payments/{$payment->id}/confirm")
+            ->assertRedirect('/dashboard');
+
+        $scheduledDowngrade->refresh();
+
+        $this->assertSame('canceled', $scheduledDowngrade->status);
+    }
+
+    public function test_activating_scheduled_downgrade_pauses_excess_monitors_by_created_at(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $project = $this->createProject($organization);
+        $resource = $this->createResource($organization, $project, $user);
+        $free = $this->createPlan('free', 0, 10, [
+            'max_monitors' => ['limit' => 2],
+            'allowed_monitor_types' => ['types' => ['http', 'ssl']],
+        ]);
+        $pro = $this->createPlan('pro', 99000, 20, [
+            'max_monitors' => ['limit' => 10],
+            'allowed_monitor_types' => ['types' => ['http', 'ssl', 'domain']],
+        ]);
+        Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $pro->id,
+            'status' => 'active',
+            'starts_at' => now()->subMonth(),
+            'ends_at' => now()->subMinute(),
+        ]);
+        $scheduledFree = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $free->id,
+            'status' => 'scheduled',
+            'starts_at' => now()->subMinute(),
+        ]);
+
+        $oldHttp = $this->createMonitor($organization, $project, $resource, 'http', now()->subDays(4));
+        $oldSsl = $this->createMonitor($organization, $project, $resource, 'ssl', now()->subDays(3));
+        $newHttp = $this->createMonitor($organization, $project, $resource, 'http', now()->subDays(2));
+        $domain = $this->createMonitor($organization, $project, $resource, 'domain', now()->subDay());
+
+        $this->artisan('billing:activate-scheduled-subscriptions')
+            ->assertSuccessful();
+
+        $scheduledFree->refresh();
+        $oldHttp->refresh();
+        $oldSsl->refresh();
+        $newHttp->refresh();
+        $domain->refresh();
+
+        $this->assertSame('active', $scheduledFree->status);
+        $this->assertTrue($oldHttp->enabled);
+        $this->assertTrue($oldSsl->enabled);
+        $this->assertFalse($newHttp->enabled);
+        $this->assertSame('paused', $newHttp->status);
+        $this->assertFalse($domain->enabled);
+        $this->assertSame('paused', $domain->status);
+        $this->assertDatabaseHas('subscriptions', [
+            'organization_id' => $organization->id,
+            'plan_id' => $pro->id,
+            'status' => 'replaced',
+        ]);
+    }
+
     public function test_expiration_command_moves_active_subscription_to_past_due_then_expired(): void
     {
         [$user, $organization] = $this->createOrganizationContext();
@@ -262,16 +492,25 @@ final class BillingFlowTest extends TestCase
         $this->assertSame('solo', session('billing.intended_plan_code'));
     }
 
-    private function createPlan(string $code, int $priceCents): Plan
+    private function createPlan(string $code, int $priceCents, int $sortOrder = 0, array $limits = []): Plan
     {
-        return Plan::query()->create([
+        $plan = Plan::query()->create([
             'code' => $code,
             'name' => str($code)->headline()->toString(),
             'price_cents' => $priceCents,
             'currency' => 'RUB',
             'is_active' => true,
-            'sort_order' => 0,
+            'sort_order' => $sortOrder,
         ]);
+
+        foreach ($limits as $key => $value) {
+            $plan->limits()->create([
+                'key' => $key,
+                'value' => $value,
+            ]);
+        }
+
+        return $plan;
     }
 
     /**
@@ -296,5 +535,61 @@ final class BillingFlowTest extends TestCase
         ]);
 
         return [$user, $organization];
+    }
+
+    private function createProject(Organization $organization): Project
+    {
+        return Project::query()->create([
+            'organization_id' => $organization->id,
+            'name' => 'Default',
+            'color' => '#ffffff',
+            'is_default' => true,
+            'sort_order' => 0,
+        ]);
+    }
+
+    private function createResource(Organization $organization, Project $project, User $user): MonitoredResource
+    {
+        return MonitoredResource::query()->create([
+            'organization_id' => $organization->id,
+            'project_id' => $project->id,
+            'created_user_id' => $user->id,
+            'type' => 'website',
+            'name' => 'example.com',
+            'target' => 'https://example.com',
+            'scheme' => 'https',
+            'host' => 'example.com',
+            'path' => '/',
+            'status' => 'unknown',
+        ]);
+    }
+
+    private function createMonitor(
+        Organization $organization,
+        Project $project,
+        MonitoredResource $resource,
+        string $type,
+        \DateTimeInterface $createdAt,
+    ): Monitor {
+        $monitor = Monitor::query()->create([
+            'organization_id' => $organization->id,
+            'project_id' => $project->id,
+            'monitored_resource_id' => $resource->id,
+            'type' => $type,
+            'name' => str($type)->headline()->toString(),
+            'enabled' => true,
+            'status' => 'ok',
+            'interval_seconds' => 300,
+            'timeout_ms' => 10000,
+            'settings' => ['type' => $type],
+            'expected' => [],
+        ]);
+
+        $monitor->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ])->save();
+
+        return $monitor;
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Projects;
 
+use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
@@ -15,6 +16,27 @@ use Tests\TestCase;
 final class ProjectIndexTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_pro_plan_cannot_create_separate_projects(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext('Acme');
+        $this->subscribe($organization, 'pro', [
+            'can_create_projects' => ['enabled' => false],
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/projects', [
+                'name' => 'Client project',
+                'color' => '#0F6BFF',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('projects', [
+            'organization_id' => $organization->id,
+            'name' => 'Client project',
+        ]);
+    }
 
     public function test_authenticated_user_can_open_projects_index_for_current_organization(): void
     {
@@ -137,5 +159,31 @@ final class ProjectIndexTest extends TestCase
         ]);
 
         return [$user, $organization, $project];
+    }
+
+    private function subscribe(Organization $organization, string $planCode, array $limits): void
+    {
+        $plan = Plan::query()->create([
+            'code' => $planCode,
+            'name' => str($planCode)->headline()->toString(),
+            'price_cents' => 0,
+            'currency' => 'RUB',
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+
+        foreach ($limits as $key => $value) {
+            $plan->limits()->create([
+                'key' => $key,
+                'value' => $value,
+            ]);
+        }
+
+        $plan->subscriptions()->create([
+            'organization_id' => $organization->id,
+            'status' => 'active',
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addMonth(),
+        ]);
     }
 }

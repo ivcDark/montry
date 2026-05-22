@@ -488,6 +488,67 @@ final class MonitorRoutesTest extends TestCase
         ]);
     }
 
+    public function test_monitor_creation_respects_allowed_monitor_types(): void
+    {
+        [$user, $organization, $project] = $this->createOrganizationContext();
+        $plan = Plan::query()->create([
+            'code' => 'free',
+            'name' => 'Free',
+            'price_cents' => 0,
+            'currency' => 'RUB',
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+
+        $plan->limits()->create([
+            'key' => 'allowed_monitor_types',
+            'value' => ['types' => ['http', 'ssl']],
+        ]);
+
+        $plan->subscriptions()->create([
+            'organization_id' => $organization->id,
+            'status' => 'active',
+            'starts_at' => now()->subDay(),
+        ]);
+
+        $resource = MonitoredResource::query()->create([
+            'organization_id' => $organization->id,
+            'project_id' => $project->id,
+            'created_user_id' => $user->id,
+            'type' => 'website',
+            'name' => 'Example',
+            'target' => 'https://example.com',
+            'scheme' => 'https',
+            'host' => 'example.com',
+            'path' => '/',
+            'status' => 'unknown',
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post("/sites/{$resource->id}/monitors", [
+                'type' => 'domain',
+                'name' => 'Domain check',
+                'is_enabled' => true,
+                'interval_seconds' => 86400,
+                'timeout_ms' => 10000,
+                'settings' => [
+                    'domain' => 'example.com',
+                    'warning_days' => [30, 14, 7, 3, 1],
+                ],
+                'expected' => [
+                    'registered' => true,
+                ],
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('monitors', [
+            'organization_id' => $organization->id,
+            'monitored_resource_id' => $resource->id,
+            'type' => 'domain',
+        ]);
+    }
+
     public function test_monitor_interval_must_be_at_least_five_minutes_and_whole_minutes(): void
     {
         [$user, $organization, $project] = $this->createOrganizationContext();

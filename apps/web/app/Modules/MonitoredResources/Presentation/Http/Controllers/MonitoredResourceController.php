@@ -3,9 +3,10 @@
 namespace App\Modules\MonitoredResources\Presentation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Billing\Application\Services\LimitChecker;
+use App\Modules\Incidents\Infrastructure\Persistence\Models\Incident;
 use App\Modules\MonitoredResources\Application\Handlers\ListMonitoredResourcesHandler;
 use App\Modules\MonitoredResources\Application\Queries\ListMonitoredResourcesQuery;
-use App\Modules\Incidents\Infrastructure\Persistence\Models\Incident;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\MonitoredResources\Presentation\Http\Requests\StoreMonitoredResourceRequest;
 use App\Modules\Monitoring\Application\Services\CheckTypeRegistry;
@@ -40,8 +41,7 @@ final class MonitoredResourceController extends Controller
         Request $request,
         GetCurrentOrganization $getCurrentOrganization,
         CheckTypeRegistry $checkTypes,
-    ): Response
-    {
+    ): Response {
         $organization = $getCurrentOrganization->handle($request->user());
 
         return Inertia::render('Sites/Create', [
@@ -64,6 +64,7 @@ final class MonitoredResourceController extends Controller
         GetCurrentOrganization $getCurrentOrganization,
         CreateDefaultFolderForOrganization $createDefaultProject,
         CreateSiteAction $createMonitoredResource,
+        LimitChecker $limits,
     ): RedirectResponse {
         $organization = $getCurrentOrganization->handle($request->user());
         $project = $createDefaultProject->handle($organization);
@@ -79,7 +80,7 @@ final class MonitoredResourceController extends Controller
                 'url' => $siteData->url,
                 'host' => $siteData->host,
                 'port' => $siteData->port,
-            ]),
+            ], $limits->allowedMonitorTypes($organization->id), $limits->minimumCheckIntervalSeconds($organization->id)),
         );
 
         return redirect()
@@ -109,7 +110,7 @@ final class MonitoredResourceController extends Controller
         ]);
 
         if ($site->organization_id !== $organization->id) {
-            throw new NotFoundHttpException();
+            throw new NotFoundHttpException;
         }
 
         return Inertia::render('Sites/Show', [
@@ -145,31 +146,31 @@ final class MonitoredResourceController extends Controller
                     ))
                     ->values()
                     ->map(fn (Monitor $monitor) => [
-                    'id' => $monitor->id,
-                    'name' => $monitor->name,
-                    'type' => $monitor->type,
-                    'status' => $monitor->status,
-                    'is_enabled' => $monitor->is_enabled,
-                    'interval_seconds' => $monitor->interval_seconds,
-                    'timeout_ms' => $monitor->timeout_ms,
-                    'settings' => $monitor->settings,
-                    'expected' => $monitor->expected,
-                    'last_check_at' => $monitor->last_check_at?->toISOString(),
-                    'next_check_at' => $monitor->next_check_at?->toISOString(),
-                    'last_success_at' => $monitor->last_success_at?->toISOString(),
-                    'last_failure_at' => $monitor->last_failure_at?->toISOString(),
-                    'latest_result' => $monitor->latestCheckResult
-                        ? [
-                            'status' => $monitor->latestCheckResult->status,
-                            'checked_at' => $monitor->latestCheckResult->checked_at?->toISOString(),
-                            'response_time_ms' => $monitor->latestCheckResult->response_time_ms,
-                            'status_code' => $monitor->latestCheckResult->status_code,
-                            'error_code' => $monitor->latestCheckResult->error_code,
-                            'error_message' => $monitor->latestCheckResult->error_message,
-                            'normalized_result' => $monitor->latestCheckResult->normalized_result ?? [],
-                        ]
-                        : null,
-                ]),
+                        'id' => $monitor->id,
+                        'name' => $monitor->name,
+                        'type' => $monitor->type,
+                        'status' => $monitor->status,
+                        'is_enabled' => $monitor->is_enabled,
+                        'interval_seconds' => $monitor->interval_seconds,
+                        'timeout_ms' => $monitor->timeout_ms,
+                        'settings' => $monitor->settings,
+                        'expected' => $monitor->expected,
+                        'last_check_at' => $monitor->last_check_at?->toISOString(),
+                        'next_check_at' => $monitor->next_check_at?->toISOString(),
+                        'last_success_at' => $monitor->last_success_at?->toISOString(),
+                        'last_failure_at' => $monitor->last_failure_at?->toISOString(),
+                        'latest_result' => $monitor->latestCheckResult
+                            ? [
+                                'status' => $monitor->latestCheckResult->status,
+                                'checked_at' => $monitor->latestCheckResult->checked_at?->toISOString(),
+                                'response_time_ms' => $monitor->latestCheckResult->response_time_ms,
+                                'status_code' => $monitor->latestCheckResult->status_code,
+                                'error_code' => $monitor->latestCheckResult->error_code,
+                                'error_message' => $monitor->latestCheckResult->error_message,
+                                'normalized_result' => $monitor->latestCheckResult->normalized_result ?? [],
+                            ]
+                            : null,
+                    ]),
                 'recent_checks' => $this->recentChecks($site),
                 'incidents' => $this->incidents($site),
             ],
@@ -184,7 +185,7 @@ final class MonitoredResourceController extends Controller
         $organization = $getCurrentOrganization->handle($request->user());
 
         if ($site->organization_id !== $organization->id) {
-            throw new NotFoundHttpException();
+            throw new NotFoundHttpException;
         }
 
         DB::transaction(function () use ($site): void {

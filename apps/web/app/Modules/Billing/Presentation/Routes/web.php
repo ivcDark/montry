@@ -10,6 +10,9 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/billing/checkout', [BillingController::class, 'checkout'])
         ->name('billing.checkout');
 
+    Route::post('/billing/schedule-downgrade', [BillingController::class, 'scheduleDowngrade'])
+        ->name('billing.schedule-downgrade');
+
     Route::get('/billing/payments/{payment}', [BillingController::class, 'payment'])
         ->name('billing.payments.show');
 

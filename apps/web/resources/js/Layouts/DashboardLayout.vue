@@ -46,7 +46,7 @@ const navigation: NavigationItem[] = [
     { key: 'incidents', label: 'Инциденты', icon: '!' },
     { key: 'notifications', label: 'Уведомления', icon: '✉' },
     { key: 'reports', label: 'Отчеты', icon: '▤' },
-    { key: 'billing', label: 'Тариф', icon: '₽' },
+    { key: 'billing', label: 'Тариф', href: '/billing', icon: '₽' },
     { key: 'settings', label: 'Настройки', icon: '⚙' },
 ]
 
@@ -84,14 +84,14 @@ const usagePercent = computed(() => Math.min((props.usageCurrent / props.usageLi
                 </nav>
 
                 <div class="mt-10 rounded-3xl bg-[#17233A] p-4">
-                    <p class="font-extrabold text-white">Тариф Studio</p>
+                    <p class="font-extrabold text-white">Тариф</p>
                     <p class="mt-1 text-sm text-[#94A3B8]">{{ usageCurrent }} из {{ usageLimit }} мониторов</p>
                     <div class="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
                         <div class="h-full rounded-full bg-[#0F6BFF]" :style="{ width: `${usagePercent}%` }" />
                     </div>
-                    <button class="mt-4 h-10 w-full rounded-xl bg-white text-sm font-extrabold text-[#111827]">
+                    <a href="/billing" class="mt-4 flex h-10 w-full items-center justify-center rounded-xl bg-white text-sm font-extrabold text-[#111827]">
                         Управлять тарифом
-                    </button>
+                    </a>
                 </div>
             </div>
 

@@ -4,9 +4,12 @@ namespace App\Modules\Billing\Presentation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Billing\Application\Services\CheckoutService;
+use App\Modules\Billing\Application\Services\PlanChangeClassifier;
+use App\Modules\Billing\Application\Services\ScheduleDowngrade;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Payment;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
+use App\Modules\Billing\Presentation\Http\Requests\ScheduleDowngradeRequest;
 use App\Modules\Billing\Presentation\Http\Requests\StartCheckoutRequest;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
@@ -24,6 +27,7 @@ final class BillingController extends Controller
         $organization = $getCurrentOrganization->handle($request->user());
 
         $currentSubscription = $this->currentSubscription($organization->id);
+        $scheduledSubscription = $this->scheduledSubscription($organization->id);
 
         return Inertia::render('Billing/Index', [
             'organization' => [
@@ -36,6 +40,12 @@ final class BillingController extends Controller
                 'starts_at' => $currentSubscription->starts_at?->toISOString(),
                 'ends_at' => $currentSubscription->ends_at?->toISOString(),
                 'plan' => $this->planPayload($currentSubscription->plan),
+            ] : null,
+            'scheduledSubscription' => $scheduledSubscription ? [
+                'id' => $scheduledSubscription->id,
+                'status' => $scheduledSubscription->status,
+                'starts_at' => $scheduledSubscription->starts_at?->toISOString(),
+                'plan' => $this->planPayload($scheduledSubscription->plan),
             ] : null,
             'plans' => Plan::query()
                 ->with('limits')
@@ -52,6 +62,10 @@ final class BillingController extends Controller
                 'monitors' => Monitor::query()
                     ->where('organization_id', $organization->id)
                     ->count(),
+                'active_monitors' => Monitor::query()
+                    ->where('organization_id', $organization->id)
+                    ->where('enabled', true)
+                    ->count(),
             ],
         ]);
     }
@@ -60,11 +74,50 @@ final class BillingController extends Controller
         StartCheckoutRequest $request,
         GetCurrentOrganization $getCurrentOrganization,
         CheckoutService $checkout,
+        ScheduleDowngrade $scheduleDowngrade,
+        PlanChangeClassifier $planChangeClassifier,
     ): RedirectResponse {
         $organization = $getCurrentOrganization->handle($request->user());
-        $payment = $checkout->start($organization->id, $request->string('plan_code')->toString());
+        $planCode = $request->string('plan_code')->toString();
+        $plan = Plan::query()
+            ->where('code', $planCode)
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $currentSubscription = $this->currentSubscription($organization->id);
+        $changeType = $planChangeClassifier->classify($currentSubscription?->plan, $plan);
+
+        if ($changeType === 'same') {
+            return to_route('billing.index');
+        }
+
+        if ($changeType === 'downgrade') {
+            $scheduleDowngrade->handle($organization->id, $plan->code);
+
+            return to_route('billing.index')
+                ->with('success', 'Смена тарифа запланирована.');
+        }
+
+        if ($plan->price_cents === 0) {
+            return to_route('billing.index');
+        }
+
+        $payment = $checkout->start($organization->id, $plan->code);
 
         return redirect()->route('billing.payments.show', $payment);
+    }
+
+    public function scheduleDowngrade(
+        ScheduleDowngradeRequest $request,
+        GetCurrentOrganization $getCurrentOrganization,
+        ScheduleDowngrade $scheduleDowngrade,
+    ): RedirectResponse {
+        $organization = $getCurrentOrganization->handle($request->user());
+
+        $scheduleDowngrade->handle($organization->id, $request->string('plan_code')->toString());
+
+        return to_route('billing.index')
+            ->with('success', 'Смена тарифа запланирована.');
     }
 
     public function payment(
@@ -159,6 +212,17 @@ final class BillingController extends Controller
             ->first();
     }
 
+    private function scheduledSubscription(int $organizationId): ?Subscription
+    {
+        return Subscription::query()
+            ->with('plan.limits')
+            ->where('organization_id', $organizationId)
+            ->where('status', 'scheduled')
+            ->where('starts_at', '>', now())
+            ->latest('starts_at')
+            ->first();
+    }
+
     private function planPayload(Plan $plan): array
     {
         return [
@@ -168,6 +232,7 @@ final class BillingController extends Controller
             'description' => $plan->description,
             'price_cents' => $plan->price_cents,
             'currency' => $plan->currency,
+            'sort_order' => $plan->sort_order,
             'limits' => $plan->limits
                 ->mapWithKeys(fn ($limit): array => [$limit->key => $limit->value])
                 ->all(),

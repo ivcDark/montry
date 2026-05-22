@@ -56,14 +56,20 @@ final class StoreMonitoredResourceRequest extends FormRequest
         );
     }
 
-    public function monitorPayloads(array $site): array
+    /**
+     * @param  list<string>|null  $allowedTypes
+     */
+    public function monitorPayloads(array $site, ?array $allowedTypes = null, ?int $minimumIntervalSeconds = null): array
     {
         $submitted = collect($this->validated('monitors', []))
             ->keyBy('type');
 
         return collect(['http', 'ssl', 'domain'])
+            ->when($allowedTypes !== null, fn ($types) => $types->filter(
+                fn (string $type): bool => in_array($type, $allowedTypes, true),
+            ))
             ->map(fn (string $type): array => $this->mergeMonitorPayload(
-                $this->defaultMonitorPayload($type, $site),
+                $this->defaultMonitorPayload($type, $site, $minimumIntervalSeconds),
                 $submitted->get($type, []),
             ))
             ->values()
@@ -79,16 +85,18 @@ final class StoreMonitoredResourceRequest extends FormRequest
     }
 
     /**
-     * @param array{url: string, host: string, port: int|null} $site
+     * @param  array{url: string, host: string, port: int|null}  $site
      */
-    private function defaultMonitorPayload(string $type, array $site): array
+    private function defaultMonitorPayload(string $type, array $site, ?int $minimumIntervalSeconds): array
     {
+        $httpInterval = max(300, $minimumIntervalSeconds ?? 300);
+
         if ($type === 'http') {
             return [
                 'type' => 'http',
                 'name' => 'HTTP availability',
                 'is_enabled' => true,
-                'interval_seconds' => 300,
+                'interval_seconds' => $httpInterval,
                 'timeout_ms' => 10000,
                 'settings' => [
                     'method' => 'GET',
@@ -150,7 +158,7 @@ final class StoreMonitoredResourceRequest extends FormRequest
     private function normalizeUrl(string $url): array
     {
         if (! str_contains($url, '://')) {
-            $url = 'https://' . $url;
+            $url = 'https://'.$url;
         }
 
         $parts = parse_url($url);
@@ -178,17 +186,17 @@ final class StoreMonitoredResourceRequest extends FormRequest
         }
 
         if (isset($parts['query'])) {
-            $path .= '?' . $parts['query'];
+            $path .= '?'.$parts['query'];
         }
 
-        $normalizedUrl = $scheme . '://' . $host;
+        $normalizedUrl = $scheme.'://'.$host;
 
         if ($port !== null) {
-            $normalizedUrl .= ':' . $port;
+            $normalizedUrl .= ':'.$port;
         }
 
         return [
-            'url' => $normalizedUrl . $path,
+            'url' => $normalizedUrl.$path,
             'scheme' => $scheme,
             'host' => $host,
             'port' => $port,

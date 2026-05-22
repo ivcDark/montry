@@ -97,6 +97,11 @@ final class CheckoutService
                     'ends_at' => $periodStart,
                 ]);
 
+            Subscription::query()
+                ->where('organization_id', $payment->organization_id)
+                ->where('status', 'scheduled')
+                ->update(['status' => 'canceled']);
+
             $subscription->forceFill([
                 'status' => 'active',
                 'starts_at' => $periodStart,

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Auth;
 
 use App\Modules\Auth\Mail\RegistrationCompletedMail;
+use App\Modules\Auth\Mail\RegistrationVerificationCodeMail;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Payment;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
@@ -314,6 +315,60 @@ class RegisterTest extends TestCase
         ]);
         $this->assertSame(299000, $payment->amount_cents);
         $this->assertSame('pending', $payment->status);
+    }
+
+    public function test_registration_started_from_paid_pricing_redirects_to_purchase_confirmation_after_verification(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow('2026-05-18 12:00:00');
+
+        Plan::query()->create([
+            'code' => 'free',
+            'name' => 'Free',
+            'price_cents' => 0,
+            'currency' => 'RUB',
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+        $proPlan = Plan::query()->create([
+            'code' => 'pro',
+            'name' => 'Pro',
+            'price_cents' => 99000,
+            'currency' => 'RUB',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        $this->get('/register?plan=pro')->assertOk();
+
+        $this
+            ->post('/register', [
+                'name' => 'Ivan Petrov',
+                'email' => 'ivan-pro@gmail.com',
+                'password' => 'password',
+                'password_confirmation' => 'password',
+            ])
+            ->assertRedirect('/register/verify-code');
+
+        $this->assertSame('pro', session('billing.intended_plan_code'));
+
+        $user = User::query()->where('email', 'ivan-pro@gmail.com')->firstOrFail();
+        Mail::assertSent(RegistrationVerificationCodeMail::class);
+
+        $response = $this
+            ->post('/register/verify-code', [
+                'code' => Mail::sent(RegistrationVerificationCodeMail::class)->first()->code,
+            ]);
+
+        $payment = Payment::query()->firstOrFail();
+
+        $response->assertRedirect("/billing/payments/{$payment->id}");
+        $this->assertNull(session('billing.intended_plan_code'));
+        $this->assertSame(99000, $payment->amount_cents);
+        $this->assertDatabaseHas('subscriptions', [
+            'plan_id' => $proPlan->id,
+            'status' => 'pending',
+        ]);
     }
 
     public function test_valid_code_with_free_plan_intent_does_not_create_payment(): void

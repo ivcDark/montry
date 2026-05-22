@@ -2,6 +2,7 @@
 
 namespace App\Modules\Sites\Actions;
 
+use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Monitoring\Application\Commands\CreateMonitorCommand;
 use App\Modules\Monitoring\Application\Handlers\CreateMonitorHandler;
@@ -13,12 +14,14 @@ final readonly class CreateSiteAction
 {
     public function __construct(
         private CreateMonitorHandler $createMonitor,
-    ) {
-    }
+        private LimitChecker $limits,
+    ) {}
 
     public function handle(CreateSiteData $data, array $monitors = []): MonitoredResource
     {
         return DB::transaction(function () use ($data, $monitors) {
+            $this->limits->assertCanCreateSite((int) $data->organizationId);
+
             $site = MonitoredResource::query()->create([
                 'organization_id' => $data->organizationId,
                 'project_id' => $data->folderId,

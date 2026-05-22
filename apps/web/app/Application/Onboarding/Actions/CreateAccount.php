@@ -4,6 +4,7 @@ namespace App\Application\Onboarding\Actions;
 
 use App\Modules\Auth\Actions\RegisterUser;
 use App\Modules\Auth\DTO\RegisterUserData;
+use App\Modules\Billing\Application\Services\AssignFreeSubscription;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Organizations\Actions\CreateOrganizationForUser;
 use App\Modules\Sites\Actions\CreateDefaultFolderForOrganization;
@@ -15,8 +16,8 @@ final readonly class CreateAccount
         private RegisterUser $registerUser,
         private CreateOrganizationForUser $createOrganizationForUser,
         private CreateDefaultFolderForOrganization $createDefaultFolderForOrganization,
-    ) {
-    }
+        private AssignFreeSubscription $assignFreeSubscription,
+    ) {}
 
     public function handle(RegisterUserData $data): User
     {
@@ -24,6 +25,7 @@ final readonly class CreateAccount
             $user = $this->registerUser->handle($data);
             $organization = $this->createOrganizationForUser->handle($user);
             $this->createDefaultFolderForOrganization->handle($organization);
+            $this->assignFreeSubscription->handle($organization->id);
 
             return $user;
         });
