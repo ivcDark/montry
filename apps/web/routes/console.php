@@ -1,34 +1,45 @@
 <?php
 
 use App\Modules\Billing\Application\Services\ApplySubscriptionLimits;
+use App\Modules\Billing\Application\Services\ProcessPastDueSubscriptions;
+use App\Modules\Billing\Application\Services\SendSubscriptionRenewalReminders;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Artisan::command('billing:expire-subscriptions', function (): int {
-    $now = now();
+Artisan::command('billing:send-renewal-reminders', function (SendSubscriptionRenewalReminders $reminders): int {
+    $sent = $reminders->handle();
 
-    $pastDue = Subscription::query()
-        ->where('status', 'active')
-        ->whereNotNull('ends_at')
-        ->where('ends_at', '<=', $now)
-        ->update(['status' => 'past_due']);
-
-    $expired = Subscription::query()
-        ->where('status', 'past_due')
-        ->whereNotNull('ends_at')
-        ->where('ends_at', '<=', $now->copy()->subDays(3))
-        ->update(['status' => 'expired']);
-
-    $this->info("Moved {$pastDue} subscriptions to past_due and {$expired} subscriptions to expired.");
+    $this->info("Sent {$sent} billing renewal reminders.");
 
     return self::SUCCESS;
-})->purpose('Expire active billing subscriptions after the paid period and grace period.');
+})->purpose('Send paid billing renewal reminders before tariff expiration.');
+
+Artisan::command('billing:process-past-due-subscriptions', function (ProcessPastDueSubscriptions $processor): int {
+    $result = $processor->handle();
+
+    $this->info(
+        "Moved {$result['past_due']} subscriptions to past_due, sent {$result['warned']} warnings and switched {$result['switched_to_free']} subscriptions to free."
+    );
+
+    return self::SUCCESS;
+})->purpose('Process paid subscription grace periods and switch unpaid accounts to free.');
+
+Artisan::command('billing:expire-subscriptions', function (ProcessPastDueSubscriptions $processor): int {
+    $result = $processor->handle();
+
+    $this->info(
+        "Moved {$result['past_due']} subscriptions to past_due, sent {$result['warned']} warnings and switched {$result['switched_to_free']} subscriptions to free."
+    );
+
+    return self::SUCCESS;
+})->purpose('Compatibility alias for billing:process-past-due-subscriptions.');
 
 Artisan::command('billing:activate-scheduled-subscriptions', function (ApplySubscriptionLimits $applySubscriptionLimits): int {
     $subscriptionIds = Subscription::query()
@@ -59,11 +70,22 @@ Artisan::command('billing:activate-scheduled-subscriptions', function (ApplySubs
                     'ends_at' => $subscription->starts_at,
                 ]);
 
-            $subscription->forceFill([
-                'status' => 'active',
-            ])->save();
+            if ($subscription->plan->code === 'free' || $subscription->plan->price_cents === 0) {
+                $subscription->forceFill([
+                    'status' => 'active',
+                ])->save();
 
-            $applySubscriptionLimits->handle($subscription->organization_id, $subscription->plan);
+                $applySubscriptionLimits->handle($subscription->organization_id, $subscription->plan);
+
+                $activated++;
+
+                return;
+            }
+
+            $subscription->forceFill([
+                'status' => 'past_due',
+                'ends_at' => $subscription->starts_at,
+            ])->save();
 
             $activated++;
         });
@@ -73,3 +95,7 @@ Artisan::command('billing:activate-scheduled-subscriptions', function (ApplySubs
 
     return self::SUCCESS;
 })->purpose('Activate scheduled billing downgrades and apply new plan limits.');
+
+Schedule::command('billing:send-renewal-reminders')->dailyAt('09:00');
+Schedule::command('billing:activate-scheduled-subscriptions')->dailyAt('09:10');
+Schedule::command('billing:process-past-due-subscriptions')->dailyAt('09:20');

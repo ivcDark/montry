@@ -2,16 +2,20 @@
 
 namespace Tests\Feature\Billing;
 
+use App\Modules\Billing\Application\Mail\SubscriptionPastDueReminderMail;
+use App\Modules\Billing\Application\Mail\SubscriptionRenewalReminderMail;
+use App\Modules\Billing\Infrastructure\Persistence\Models\BillingNotificationLog;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Payment;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
+use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Organizations\Enums\OrganizationRole;
 use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
-use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -406,9 +410,197 @@ final class BillingFlowTest extends TestCase
         ]);
     }
 
-    public function test_expiration_command_moves_active_subscription_to_past_due_then_expired(): void
+    public function test_activating_scheduled_paid_plan_starts_grace_period_automatically(): void
+    {
+        [, $organization] = $this->createOrganizationContext();
+        $pro = $this->createPlan('pro', 99000, 20);
+        $plus = $this->createPlan('plus', 249000, 30);
+
+        $activePlus = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plus->id,
+            'status' => 'active',
+            'starts_at' => now()->subMonth(),
+            'ends_at' => now()->subMinute(),
+        ]);
+        $scheduledPro = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $pro->id,
+            'status' => 'scheduled',
+            'starts_at' => now()->subMinute(),
+        ]);
+
+        $this->artisan('billing:activate-scheduled-subscriptions')
+            ->assertSuccessful();
+
+        $activePlus->refresh();
+        $scheduledPro->refresh();
+
+        $this->assertSame('replaced', $activePlus->status);
+        $this->assertSame('past_due', $scheduledPro->status);
+        $this->assertSame($scheduledPro->starts_at->toDateTimeString(), $scheduledPro->ends_at->toDateTimeString());
+    }
+
+    public function test_renewal_reminder_command_sends_paid_plan_reminder_three_days_before_expiration(): void
+    {
+        Mail::fake();
+        [, $organization] = $this->createOrganizationContext();
+        $plan = $this->createPlan('pro', 99000);
+
+        Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+            'starts_at' => now()->subDays(27),
+            'ends_at' => now()->addDays(3),
+        ]);
+
+        $this->artisan('billing:send-renewal-reminders')
+            ->assertSuccessful();
+
+        Mail::assertSent(SubscriptionRenewalReminderMail::class, function (SubscriptionRenewalReminderMail $mail): bool {
+            return $mail->daysUntilExpiration === 3
+                && $mail->currentPlanName === 'Pro'
+                && $mail->upcomingPlanName === null;
+        });
+    }
+
+    public function test_renewal_reminder_command_mentions_scheduled_plan(): void
+    {
+        Mail::fake();
+        [, $organization] = $this->createOrganizationContext();
+        $pro = $this->createPlan('pro', 99000, 20);
+        $plus = $this->createPlan('plus', 249000, 30);
+        $periodEnd = now()->addDay();
+
+        Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plus->id,
+            'status' => 'active',
+            'starts_at' => now()->subDays(29),
+            'ends_at' => $periodEnd,
+        ]);
+        Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $pro->id,
+            'status' => 'scheduled',
+            'starts_at' => $periodEnd,
+        ]);
+
+        $this->artisan('billing:send-renewal-reminders')
+            ->assertSuccessful();
+
+        Mail::assertSent(SubscriptionRenewalReminderMail::class, function (SubscriptionRenewalReminderMail $mail): bool {
+            return $mail->daysUntilExpiration === 1
+                && $mail->currentPlanName === 'Plus'
+                && $mail->upcomingPlanName === 'Pro';
+        });
+    }
+
+    public function test_renewal_reminder_command_skips_free_plan_and_deduplicates_paid_reminders(): void
+    {
+        Mail::fake();
+        [, $freeOrganization] = $this->createOrganizationContext();
+        [, $paidOrganization] = $this->createOrganizationContext();
+        $free = $this->createPlan('free', 0);
+        $pro = $this->createPlan('pro', 99000);
+
+        Subscription::query()->create([
+            'organization_id' => $freeOrganization->id,
+            'plan_id' => $free->id,
+            'status' => 'active',
+            'starts_at' => now()->subDays(27),
+            'ends_at' => now()->addDays(3),
+        ]);
+        $paidSubscription = Subscription::query()->create([
+            'organization_id' => $paidOrganization->id,
+            'plan_id' => $pro->id,
+            'status' => 'active',
+            'starts_at' => now()->subDays(27),
+            'ends_at' => now()->addDays(3),
+        ]);
+
+        $this->artisan('billing:send-renewal-reminders')->assertSuccessful();
+        $this->artisan('billing:send-renewal-reminders')->assertSuccessful();
+
+        Mail::assertSent(SubscriptionRenewalReminderMail::class, 1);
+        $this->assertSame(1, BillingNotificationLog::query()
+            ->where('subscription_id', $paidSubscription->id)
+            ->where('event_type', 'renewal_3_days')
+            ->count());
+    }
+
+    public function test_process_past_due_subscriptions_sends_daily_warning_during_grace_period(): void
+    {
+        Mail::fake();
+        [, $organization] = $this->createOrganizationContext();
+        $plan = $this->createPlan('pro', 99000);
+        $subscription = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plan->id,
+            'status' => 'past_due',
+            'starts_at' => now()->subMonth(),
+            'ends_at' => now()->subDay(),
+        ]);
+
+        $this->artisan('billing:process-past-due-subscriptions')
+            ->assertSuccessful();
+
+        $subscription->refresh();
+
+        $this->assertSame('past_due', $subscription->status);
+        Mail::assertSent(SubscriptionPastDueReminderMail::class, function (SubscriptionPastDueReminderMail $mail): bool {
+            return $mail->daysPastDue === 1
+                && $mail->planName === 'Pro';
+        });
+    }
+
+    public function test_process_past_due_subscriptions_switches_to_free_after_grace_period_and_applies_limits(): void
+    {
+        Mail::fake();
+        [$user, $organization] = $this->createOrganizationContext();
+        $project = $this->createProject($organization);
+        $resource = $this->createResource($organization, $project, $user);
+        $free = $this->createPlan('free', 0, 10, [
+            'max_monitors' => ['limit' => 1],
+            'allowed_monitor_types' => ['types' => ['http']],
+        ]);
+        $pro = $this->createPlan('pro', 99000, 20);
+        $pastDue = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $pro->id,
+            'status' => 'past_due',
+            'starts_at' => now()->subMonth(),
+            'ends_at' => now()->subDays(4),
+        ]);
+
+        $oldHttp = $this->createMonitor($organization, $project, $resource, 'http', now()->subDays(3));
+        $newHttp = $this->createMonitor($organization, $project, $resource, 'http', now()->subDays(2));
+        $domain = $this->createMonitor($organization, $project, $resource, 'domain', now()->subDay());
+
+        $this->artisan('billing:process-past-due-subscriptions')
+            ->assertSuccessful();
+
+        $pastDue->refresh();
+        $oldHttp->refresh();
+        $newHttp->refresh();
+        $domain->refresh();
+
+        $this->assertSame('expired', $pastDue->status);
+        $this->assertDatabaseHas('subscriptions', [
+            'organization_id' => $organization->id,
+            'plan_id' => $free->id,
+            'status' => 'active',
+        ]);
+        $this->assertTrue($oldHttp->enabled);
+        $this->assertFalse($newHttp->enabled);
+        $this->assertFalse($domain->enabled);
+    }
+
+    public function test_expiration_command_moves_active_subscription_to_past_due_then_free_after_grace_period(): void
     {
         [$user, $organization] = $this->createOrganizationContext();
+        $this->createPlan('free', 0);
         $plan = $this->createPlan('pro', 99000);
 
         $subscription = Subscription::query()->create([
@@ -432,6 +624,10 @@ final class BillingFlowTest extends TestCase
 
         $subscription->refresh();
         $this->assertSame('expired', $subscription->status);
+        $this->assertDatabaseHas('subscriptions', [
+            'organization_id' => $organization->id,
+            'status' => 'active',
+        ]);
     }
 
     public function test_guest_register_page_stores_valid_plan_intent(): void
