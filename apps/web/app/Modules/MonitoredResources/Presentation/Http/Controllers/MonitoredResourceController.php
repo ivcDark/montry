@@ -157,6 +157,8 @@ final class MonitoredResourceController extends Controller
                         'expected' => $monitor->expected,
                         'last_check_at' => $monitor->last_check_at?->toISOString(),
                         'next_check_at' => $monitor->next_check_at?->toISOString(),
+                        'check_in_progress_until' => $monitor->check_in_progress_until?->toISOString(),
+                        'is_checking' => $monitor->check_in_progress_until?->isFuture() ?? false,
                         'last_success_at' => $monitor->last_success_at?->toISOString(),
                         'last_failure_at' => $monitor->last_failure_at?->toISOString(),
                         'latest_result' => $monitor->latestCheckResult

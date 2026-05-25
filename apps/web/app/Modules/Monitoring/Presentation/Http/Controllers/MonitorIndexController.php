@@ -51,6 +51,8 @@ final class MonitorIndexController extends Controller
                 'timeout_ms' => $monitor->timeout_ms,
                 'last_check_at' => $monitor->last_check_at?->toISOString(),
                 'next_check_at' => $monitor->next_check_at?->toISOString(),
+                'check_in_progress_until' => $monitor->check_in_progress_until?->toISOString(),
+                'is_checking' => $monitor->check_in_progress_until?->isFuture() ?? false,
                 'settings' => $monitor->settings ?? [],
                 'expected' => $monitor->expected ?? [],
                 'project' => $monitor->project

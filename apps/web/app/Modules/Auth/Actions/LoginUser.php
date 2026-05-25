@@ -15,5 +15,13 @@ final class LoginUser
                 'email' => 'Неверная пара почта/пароль',
             ]);
         }
+
+        if ((bool) Auth::user()?->is_blocked) {
+            Auth::logout();
+
+            throw ValidationException::withMessages([
+                'email' => 'Учетная запись заблокирована.',
+            ]);
+        }
     }
 }

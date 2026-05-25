@@ -1,6 +1,6 @@
 # Laravel and Go Poller Integration Checklist
 
-Дата обновления: 2026-05-13.
+Дата обновления: 2026-05-22.
 
 Этот документ фиксирует, что Laravel должен реализовать для полноценной интеграции с Go poller. Go poller выполняет только технические проверки. Laravel остается источником бизнес-логики и состояния.
 
@@ -12,14 +12,14 @@
 
 Checklist:
 
-- [ ] Endpoint доступен только для internal clients.
-- [ ] Поддерживает query `limit`.
-- [ ] Возвращает только enabled monitors.
-- [ ] Не возвращает monitors, которые paused/deleted/archived.
-- [ ] Формирует generic payload без PHP class names.
-- [ ] Для каждого задания генерирует стабильный `event_id`.
-- [ ] Возвращает `timeout_ms`, `settings`, `expected`.
-- [ ] Учитывает lease/idempotency, если несколько poller instances будут запущены позже.
+- [x] Endpoint доступен только для internal clients, если задан `services.poller.internal_token`.
+- [x] Поддерживает query `limit`.
+- [x] Возвращает только enabled monitors.
+- [x] Не возвращает paused/deleted/not-due monitors.
+- [x] Формирует generic payload без PHP class names.
+- [x] Для каждого задания генерирует стабильный `event_id` на время lease.
+- [x] Возвращает `timeout_ms`, `settings`, `expected`.
+- [x] Учитывает lease/idempotency через `check_in_progress_until` и `last_check_event_id`.
 
 ### Laravel endpoint: `POST /internal/check-results`
 
@@ -27,15 +27,16 @@ Checklist:
 
 Checklist:
 
-- [ ] Валидирует Bearer token или HMAC.
-- [ ] Валидирует payload.
-- [ ] Ищет monitor по `monitor_id`.
-- [ ] Проверяет, что `check_type` соответствует monitor type.
-- [ ] Обрабатывает повторную доставку по `event_id`.
-- [ ] Сохраняет `check_results`.
-- [ ] Обновляет monitor counters/status/last timestamps.
-- [ ] Запускает incident resolver.
-- [ ] Публикует Laravel domain events для notifications.
+- [x] Валидирует Bearer token, если задан `services.poller.internal_token`.
+- [x] Валидирует payload.
+- [x] Ищет monitor по `monitor_id`.
+- [x] Проверяет, что `check_type` соответствует monitor type.
+- [x] Обрабатывает повторную доставку по `event_id`.
+- [x] Сохраняет `check_results`.
+- [x] Обновляет monitor counters/status/last timestamps/next check.
+- [x] Очищает active lease, если `event_id` совпадает с `last_check_event_id`.
+- [x] Запускает incident resolver через Laravel events/listeners.
+- [x] Публикует Laravel domain events для notifications.
 
 ### Poller endpoint: `POST {POLLER_BASE_URL}/internal/manual-checks`
 
@@ -43,10 +44,11 @@ MVP-вариант: endpoint находится в Go poller, Laravel вызыв
 
 Checklist на Laravel стороне:
 
-- [ ] User-facing endpoint проверяет права пользователя.
-- [ ] Billing/Application service проверяет тарифные лимиты.
-- [ ] Laravel формирует `WorkerCheckPayload`.
-- [ ] Laravel отправляет payload в poller через `MonitoringWorkerClientInterface`.
+- [x] User-facing endpoint проверяет права пользователя.
+- [x] Billing/Application service проверяет тарифные лимиты.
+- [x] Laravel формирует `WorkerCheckPayload`.
+- [x] Laravel отправляет payload в poller через `MonitoringWorkerClientInterface`.
+- [x] Laravel ставит короткий `check_in_progress_until` lease для UI и защиты от параллельной scheduled выдачи.
 - [ ] `POLLER_BASE_URL` указывает на `http://poller:8090` внутри Docker.
 - [ ] `POLLER_TOKEN` совпадает с `POLLER_MANUAL_API_TOKEN` в poller.
 - [ ] При недоступности poller Laravel показывает понятную ошибку или ставит задачу в retry/outbox позже.
@@ -154,7 +156,7 @@ Authorization: Bearer <POLLER_TOKEN>
 Checklist:
 
 - [ ] Store tokens in env only.
-- [ ] Compare tokens with constant-time comparison where practical.
+- [x] Compare tokens with constant-time comparison where practical.
 - [ ] Return `401` or `403` for invalid token.
 - [ ] Do not log full token values.
 
@@ -170,11 +172,19 @@ Required identifiers:
 
 Checklist:
 
-- [ ] `check_results` should not duplicate the same `event_id`.
-- [ ] Repeated `POST /internal/check-results` with the same `event_id` should return a safe success response.
-- [ ] Laravel should not open duplicate incidents for the same result.
-- [ ] Laravel should not send duplicate notifications for repeated delivery.
-- [ ] Future multi-poller mode should add lease/claim semantics for due jobs.
+- [x] `check_results` should not duplicate the same `event_id`.
+- [x] Repeated `POST /internal/check-results` with the same `event_id` should return a safe success response.
+- [x] Laravel should not open duplicate incidents for the same result.
+- [x] Laravel should not send duplicate notifications for repeated delivery.
+- [x] Future multi-poller mode should add lease/claim semantics for due jobs.
+
+Current lease behavior:
+
+- `GET /internal/monitors/due` selects due enabled monitors whose `check_in_progress_until` is empty or expired.
+- The selected rows are locked with `FOR UPDATE SKIP LOCKED`.
+- Laravel writes `last_check_event_id` and `check_in_progress_until = now + timeout_ms + 60 seconds` before returning jobs.
+- `POST /internal/check-results` clears `check_in_progress_until` only when the incoming `event_id` matches `last_check_event_id`.
+- If poller dies or cannot deliver a result, the lease expires and the monitor becomes due again.
 
 ## 6. Laravel State Updates
 
@@ -182,21 +192,22 @@ Checklist:
 
 Laravel should:
 
-- [ ] Save raw technical result from poller.
-- [ ] Save normalized result from Laravel `CheckTypeRegistry`.
-- [ ] Store `status`, `checked_at`, `duration_ms`, `error`.
-- [ ] Keep organization/monitor relations for query performance.
+- [x] Save raw technical result from poller.
+- [x] Save normalized result from Laravel `CheckTypeRegistry`.
+- [x] Store `status`, `checked_at`, `duration_ms`, `error`.
+- [x] Keep organization/monitor relations for query performance.
 
 ### `monitors`
 
 Laravel should:
 
-- [ ] Update `last_check_at`.
-- [ ] Update `last_success_at` or `last_failure_at`.
-- [ ] Update `consecutive_successes`.
-- [ ] Update `consecutive_failures`.
-- [ ] Calculate `next_check_at`.
-- [ ] Resolve current monitor status through Laravel rules.
+- [x] Update `last_check_at`.
+- [x] Update `last_success_at` or `last_failure_at`.
+- [x] Update `consecutive_successes`.
+- [x] Update `consecutive_failures`.
+- [x] Calculate `next_check_at`.
+- [x] Resolve current monitor status through Laravel rules.
+- [x] Track in-flight checks through `check_in_progress_until`.
 
 ### `incidents`
 

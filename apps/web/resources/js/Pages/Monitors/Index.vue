@@ -43,6 +43,8 @@ type Monitor = {
     timeout_ms: number | null
     last_check_at: string | null
     next_check_at: string | null
+    check_in_progress_until: string | null
+    is_checking: boolean
     settings: Record<string, unknown>
     expected: Record<string, unknown>
     project: Project | null
@@ -76,6 +78,7 @@ const statusFilters = [
     { value: 'ok', label: 'OK' },
     { value: 'warning', label: 'Warning' },
     { value: 'down', label: 'Down' },
+    { value: 'checking', label: 'Checking' },
     { value: 'paused', label: 'Paused' },
 ]
 
@@ -112,12 +115,14 @@ const stats = computed(() => {
         ok: monitors.filter((monitor) => statusKey(monitor) === 'ok').length,
         down: monitors.filter((monitor) => statusKey(monitor) === 'down').length,
         warning: monitors.filter((monitor) => statusKey(monitor) === 'warning').length,
+        checking: monitors.filter((monitor) => statusKey(monitor) === 'checking').length,
         paused: monitors.filter((monitor) => statusKey(monitor) === 'paused').length,
     }
 })
 
 function statusKey(monitor: Monitor): string {
     if (!monitor.is_enabled || monitor.status === 'paused') return 'paused'
+    if (monitor.is_checking) return 'checking'
     if (monitor.status === 'success' || monitor.status === 'up') return 'ok'
     if (monitor.status === 'failure' || monitor.status === 'down') return 'down'
     if (monitor.status === 'degraded' || monitor.latest_result?.status === 'warning') return 'warning'
@@ -131,6 +136,7 @@ function statusLabel(monitor: Monitor): string {
     if (key === 'ok') return 'OK'
     if (key === 'down') return 'Down'
     if (key === 'warning') return 'Warning'
+    if (key === 'checking') return 'Checking'
     if (key === 'paused') return 'Paused'
 
     return 'Unknown'
@@ -142,6 +148,7 @@ function statusClass(monitor: Monitor): string {
     if (key === 'ok') return 'bg-[#ECFDF3] text-[#16A34A]'
     if (key === 'down') return 'bg-[#FEECEC] text-[#EF4444]'
     if (key === 'warning') return 'bg-[#FFF7E8] text-[#F59E0B]'
+    if (key === 'checking') return 'bg-[#EAF2FF] text-[#0F6BFF]'
     if (key === 'paused') return 'bg-[#F1F5F9] text-[#64748B]'
 
     return 'bg-[#F3E8FF] text-[#7C3AED]'
@@ -186,6 +193,7 @@ function formatInterval(seconds: number | null): string {
 function resultText(monitor: Monitor): string {
     const result = monitor.latest_result
 
+    if (monitor.is_checking) return 'идет проверка'
     if (!result) return 'нет результата'
     if (result.error_message) return result.error_message
 
@@ -220,6 +228,10 @@ function targetText(monitor: Monitor): string {
 }
 
 function checkNow(monitor: Monitor): void {
+    if (!monitor.is_enabled || monitor.is_checking) {
+        return
+    }
+
     router.post(`/monitors/${monitor.id}/check-now`, {}, {
         preserveScroll: true,
     })
@@ -269,10 +281,11 @@ function toggleMonitor(monitor: Monitor): void {
                         <h2 class="text-xl font-extrabold text-[#111827]">Сводка мониторингов</h2>
                         <span v-if="stats.down" class="rounded-full bg-[#FEECEC] px-3 py-1 text-xs font-extrabold text-[#EF4444]">{{ stats.down }} Down</span>
                         <span v-if="stats.warning" class="rounded-full bg-[#FFF7E8] px-3 py-1 text-xs font-extrabold text-[#F59E0B]">{{ stats.warning }} Warning</span>
+                        <span v-if="stats.checking" class="rounded-full bg-[#EAF2FF] px-3 py-1 text-xs font-extrabold text-[#0F6BFF]">{{ stats.checking }} Checking</span>
                         <span v-if="stats.paused" class="rounded-full bg-[#F1F5F9] px-3 py-1 text-xs font-extrabold text-[#64748B]">{{ stats.paused }} Paused</span>
                     </div>
 
-                    <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                    <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
                         <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
                             <p class="text-sm font-bold text-[#667085]">Всего мониторингов</p>
                             <p class="mt-3 text-4xl font-extrabold text-[#111827]">{{ stats.total }}</p>
@@ -292,6 +305,11 @@ function toggleMonitor(monitor: Monitor): void {
                             <p class="text-sm font-bold text-[#667085]">Предупреждения</p>
                             <p class="mt-3 text-4xl font-extrabold text-[#F59E0B]">{{ stats.warning }}</p>
                             <p class="mt-2 text-sm text-[#667085]">SSL и домены</p>
+                        </article>
+                        <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+                            <p class="text-sm font-bold text-[#667085]">Проверяются</p>
+                            <p class="mt-3 text-4xl font-extrabold text-[#0F6BFF]">{{ stats.checking }}</p>
+                            <p class="mt-2 text-sm text-[#667085]">В работе у poller</p>
                         </article>
                         <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
                             <p class="text-sm font-bold text-[#667085]">На паузе</p>
@@ -358,7 +376,7 @@ function toggleMonitor(monitor: Monitor): void {
                                 v-for="monitor in filteredMonitors"
                                 :key="monitor.id"
                                 class="border-b border-[#E5E7EB]"
-                                :class="statusKey(monitor) === 'down' ? 'bg-[#FFF8F8]' : ''"
+                                :class="statusKey(monitor) === 'down' ? 'bg-[#FFF8F8]' : statusKey(monitor) === 'checking' ? 'bg-[#F7FBFF]' : ''"
                             >
                                 <td class="border-t border-[#E5E7EB] px-5 py-4">
                                     <Link :href="`/sites/${monitor.site_id}`" class="font-extrabold text-[#111827] hover:text-[#0F6BFF]">
@@ -395,11 +413,16 @@ function toggleMonitor(monitor: Monitor): void {
                                     <div class="flex justify-end gap-2">
                                         <button
                                             type="button"
-                                            class="h-9 rounded-xl border border-[#E5E7EB] px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-50"
-                                            :disabled="!monitor.is_enabled"
+                                            class="inline-flex h-9 min-w-[104px] items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-50"
+                                            :disabled="!monitor.is_enabled || monitor.is_checking"
                                             @click="checkNow(monitor)"
                                         >
-                                            Проверить
+                                            <span
+                                                v-if="monitor.is_checking"
+                                                class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#0F6BFF]/25 border-t-[#0F6BFF]"
+                                                aria-hidden="true"
+                                            />
+                                            <span>{{ monitor.is_checking ? 'Проверяем...' : 'Проверить' }}</span>
                                         </button>
                                         <button
                                             type="button"

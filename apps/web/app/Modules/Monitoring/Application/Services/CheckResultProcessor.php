@@ -47,7 +47,7 @@ final readonly class CheckResultProcessor
             'normalized_result' => $normalizedResult,
         ]);
 
-        $this->updateMonitorState($monitor, $status, $checkedAt);
+        $this->updateMonitorState($monitor, $status, $checkedAt, $eventId);
         $this->emitExpirationWarningIfNeeded($monitor, $normalizedResult);
 
         return $checkResult;
@@ -97,11 +97,19 @@ final readonly class CheckResultProcessor
         ));
     }
 
-    private function updateMonitorState(Monitor $monitor, string $status, DateTimeInterface $checkedAt): void
-    {
+    private function updateMonitorState(
+        Monitor $monitor,
+        string $status,
+        DateTimeInterface $checkedAt,
+        ?string $eventId,
+    ): void {
         $monitor->status = $status;
         $monitor->last_check_at = $checkedAt;
         $monitor->next_check_at = Carbon::instance($checkedAt)->copy()->addSeconds((int) $monitor->interval_seconds);
+
+        if ($eventId !== null && $eventId === $monitor->last_check_event_id) {
+            $monitor->check_in_progress_until = null;
+        }
 
         if ($status === 'success') {
             $monitor->last_success_at = $checkedAt;

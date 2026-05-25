@@ -1,23 +1,39 @@
 <?php
 
+use App\Modules\Admin\Infrastructure\Providers\AdminModuleServiceProvider;
+use App\Modules\Auth\Providers\AuthModuleServiceProvider;
+use App\Modules\Billing\Infrastructure\Providers\BillingModuleServiceProvider;
+use App\Modules\CheckTypes\Infrastructure\Providers\CheckTypesModuleServiceProvider;
+use App\Modules\Dashboard\Infrastructure\Providers\DashboardModuleServiceProvider;
+use App\Modules\Identity\Infrastructure\Providers\IdentityModuleServiceProvider;
+use App\Modules\Incidents\Infrastructure\Providers\IncidentsModuleServiceProvider;
+use App\Modules\MonitoredResources\Infrastructure\Providers\MonitoredResourcesModuleServiceProvider;
+use App\Modules\Monitoring\Infrastructure\Providers\MonitoringModuleServiceProvider;
+use App\Modules\Notifications\Infrastructure\Providers\NotificationsModuleServiceProvider;
+use App\Modules\Organizations\Providers\OrganizationsModuleServiceProvider;
+use App\Modules\Projects\Infrastructure\Providers\ProjectsModuleServiceProvider;
+use App\Modules\Reports\Infrastructure\Providers\ReportsModuleServiceProvider;
+use App\Modules\Sites\Providers\SitesModuleServiceProvider;
+use App\Modules\WorkerGateway\Infrastructure\Providers\WorkerGatewayModuleServiceProvider;
 use App\Providers\AppServiceProvider;
 
 return [
     AppServiceProvider::class,
 
-    \App\Modules\Identity\Infrastructure\Providers\IdentityModuleServiceProvider::class,
-    \App\Modules\Billing\Infrastructure\Providers\BillingModuleServiceProvider::class,
-    \App\Modules\Projects\Infrastructure\Providers\ProjectsModuleServiceProvider::class,
-    \App\Modules\Dashboard\Infrastructure\Providers\DashboardModuleServiceProvider::class,
-    \App\Modules\MonitoredResources\Infrastructure\Providers\MonitoredResourcesModuleServiceProvider::class,
-    \App\Modules\Monitoring\Infrastructure\Providers\MonitoringModuleServiceProvider::class,
-    \App\Modules\CheckTypes\Infrastructure\Providers\CheckTypesModuleServiceProvider::class,
-    \App\Modules\Incidents\Infrastructure\Providers\IncidentsModuleServiceProvider::class,
-    \App\Modules\Notifications\Infrastructure\Providers\NotificationsModuleServiceProvider::class,
-    \App\Modules\Reports\Infrastructure\Providers\ReportsModuleServiceProvider::class,
-    \App\Modules\WorkerGateway\Infrastructure\Providers\WorkerGatewayModuleServiceProvider::class,
+    IdentityModuleServiceProvider::class,
+    BillingModuleServiceProvider::class,
+    ProjectsModuleServiceProvider::class,
+    DashboardModuleServiceProvider::class,
+    MonitoredResourcesModuleServiceProvider::class,
+    MonitoringModuleServiceProvider::class,
+    CheckTypesModuleServiceProvider::class,
+    IncidentsModuleServiceProvider::class,
+    NotificationsModuleServiceProvider::class,
+    ReportsModuleServiceProvider::class,
+    WorkerGatewayModuleServiceProvider::class,
+    AdminModuleServiceProvider::class,
 
-    \App\Modules\Auth\Providers\AuthModuleServiceProvider::class,
-    \App\Modules\Organizations\Providers\OrganizationsModuleServiceProvider::class,
-    \App\Modules\Sites\Providers\SitesModuleServiceProvider::class,
+    AuthModuleServiceProvider::class,
+    OrganizationsModuleServiceProvider::class,
+    SitesModuleServiceProvider::class,
 ];

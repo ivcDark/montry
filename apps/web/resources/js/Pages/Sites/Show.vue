@@ -55,6 +55,8 @@ type Monitor = {
     expected: MonitorExpected | null
     last_check_at: string | null
     next_check_at: string | null
+    check_in_progress_until: string | null
+    is_checking: boolean
     last_success_at: string | null
     last_failure_at: string | null
     latest_result: LatestResult | null
@@ -208,6 +210,7 @@ function statusLabel(status: string): string {
     if (status === 'ok' || status === 'success' || status === 'up') return 'OK'
     if (status === 'down' || status === 'failure') return 'Down'
     if (status === 'warning' || status === 'degraded') return 'Warning'
+    if (status === 'checking') return 'Checking'
     if (status === 'paused') return 'Paused'
     if (status === 'empty') return 'Empty'
 
@@ -218,6 +221,7 @@ function statusClass(status: string): string {
     if (status === 'ok' || status === 'success' || status === 'up') return 'bg-[#ECFDF3] text-[#16A34A]'
     if (status === 'down' || status === 'failure') return 'bg-[#FEECEC] text-[#EF4444]'
     if (status === 'warning' || status === 'degraded') return 'bg-[#FFF7E8] text-[#F59E0B]'
+    if (status === 'checking') return 'bg-[#EAF2FF] text-[#0F6BFF]'
     if (status === 'paused') return 'bg-[#F1F5F9] text-[#64748B]'
 
     return 'bg-[#EAF2FF] text-[#0F6BFF]'
@@ -225,6 +229,7 @@ function statusClass(status: string): string {
 
 function monitorStatus(monitor: Monitor): string {
     if (!monitor.is_enabled || monitor.status === 'paused') return 'paused'
+    if (isChecking(monitor)) return 'checking'
     if (monitor.status === 'success' || monitor.status === 'up') return 'ok'
     if (monitor.status === 'failure' || monitor.status === 'down') return 'down'
     if (monitor.status === 'degraded' || monitor.status === 'warning' || monitor.latest_result?.status === 'warning') return 'warning'
@@ -253,6 +258,7 @@ function monitorCardClass(monitor: Monitor): string {
 
     if (status === 'down') return 'border-[#FECACA] bg-[#FFF8F8]'
     if (status === 'warning') return 'border-[#FDE68A] bg-[#FFFCF4]'
+    if (status === 'checking') return 'border-[#BFDBFE] bg-[#F7FBFF]'
     if (status === 'ok') return 'border-[#BBF7D0] bg-[#F6FEF9]'
 
     return 'border-[#E5E7EB] bg-[#F8FAFC]'
@@ -307,6 +313,7 @@ function formatDuration(seconds: number | null): string {
 function resultText(monitor: Monitor): string {
     const result = monitor.latest_result
 
+    if (isChecking(monitor)) return 'Идет проверка'
     if (!result) return 'Нет результата'
     if (result.error_message) return result.error_message
 
@@ -433,7 +440,7 @@ function toggleMonitor(monitor: Monitor): void {
 }
 
 function isChecking(monitor: Monitor): boolean {
-    return checkingMonitorIds.value.includes(monitor.id)
+    return monitor.is_checking || checkingMonitorIds.value.includes(monitor.id)
 }
 
 function stopChecking(monitorId: string): void {

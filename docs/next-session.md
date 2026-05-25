@@ -15,6 +15,7 @@
   - domain card
 - Checks are implemented:
   - manual domain check from UI
+  - automatic periodic HTTP, SSL and domain checks through Go poller
   - check history
   - SSL inspection
   - WHOIS expiration lookup
@@ -25,6 +26,11 @@
   - new problem emails are sent through Mailpit
   - email delivery is asynchronous through RabbitMQ
 - Domain check dispatch is also asynchronous through RabbitMQ.
+- Generic monitor dispatch is available through the Go poller internal API:
+  - Laravel exposes `GET /internal/monitors/due`
+  - Laravel exposes `POST /internal/check-results`
+  - poller scheduler fetches due monitors and posts results back
+- Due monitor dispatch uses a short lease on `monitors.check_in_progress_until` to avoid handing the same monitor to the poller repeatedly while a check is in flight.
 
 ## Important architecture decisions
 
@@ -95,11 +101,11 @@ make artisan cmd="route:list"
 
 ## Recommended next steps
 
-1. Add automatic periodic checks.
+1. Verify scheduled monitor lease behavior under real poller load.
 2. Improve dashboard with summary counters and recent activity.
-3. Add deduplication/protection from repeated check dispatches for the same domain.
-4. Add tests for auth, domain checks, and RabbitMQ-related flows.
-5. Decide whether to show explicit "queued/in progress" state for domains in UI.
+3. Add tests for auth, domain checks, poller lease behavior and RabbitMQ-related flows when we decide to invest in coverage.
+4. Continue polishing explicit "checking / last checked / next check" UI states.
+5. Decide whether old RabbitMQ domain-check flow should be retired or kept as a compatibility path.
 
 ## Start of next session
 

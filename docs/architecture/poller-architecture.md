@@ -1,6 +1,6 @@
 # Go Poller Architecture
 
-Дата обновления: 2026-05-13.
+Дата обновления: 2026-05-22.
 
 ## 1. Цель Go poller
 
@@ -91,7 +91,7 @@ Worker знает только registry и общий интерфейс `Checke
 MVP-поток через HTTP polling:
 
 1. `scheduler.DueFetcher` по interval обращается в Laravel: `GET /internal/monitors/due`.
-2. Laravel возвращает список due monitors как `CheckJob` payloads.
+2. Laravel выбирает due monitors без active lease, резервирует их через `check_in_progress_until` и возвращает список как `CheckJob` payloads.
 3. Scheduler валидирует минимальные технические поля: `event_id`, `monitor_id`, `check_type`, `target`, `settings`, `expected`.
 4. Scheduler кладет задания в общий `jobs` channel.
 5. Dispatcher передает задания в worker pool.
@@ -101,9 +101,17 @@ MVP-поток через HTTP polling:
 9. Worker формирует `CheckResult` даже при ошибке проверки.
 10. Result publisher отправляет результат в Laravel: `POST /internal/check-results`.
 11. При временной ошибке отправки publisher делает retry/backoff.
-12. Laravel сохраняет результат и сам обновляет status/counters/incidents/notifications.
+12. Laravel сохраняет результат, очищает lease для совпавшего `event_id` и сам обновляет status/counters/incidents/notifications.
 
 Важно: scheduler не должен вычислять `next_check_at`. Laravel выдает due checks и после приема результата решает, когда монитор должен проверяться дальше.
+
+Laravel ставит короткий lease перед возвратом scheduled jobs:
+
+- `last_check_event_id` хранит `event_id`, который ожидается от poller;
+- `check_in_progress_until` блокирует повторную выдачу monitor до завершения проверки или истечения lease;
+- длительность lease сейчас равна `timeout_ms + 60 секунд`;
+- прием результата очищает lease только если входящий `event_id` совпадает с `last_check_event_id`;
+- если poller не вернул результат, lease истечет и monitor снова попадет в `/internal/monitors/due`.
 
 ## 5. Поток ручной проверки
 
@@ -146,6 +154,8 @@ Poller manual listener:
 6. выполнение дальше идет через тот же worker pool, что и плановые проверки.
 
 Manual checks не должны иметь отдельную реализацию runner/checker. Отличается только источник задания и возможный приоритет очереди.
+
+Laravel также ставит `check_in_progress_until` для manual checks до отправки payload в poller. Это дает UI состояние `checking` и не позволяет scheduled polling параллельно выдать тот же monitor, пока ручная проверка в работе.
 
 ## 6. Архитектура goroutines
 

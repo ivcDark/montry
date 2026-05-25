@@ -7,6 +7,7 @@ use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\WorkerGateway\Presentation\Http\Requests\ListDueMonitorsRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 final class DueMonitorController extends Controller
@@ -16,23 +17,46 @@ final class DueMonitorController extends Controller
         $limit = (int) ($request->validated('limit') ?? 100);
         $now = Carbon::now();
 
-        $monitors = Monitor::query()
-            ->with('monitoredResource')
-            ->where('enabled', true)
-            ->where(function ($query) use ($now): void {
-                $query
-                    ->whereNull('next_check_at')
-                    ->orWhere('next_check_at', '<=', $now);
-            })
-            ->orderByRaw('next_check_at is null')
-            ->orderBy('next_check_at')
-            ->limit($limit)
-            ->get();
+        $monitors = DB::transaction(function () use ($limit, $now) {
+            $query = Monitor::query()
+                ->with('monitoredResource')
+                ->where('enabled', true)
+                ->where(function ($query) use ($now): void {
+                    $query
+                        ->whereNull('next_check_at')
+                        ->orWhere('next_check_at', '<=', $now);
+                })
+                ->where(function ($query) use ($now): void {
+                    $query
+                        ->whereNull('check_in_progress_until')
+                        ->orWhere('check_in_progress_until', '<=', $now);
+                })
+                ->orderByRaw('next_check_at is null')
+                ->orderBy('next_check_at')
+                ->limit($limit);
+
+            if (in_array(DB::connection()->getDriverName(), ['pgsql', 'mysql', 'mariadb'], true)) {
+                $query->lock('FOR UPDATE SKIP LOCKED');
+            }
+
+            $monitors = $query->get();
+
+            $monitors->each(function (Monitor $monitor) use ($now): void {
+                $monitor->last_check_event_id = (string) Str::uuid();
+                $monitor->check_in_progress_until = $now
+                    ->copy()
+                    ->addMilliseconds((int) $monitor->timeout_ms)
+                    ->addSeconds(60);
+                $monitor->save();
+            });
+
+            return $monitors;
+        });
 
         return response()->json([
             'data' => $monitors->map(fn (Monitor $monitor): array => [
                 'id' => (string) Str::uuid(),
-                'event_id' => (string) Str::uuid(),
+                'event_id' => $monitor->last_check_event_id,
                 'event_type' => 'scheduled_check_due',
                 'monitor_id' => $monitor->id,
                 'check_type' => $monitor->type,
