@@ -1,0 +1,38 @@
+groups:
+  - name: montry-platform
+    rules:
+      - alert: MontryTargetDown
+        expr: up{job!="laravel",job!="poller"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus target is down"
+          description: "Target {{ $labels.job }} / {{ $labels.instance }} has been down for more than 2 minutes."
+
+      - alert: MontryContainerRestarting
+        expr: increase(container_start_time_seconds{name=~"montry-.+"}[10m]) > 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container restarted repeatedly"
+          description: "Container {{ $labels.name }} restarted more than once in 10 minutes."
+
+      - alert: MontryDiskUsageHigh
+        expr: 100 - ((node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} * 100) / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk usage is high"
+          description: "Disk usage on {{ $labels.instance }} {{ $labels.mountpoint }} is above 85%."
+
+      - alert: MontryBlackboxProbeFailed
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "External probe failed"
+          description: "Blackbox probe for {{ $labels.instance }} failed for more than 2 minutes."

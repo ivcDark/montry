@@ -11,6 +11,7 @@ import (
 	"montry/apps/poller/internal/jobs"
 	"montry/apps/poller/internal/laravel"
 	"montry/apps/poller/internal/logger"
+	"montry/apps/poller/internal/observability"
 	"montry/apps/poller/internal/runner"
 	"montry/apps/poller/internal/scheduler"
 	transporthttp "montry/apps/poller/internal/transport/http"
@@ -24,6 +25,7 @@ type App struct {
 	pool   *runner.WorkerPool
 	sched  *scheduler.Scheduler
 	server *transporthttp.Server
+	sentry *observability.SentryReporter
 }
 
 func NewFromEnv() (*App, error) {
@@ -38,6 +40,27 @@ func NewFromEnv() (*App, error) {
 }
 
 func New(cfg config.Config, log *logger.Logger) (*App, error) {
+	metrics := observability.NewMetrics()
+	metrics.SetWorkerCount(cfg.Workers)
+	metrics.SetQueueStats(0, cfg.QueueBuffer)
+	tracer := observability.NewTracer(observability.TracerConfig{
+		Enabled:     cfg.TracingEnabled,
+		Endpoint:    cfg.TracingEndpoint,
+		ServiceName: cfg.TracingServiceName,
+		Environment: cfg.AppEnv,
+		Timeout:     cfg.TracingTimeout,
+	})
+	sentryReporter, err := observability.NewSentryReporter(observability.SentryConfig{
+		DSN:         cfg.SentryDSN,
+		Enabled:     cfg.SentryEnabled,
+		Environment: cfg.SentryEnvironment,
+		Release:     cfg.SentryRelease,
+		ServiceName: cfg.TracingServiceName,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create sentry reporter: %w", err)
+	}
+
 	checkRegistry := checks.NewRegistry()
 	if err := checkRegistry.Register(httpcheck.New()); err != nil {
 		return nil, fmt.Errorf("register %s checker: %w", httpcheck.Type, err)
@@ -53,12 +76,15 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		BaseURL: cfg.LaravelInternalAPIURL,
 		Token:   cfg.LaravelInternalAPIToken,
 		Timeout: cfg.LaravelInternalAPITimeout,
+		Tracer:  tracer,
 	})
 
 	resultPublisher, err := runner.NewLaravelResultPublisher(laravelClient, runner.ResultPublisherConfig{
 		RetryAttempts: cfg.ResultRetryAttempts,
 		RetryDelay:    cfg.ResultRetryDelay,
 		Logger:        log,
+		Metrics:       metrics,
+		Tracer:        tracer,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create result publisher: %w", err)
@@ -67,6 +93,9 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	workerPool, err := runner.NewWorkerPool(checkRegistry, resultPublisher, runner.WorkerPoolConfig{
 		Workers:      cfg.Workers,
 		CheckTimeout: cfg.CheckTimeout,
+		Metrics:      metrics,
+		Tracer:       tracer,
+		Sentry:       sentryReporter,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create worker pool: %w", err)
@@ -77,6 +106,8 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		Interval:   cfg.SchedulerInterval,
 		FetchLimit: cfg.FetchDueLimit,
 		Logger:     log,
+		Metrics:    metrics,
+		Sentry:     sentryReporter,
 	})
 
 	return &App{
@@ -86,11 +117,17 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		jobs:   jobCh,
 		pool:   workerPool,
 		sched:  sched,
+		sentry: sentryReporter,
 		server: transporthttp.NewServer(cfg.HTTPAddr, log, transporthttp.Options{
 			ManualJobs:           jobCh,
 			CheckRegistry:        checkRegistry,
 			ManualAuthToken:      cfg.ManualAPIToken,
 			ManualRequestTimeout: cfg.ManualRequestTimeout,
+			Metrics:              metrics,
+			Tracer:               tracer,
+			QueueStats: func() (int, int) {
+				return len(jobCh), cap(jobCh)
+			},
 		}),
 	}, nil
 }

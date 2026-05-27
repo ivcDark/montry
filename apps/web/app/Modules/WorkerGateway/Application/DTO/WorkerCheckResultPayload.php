@@ -16,6 +16,7 @@ final readonly class WorkerCheckResultPayload
         public ?int $durationMs,
         public array $result,
         public ?array $error,
+        public ?string $traceparent = null,
     ) {
     }
 
@@ -30,6 +31,7 @@ final readonly class WorkerCheckResultPayload
             durationMs: isset($payload['duration_ms']) ? (int) $payload['duration_ms'] : null,
             result: is_array($payload['result'] ?? null) ? $payload['result'] : [],
             error: is_array($payload['error'] ?? null) ? $payload['error'] : null,
+            traceparent: $payload['traceparent'] ?? null,
         );
     }
 
@@ -40,6 +42,7 @@ final readonly class WorkerCheckResultPayload
             'status' => $this->status,
             'duration_ms' => $this->durationMs,
             'error' => $this->error,
+            'traceparent' => $this->traceparent,
         ];
     }
 }

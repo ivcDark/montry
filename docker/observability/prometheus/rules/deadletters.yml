@@ -1,0 +1,25 @@
+groups:
+  - name: montry-deadletters
+    rules:
+      - alert: MontryDeadLettersOpen
+        expr: sum(montry_dead_letters_total{status="open"}) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: observability
+          runbook: docs/operations/runbooks/dead-letters.md
+        annotations:
+          summary: "Open dead-letter records exist"
+          description: "One or more permanent side-effect failures are waiting for review or retry."
+
+      - alert: MontryRecoverableDeadLettersOpen
+        expr: sum(montry_dead_letters_total{status="open",recoverable="true"}) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: observability
+          runbook: docs/operations/runbooks/dead-letters.md
+        annotations:
+          summary: "Recoverable dead-letter records are waiting"
+          description: "Recoverable dead-letter records have been open for more than 15 minutes."
+

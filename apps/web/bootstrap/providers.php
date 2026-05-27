@@ -10,6 +10,7 @@ use App\Modules\Incidents\Infrastructure\Providers\IncidentsModuleServiceProvide
 use App\Modules\MonitoredResources\Infrastructure\Providers\MonitoredResourcesModuleServiceProvider;
 use App\Modules\Monitoring\Infrastructure\Providers\MonitoringModuleServiceProvider;
 use App\Modules\Notifications\Infrastructure\Providers\NotificationsModuleServiceProvider;
+use App\Modules\Observability\Infrastructure\Providers\ObservabilityServiceProvider;
 use App\Modules\Organizations\Providers\OrganizationsModuleServiceProvider;
 use App\Modules\Projects\Infrastructure\Providers\ProjectsModuleServiceProvider;
 use App\Modules\Reports\Infrastructure\Providers\ReportsModuleServiceProvider;
@@ -29,6 +30,7 @@ return [
     CheckTypesModuleServiceProvider::class,
     IncidentsModuleServiceProvider::class,
     NotificationsModuleServiceProvider::class,
+    ObservabilityServiceProvider::class,
     ReportsModuleServiceProvider::class,
     WorkerGatewayModuleServiceProvider::class,
     AdminModuleServiceProvider::class,

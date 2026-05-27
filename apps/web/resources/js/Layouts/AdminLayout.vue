@@ -27,6 +27,7 @@ defineProps<{
 
 const navigation: NavigationItem[] = [
     { key: 'users', label: 'Пользователи', href: '/admin/users' },
+    { key: 'dead_letters', label: 'Dead letters', href: '/admin/dead-letters' },
     { key: 'organizations', label: 'Организации' },
     { key: 'monitors', label: 'Мониторы' },
     { key: 'incidents', label: 'Инциденты' },

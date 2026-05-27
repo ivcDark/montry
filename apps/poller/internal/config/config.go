@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -25,10 +26,24 @@ type Config struct {
 	ManualAPIToken            string
 	ManualRequestTimeout      time.Duration
 	ShutdownTimeout           time.Duration
+	TracingEnabled            bool
+	TracingEndpoint           string
+	TracingServiceName        string
+	TracingTimeout            time.Duration
+	SentryEnabled             bool
+	SentryDSN                 string
+	SentryEnvironment         string
+	SentryRelease             string
+	SentryFlushTimeout        time.Duration
 }
 
 func Load() (Config, error) {
 	concurrency, err := intFromEnv("POLLER_CONCURRENCY", 10)
+	if err != nil {
+		return Config{}, err
+	}
+
+	sentryFlushTimeout, err := durationFromEnv("SENTRY_FLUSH_TIMEOUT", 2*time.Second)
 	if err != nil {
 		return Config{}, err
 	}
@@ -127,6 +142,11 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("POLLER_SHUTDOWN_TIMEOUT must be greater than 0")
 	}
 
+	tracingTimeout, err := durationFromEnv("OTEL_EXPORTER_OTLP_TIMEOUT", 2*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		AppEnv:                    stringFromEnv("APP_ENV", "local"),
 		Mode:                      stringFromEnv("POLLER_MODE", "service"),
@@ -145,6 +165,15 @@ func Load() (Config, error) {
 		ManualAPIToken:            stringFromEnv("POLLER_MANUAL_API_TOKEN", ""),
 		ManualRequestTimeout:      time.Duration(manualRequestTimeoutSeconds) * time.Second,
 		ShutdownTimeout:           shutdownTimeout,
+		TracingEnabled:            boolFromEnv("OTEL_TRACES_ENABLED", true),
+		TracingEndpoint:           stringFromEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4318"),
+		TracingServiceName:        stringFromEnv("OTEL_SERVICE_NAME", "montry-poller"),
+		TracingTimeout:            tracingTimeout,
+		SentryEnabled:             boolFromEnv("SENTRY_ENABLED", false),
+		SentryDSN:                 stringFromEnv("SENTRY_POLLER_DSN", stringFromEnv("SENTRY_DSN", "")),
+		SentryEnvironment:         stringFromEnv("SENTRY_ENVIRONMENT", stringFromEnv("APP_ENV", "local")),
+		SentryRelease:             stringFromEnv("SENTRY_RELEASE", ""),
+		SentryFlushTimeout:        sentryFlushTimeout,
 	}, nil
 }
 
@@ -169,6 +198,15 @@ func intFromEnv(key string, fallback int) (int, error) {
 	}
 
 	return parsed, nil
+}
+
+func boolFromEnv(key string, fallback bool) bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if value == "" {
+		return fallback
+	}
+
+	return value == "1" || value == "true" || value == "yes" || value == "on"
 }
 
 func durationFromEnv(key string, fallback time.Duration) (time.Duration, error) {

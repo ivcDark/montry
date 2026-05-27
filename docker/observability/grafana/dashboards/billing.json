@@ -1,0 +1,81 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "expr": "sum(montry_subscriptions_total{status=\"active\"})", "legendFormat": "active", "refId": "A" }],
+      "title": "Active Subscriptions",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "expr": "sum(montry_payments_total{status=\"succeeded\"})", "legendFormat": "succeeded", "refId": "A" }],
+      "title": "Succeeded Payments",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "expr": "sum(montry_payments_total{status=~\"failed|canceled|expired\"})", "legendFormat": "failed", "refId": "A" }],
+      "title": "Failed Payments",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "expr": "sum(montry_business_events_total{event_type=\"billing.limit_hit\"})", "legendFormat": "limit hits", "refId": "A" }],
+      "title": "Billing Limit Hits",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" } }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 5,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [{ "format": "time_series", "query": "SELECT toStartOfDay(occurred_at) AS time, event_type, count() AS value FROM analytics_events WHERE event_type IN ('plan.selected','plan.changed','payment.started','payment.succeeded','payment.failed','subscription.activated','subscription.expired','billing.limit_hit') AND occurred_at >= now() - INTERVAL 30 DAY GROUP BY time, event_type ORDER BY time", "rawSql": "SELECT toStartOfDay(occurred_at) AS time, event_type, count() AS value FROM analytics_events WHERE event_type IN ('plan.selected','plan.changed','payment.started','payment.succeeded','payment.failed','subscription.activated','subscription.expired','billing.limit_hit') AND occurred_at >= now() - INTERVAL 30 DAY GROUP BY time, event_type ORDER BY time", "refId": "A" }],
+      "title": "Billing Events 30d",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "postgres" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 6,
+      "options": { "showHeader": true },
+      "targets": [{ "format": "table", "rawSql": "select plans.code as plan_code, subscriptions.status, count(*) as subscriptions from subscriptions join plans on plans.id = subscriptions.plan_id group by plans.code, subscriptions.status order by subscriptions desc", "refId": "A" }],
+      "title": "Subscriptions by Plan",
+      "type": "table"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 40,
+  "tags": ["montry", "billing"],
+  "templating": { "list": [] },
+  "time": { "from": "now-30d", "to": "now" },
+  "timezone": "browser",
+  "title": "Montry Billing",
+  "uid": "montry-billing",
+  "version": 1,
+  "weekStart": ""
+}

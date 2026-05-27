@@ -1,0 +1,13 @@
+- labels:
+    scope: public-local
+    service: laravel
+  targets:
+    - http://nginx/
+    - http://nginx/login
+    - http://nginx/register
+
+- labels:
+    scope: internal
+    service: poller
+  targets:
+    - http://poller:8090/health

@@ -5,6 +5,8 @@ namespace App\Modules\Billing\Application\Services;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
+use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
+use App\Modules\Observability\Application\Services\BusinessEventRecorder;
 use App\Modules\Sites\Actions\GetCurrentOrganization;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,6 +17,7 @@ final readonly class StartIntendedCheckout
         private PlanIntentService $planIntent,
         private CheckoutService $checkout,
         private GetCurrentOrganization $getCurrentOrganization,
+        private BusinessEventRecorder $events,
     ) {}
 
     public function redirect(Request $request, User $user): RedirectResponse
@@ -37,6 +40,22 @@ final readonly class StartIntendedCheckout
         }
 
         $organization = $this->getCurrentOrganization->handle($user);
+
+        $this->events->record(new RecordBusinessEventData(
+            eventType: 'plan.selected',
+            organizationId: $organization->id,
+            userId: $user->id,
+            planCode: $plan->code,
+            subjectType: 'plan',
+            subjectId: (string) $plan->id,
+            status: 'intended',
+            source: 'registration',
+            payload: [
+                'selected_plan_code' => $plan->code,
+                'price_cents' => $plan->price_cents,
+                'currency' => $plan->currency,
+            ],
+        ));
 
         if ($this->hasActivePlan($organization->id, $plan->id)) {
             $this->planIntent->clear($request);

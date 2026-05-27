@@ -1,0 +1,90 @@
+groups:
+  - name: montry-availability
+    rules:
+      - alert: MontryLaravelUnavailable
+        expr: up{job="laravel"} == 0 or probe_success{job="blackbox-montry",instance="http://nginx"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: laravel
+          runbook: docs/operations/runbooks/laravel-down.md
+        annotations:
+          summary: "Laravel is unavailable"
+          description: "Laravel metrics scrape or nginx blackbox probe has failed for more than 2 minutes."
+
+      - alert: MontryPostgresUnavailable
+        expr: probe_success{job="blackbox-montry-tcp",service="postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: postgres
+          runbook: docs/operations/runbooks/laravel-down.md
+        annotations:
+          summary: "PostgreSQL container is unavailable"
+          description: "Blackbox TCP probe for PostgreSQL has failed for more than 2 minutes."
+
+      - alert: MontryRedisUnavailable
+        expr: probe_success{job="blackbox-montry-tcp",service="redis"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: redis
+          runbook: docs/operations/runbooks/queue-backlog.md
+        annotations:
+          summary: "Redis container is unavailable"
+          description: "Blackbox TCP probe for Redis has failed for more than 2 minutes."
+
+      - alert: MontryInternalApi5xx
+        expr: sum(rate(montry_internal_api_duration_seconds_count{status_class="5xx"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: laravel
+          runbook: docs/operations/runbooks/laravel-down.md
+        annotations:
+          summary: "Internal API is returning 5xx responses"
+          description: "Laravel internal API has returned 5xx responses at a sustained rate above 0.05 requests/sec."
+
+      - alert: MontryPublicEndpointDown
+        expr: probe_success{job="blackbox-montry",scope=~"public|public-local"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: public-endpoint
+          runbook: docs/operations/self-monitoring.md
+        annotations:
+          summary: "Montry public endpoint is unavailable"
+          description: "Blackbox probe for {{ $labels.instance }} has failed for more than 2 minutes."
+
+      - alert: MontryPostgresBackupFailed
+        expr: montry_postgres_backup_last_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: postgres
+          runbook: docs/operations/backups.md
+        annotations:
+          summary: "PostgreSQL backup failed"
+          description: "The last PostgreSQL backup attempt failed. Check scripts/backup-postgres.sh logs and Docker/PostgreSQL health."
+
+      - alert: MontryPostgresBackupStale
+        expr: absent(montry_postgres_backup_last_success_timestamp_seconds) or (time() - montry_postgres_backup_last_success_timestamp_seconds > 90000)
+        for: 15m
+        labels:
+          severity: critical
+          service: postgres
+          runbook: docs/operations/backups.md
+        annotations:
+          summary: "PostgreSQL backup is stale"
+          description: "No successful PostgreSQL backup has been recorded in the last 25 hours."
+
+      - alert: MontryPostgresBackupVerificationFailed
+        expr: montry_postgres_backup_last_verify_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: postgres
+          runbook: docs/operations/backups.md
+        annotations:
+          summary: "PostgreSQL backup restore verification failed"
+          description: "The last PostgreSQL backup verification did not restore cleanly into a temporary database."

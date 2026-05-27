@@ -5,6 +5,8 @@ namespace App\Modules\Billing\Application\Services;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
+use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
+use App\Modules\Observability\Application\Services\BusinessEventRecorder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -12,6 +14,7 @@ final readonly class ScheduleDowngrade
 {
     public function __construct(
         private PlanChangeClassifier $classifier,
+        private BusinessEventRecorder $events,
     ) {}
 
     public function handle(int $organizationId, string $planCode): Subscription
@@ -61,12 +64,30 @@ final readonly class ScheduleDowngrade
                 ->where('status', 'scheduled')
                 ->update(['status' => 'canceled']);
 
-            return Subscription::query()->create([
+            $subscription = Subscription::query()->create([
                 'organization_id' => $organizationId,
                 'plan_id' => $selectedPlan->id,
                 'status' => 'scheduled',
                 'starts_at' => $currentSubscription->ends_at,
             ]);
+
+            $this->events->record(new RecordBusinessEventData(
+                eventType: 'plan.changed',
+                organizationId: $organizationId,
+                planCode: $selectedPlan->code,
+                subjectType: 'subscription',
+                subjectId: (string) $subscription->id,
+                status: 'scheduled',
+                source: 'billing',
+                payload: [
+                    'change_type' => 'downgrade',
+                    'from_plan_code' => $currentSubscription->plan?->code,
+                    'to_plan_code' => $selectedPlan->code,
+                    'starts_at' => $subscription->starts_at?->toISOString(),
+                ],
+            ));
+
+            return $subscription;
         });
     }
 }

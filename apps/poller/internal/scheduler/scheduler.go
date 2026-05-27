@@ -7,6 +7,7 @@ import (
 
 	"montry/apps/poller/internal/jobs"
 	"montry/apps/poller/internal/laravel"
+	"montry/apps/poller/internal/observability"
 )
 
 type Logger interface {
@@ -18,6 +19,8 @@ type Config struct {
 	Interval   time.Duration
 	FetchLimit int
 	Logger     Logger
+	Metrics    *observability.Metrics
+	Sentry     *observability.SentryReporter
 }
 
 type Scheduler struct {
@@ -69,6 +72,12 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 	checkJobs, err := s.fetcher.Fetch(ctx)
 	if err != nil {
 		s.logError("failed to fetch due checks", "error", err)
+		if s.cfg.Sentry != nil {
+			s.cfg.Sentry.CaptureException(err, map[string]string{
+				"event":  "poller_due_fetch_failed",
+				"source": "scheduler",
+			}, nil)
+		}
 		return nil
 	}
 
@@ -86,8 +95,14 @@ func (s *Scheduler) enqueue(ctx context.Context, job jobs.CheckJob) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	case s.jobs <- job:
+		if s.cfg.Metrics != nil {
+			s.cfg.Metrics.IncJobs(job.Type, string(job.Source), "queued")
+		}
 		return nil
 	default:
+		if s.cfg.Metrics != nil {
+			s.cfg.Metrics.IncJobs(job.Type, string(job.Source), "queue_full")
+		}
 		s.logWarn(
 			"jobs queue is full, dropping due check",
 			"event_id", job.EventID,

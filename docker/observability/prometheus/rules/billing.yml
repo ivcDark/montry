@@ -1,0 +1,24 @@
+groups:
+  - name: montry-billing
+    rules:
+      - alert: MontryPaymentFailureRateHigh
+        expr: sum(montry_payments_total) > 10 and sum(montry_payments_total{status=~"failed|canceled|expired"}) / sum(montry_payments_total) > 0.3
+        for: 15m
+        labels:
+          severity: warning
+          service: billing
+          runbook: docs/operations/runbooks/payment-failures.md
+        annotations:
+          summary: "Payment failure rate is high"
+          description: "More than 30% of stored payment records are failed, canceled or expired."
+
+      - alert: MontryNoSuccessfulPaymentsAfterStarts
+        expr: sum(increase(montry_business_events_total{event_type="payment.started"}[2h])) > 3 and sum(increase(montry_business_events_total{event_type="payment.succeeded"}[2h])) == 0
+        for: 30m
+        labels:
+          severity: warning
+          service: billing
+          runbook: docs/operations/runbooks/payment-failures.md
+        annotations:
+          summary: "Payments are started but not succeeding"
+          description: "Payments have started in the last 2 hours, but no payment.succeeded events were recorded."

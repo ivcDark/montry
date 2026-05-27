@@ -11,6 +11,8 @@ REDIS = $(COMPOSE) exec redis
 	composer-install composer-update fix-permissions artisan key generate-app-key \
 	migrate fresh seed test shell status \
 	web-logs scheduler-logs queue-logs result-consumer-logs \
+	observability-up observability-down observability-logs grafana-ui prometheus-ui loki-ui tempo-ui clickhouse-shell \
+	backup-postgres verify-postgres-backup \
 	poller-build poller-logs poller-test poller-run poller-run-mock poller-manual-logs poller-http-logs poller-seo-logs poller-ssl-logs poller-domain-logs \
 	poller-shell postgres-shell redis-cli rabbitmq-ui mailpit-ui \
 	scale-http scale-seo
@@ -52,6 +54,34 @@ ps:
 	$(COMPOSE) ps
 
 status: ps
+
+observability-up:
+	$(COMPOSE) --profile observability up -d
+
+observability-down:
+	$(COMPOSE) --profile observability down
+
+observability-logs:
+	$(COMPOSE) --profile observability logs -f --tail=200 grafana prometheus loki tempo otel-collector clickhouse node-exporter cadvisor blackbox-exporter
+
+grafana-ui:
+	xdg-open http://localhost:$${GRAFANA_PORT:-3000} || open http://localhost:$${GRAFANA_PORT:-3000} || true
+
+prometheus-ui:
+	xdg-open http://localhost:$${PROMETHEUS_PORT:-9090} || open http://localhost:$${PROMETHEUS_PORT:-9090} || true
+
+loki-ui: grafana-ui
+
+tempo-ui: grafana-ui
+
+clickhouse-shell:
+	$(COMPOSE) --profile observability exec clickhouse clickhouse-client -u $${CLICKHOUSE_USER:-montry} --password $${CLICKHOUSE_PASSWORD:-montry_secret} -d $${CLICKHOUSE_DB:-montry_analytics}
+
+backup-postgres:
+	./scripts/backup-postgres.sh
+
+verify-postgres-backup:
+	./scripts/verify-postgres-backup.sh
 
 web-logs:
 	$(COMPOSE) logs -f --tail=200 web nginx

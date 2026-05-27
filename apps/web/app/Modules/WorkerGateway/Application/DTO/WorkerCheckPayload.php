@@ -15,6 +15,8 @@ final readonly class WorkerCheckPayload
         public array $settings,
         public array $expected,
         public DateTimeInterface $requestedAt,
+        public ?string $correlationId = null,
+        public ?string $traceparent = null,
     ) {
     }
 
@@ -29,6 +31,8 @@ final readonly class WorkerCheckPayload
             'settings' => $this->settings,
             'expected' => $this->expected,
             'requested_at' => $this->requestedAt->format(DateTimeInterface::ATOM),
+            'correlation_id' => $this->correlationId,
+            'traceparent' => $this->traceparent,
         ];
     }
 }

@@ -6,11 +6,18 @@ use App\Modules\Billing\Infrastructure\Persistence\Models\Payment;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
+use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
+use App\Modules\Observability\Application\Services\BusinessEventRecorder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 
-final class CheckoutService
+final readonly class CheckoutService
 {
+    public function __construct(
+        private BusinessEventRecorder $events,
+    ) {
+    }
+
     public function start(int $organizationId, string $planCode): Payment
     {
         $plan = Plan::query()
@@ -45,7 +52,7 @@ final class CheckoutService
                 'starts_at' => now(),
             ]);
 
-            return Payment::query()->create([
+            $payment = Payment::query()->create([
                 'organization_id' => $organizationId,
                 'subscription_id' => $subscription->id,
                 'provider' => 'manual',
@@ -57,6 +64,24 @@ final class CheckoutService
                     'period' => 'month',
                 ],
             ]);
+
+            $this->events->record(new RecordBusinessEventData(
+                eventType: 'payment.started',
+                organizationId: $organizationId,
+                planCode: $plan->code,
+                subjectType: 'payment',
+                subjectId: (string) $payment->id,
+                status: 'pending',
+                source: 'billing',
+                payload: [
+                    'subscription_id' => $subscription->id,
+                    'provider' => $payment->provider,
+                    'amount_cents' => $payment->amount_cents,
+                    'currency' => $payment->currency,
+                ],
+            ));
+
+            return $payment;
         });
     }
 
@@ -107,6 +132,54 @@ final class CheckoutService
                 'starts_at' => $periodStart,
                 'ends_at' => $periodStart->copy()->addMonth(),
             ])->save();
+
+            $plan = $subscription->plan;
+
+            $this->events->record(new RecordBusinessEventData(
+                eventType: 'payment.succeeded',
+                organizationId: $payment->organization_id,
+                planCode: $plan?->code,
+                subjectType: 'payment',
+                subjectId: (string) $payment->id,
+                status: 'paid',
+                source: 'billing',
+                payload: [
+                    'subscription_id' => $subscription->id,
+                    'provider' => $payment->provider,
+                    'amount_cents' => $payment->amount_cents,
+                    'currency' => $payment->currency,
+                ],
+            ));
+
+            $this->events->record(new RecordBusinessEventData(
+                eventType: 'subscription.activated',
+                organizationId: $payment->organization_id,
+                planCode: $plan?->code,
+                subjectType: 'subscription',
+                subjectId: (string) $subscription->id,
+                status: 'active',
+                source: 'billing',
+                payload: [
+                    'payment_id' => $payment->id,
+                    'plan_id' => $plan?->id,
+                    'starts_at' => $subscription->starts_at?->toISOString(),
+                    'ends_at' => $subscription->ends_at?->toISOString(),
+                ],
+            ));
+
+            $this->events->record(new RecordBusinessEventData(
+                eventType: 'plan.changed',
+                organizationId: $payment->organization_id,
+                planCode: $plan?->code,
+                subjectType: 'subscription',
+                subjectId: (string) $subscription->id,
+                status: 'active',
+                source: 'billing',
+                payload: [
+                    'payment_id' => $payment->id,
+                    'plan_id' => $plan?->id,
+                ],
+            ));
 
             return $subscription;
         });

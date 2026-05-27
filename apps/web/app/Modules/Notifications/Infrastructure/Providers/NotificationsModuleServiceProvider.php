@@ -13,6 +13,8 @@ use App\Modules\Notifications\Application\Listeners\SendSslExpiringNotification;
 use App\Modules\Notifications\Application\Senders\EmailNotificationSender;
 use App\Modules\Notifications\Application\Senders\TelegramNotificationSender;
 use App\Modules\Notifications\Application\Services\NotificationDispatcher;
+use App\Modules\Observability\Application\Services\BusinessEventRecorder;
+use App\Modules\Observability\Application\Services\DeadLetterRecorder;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -28,6 +30,8 @@ final class NotificationsModuleServiceProvider extends ServiceProvider
                     $app->make(EmailNotificationSender::class),
                     $app->make(TelegramNotificationSender::class),
                 ],
+                $app->make(BusinessEventRecorder::class),
+                $app->make(DeadLetterRecorder::class),
             );
         });
     }

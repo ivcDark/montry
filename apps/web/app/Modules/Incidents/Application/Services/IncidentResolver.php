@@ -6,11 +6,14 @@ use App\Modules\Incidents\Domain\Events\IncidentOpened;
 use App\Modules\Incidents\Domain\Events\IncidentResolved;
 use App\Modules\Incidents\Infrastructure\Persistence\Models\Incident;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\CheckResult;
+use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
+use App\Modules\Observability\Application\Services\BusinessEventRecorder;
 use Illuminate\Support\Carbon;
 
 final readonly class IncidentResolver
 {
     public function __construct(
+        private BusinessEventRecorder $events,
         private int $failureThreshold = 2,
         private int $recoveryThreshold = 1,
     ) {
@@ -68,6 +71,23 @@ final readonly class IncidentResolver
 
         event(new IncidentOpened($incident->id));
 
+        $this->events->record(new RecordBusinessEventData(
+            eventType: 'incident.opened',
+            organizationId: $incident->organization_id,
+            subjectType: 'incident',
+            subjectId: (string) $incident->id,
+            status: 'open',
+            source: 'incidents',
+            payload: [
+                'monitor_id' => $monitor->id,
+                'monitored_resource_id' => $monitor->monitored_resource_id,
+                'check_result_id' => $checkResult->id,
+                'check_type' => $monitor->type,
+                'severity' => $incident->severity,
+                'started_at' => $incident->started_at?->toISOString(),
+            ],
+        ));
+
         return $incident;
     }
 
@@ -95,6 +115,22 @@ final readonly class IncidentResolver
         ]);
 
         event(new IncidentResolved($incident->id));
+
+        $this->events->record(new RecordBusinessEventData(
+            eventType: 'incident.resolved',
+            organizationId: $incident->organization_id,
+            subjectType: 'incident',
+            subjectId: (string) $incident->id,
+            status: 'resolved',
+            source: 'incidents',
+            payload: [
+                'monitor_id' => $monitor->id,
+                'monitored_resource_id' => $monitor->monitored_resource_id,
+                'check_result_id' => $checkResult->id,
+                'duration_seconds' => $incident->duration_seconds,
+                'resolved_at' => $incident->resolved_at?->toISOString(),
+            ],
+        ));
 
         return $incident->refresh();
     }

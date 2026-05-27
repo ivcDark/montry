@@ -1,0 +1,60 @@
+Где смотреть состояние
+  Grafana: http://localhost:3000
+  Логин: admin / admin
+
+  Главные dashboards:
+
+  - Montry Overview — общий обзор
+  - Montry Operations — инфраструктура, availability, backup
+  - Montry Monitoring Product — мониторы, check results, incidents
+  - Montry Owner — business/product metrics
+  - Montry Billing — тарифы и платежи
+  - Montry Notifications — email/Telegram delivery
+  - Montry Security and Audit — audit logs/security events
+
+  Prometheus: http://localhost:9090
+
+  Полезные PromQL:
+
+  up
+  probe_success{job="blackbox-montry"}
+  probe_success{job="blackbox-montry-tcp"}
+  montry_poller_jobs_total
+  montry_poller_result_delivery_total
+  montry_postgres_backup_last_status
+  montry_postgres_backup_last_verify_status
+  ALERTS
+
+  Loki логи удобнее смотреть в Grafana → Explore → datasource Loki.
+
+  Базовый LogQL:
+
+  {exporter="OTLP"}
+
+  Tempo traces: Grafana → Explore → datasource Tempo, либо API уже проверен через:
+
+  docker compose exec -T web php -r 'echo file_get_contents("http://tempo:3200/api/search?limit=20"), PHP_EOL;'
+
+  ClickHouse:
+
+  make clickhouse-shell
+
+  Пример:
+
+  SELECT event_type, count()
+  FROM analytics_events
+  GROUP BY event_type
+  ORDER BY count() DESC;
+
+  Docker/server state:
+
+  docker compose ps
+  docker compose logs -f --tail=200 web nginx poller
+  make observability-logs
+
+  Backup:
+
+  make backup-postgres
+  make verify-postgres-backup
+
+  Ограничение: Sentry live visibility можно закрыть только после настройки SENTRY_LARAVEL_DSN / SENTRY_POLLER_DSN. Сейчас команда корректно сообщает: Sentry is disabled. Коммит не делал.

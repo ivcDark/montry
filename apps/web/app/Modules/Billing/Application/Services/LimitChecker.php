@@ -5,10 +5,17 @@ namespace App\Modules\Billing\Application\Services;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
+use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
+use App\Modules\Observability\Application\Services\BusinessEventRecorder;
 use Illuminate\Auth\Access\AuthorizationException;
 
-final class LimitChecker
+final readonly class LimitChecker
 {
+    public function __construct(
+        private BusinessEventRecorder $events,
+    ) {
+    }
+
     /**
      * @throws AuthorizationException
      */
@@ -25,6 +32,11 @@ final class LimitChecker
             ->count();
 
         if ($monitorCount >= $limit) {
+            $this->recordLimitHit($organizationId, 'max_monitors', [
+                'current_count' => $monitorCount,
+                'limit' => $limit,
+            ]);
+
             throw new AuthorizationException('Monitor limit reached for the current plan.');
         }
     }
@@ -46,6 +58,11 @@ final class LimitChecker
             ->count();
 
         if ($siteCount >= $limit) {
+            $this->recordLimitHit($organizationId, 'max_sites', [
+                'current_count' => $siteCount,
+                'limit' => $limit,
+            ]);
+
             throw new AuthorizationException('Site limit reached for the current plan.');
         }
     }
@@ -58,6 +75,8 @@ final class LimitChecker
         if ($this->booleanLimit($organizationId, 'can_create_projects', true)) {
             return;
         }
+
+        $this->recordLimitHit($organizationId, 'can_create_projects');
 
         throw new AuthorizationException('Separate projects are not available for the current plan.');
     }
@@ -73,6 +92,11 @@ final class LimitChecker
             return;
         }
 
+        $this->recordLimitHit($organizationId, 'allowed_monitor_types', [
+            'requested_type' => $type,
+            'allowed_types' => $allowedTypes,
+        ]);
+
         throw new AuthorizationException('Monitor type is not available for the current plan.');
     }
 
@@ -84,6 +108,11 @@ final class LimitChecker
         $minimumInterval = $this->limitValue($organizationId, 'minimum_check_interval_seconds');
 
         if ($minimumInterval !== null && $intervalSeconds < $minimumInterval) {
+            $this->recordLimitHit($organizationId, 'minimum_check_interval_seconds', [
+                'requested_interval_seconds' => $intervalSeconds,
+                'minimum_interval_seconds' => $minimumInterval,
+            ]);
+
             throw new AuthorizationException('Check interval is below the current plan limit.');
         }
     }
@@ -96,6 +125,10 @@ final class LimitChecker
         $limit = $this->limitValue($organizationId, 'manual_checks_per_day');
 
         if ($limit === 0) {
+            $this->recordLimitHit($organizationId, 'manual_checks_per_day', [
+                'limit' => $limit,
+            ]);
+
             throw new AuthorizationException('Manual checks are not available for the current plan.');
         }
     }
@@ -110,6 +143,11 @@ final class LimitChecker
         if ($allowedChannels === null || in_array($channel, $allowedChannels, true)) {
             return;
         }
+
+        $this->recordLimitHit($organizationId, 'notification_channels', [
+            'requested_channel' => $channel,
+            'allowed_channels' => $allowedChannels,
+        ]);
 
         throw new AuthorizationException('Notification channel is not available for the current plan.');
     }
@@ -215,5 +253,25 @@ final class LimitChecker
             ->whereHas('plan', fn ($query) => $query->where('code', 'free'))
             ->latest('starts_at')
             ->first();
+    }
+
+    private function recordLimitHit(int $organizationId, string $limitKey, array $payload = []): void
+    {
+        $subscription = $this->currentSubscription($organizationId);
+
+        $this->events->record(new RecordBusinessEventData(
+            eventType: 'billing.limit_hit',
+            organizationId: $organizationId,
+            planCode: $subscription?->plan?->code,
+            subjectType: 'billing_limit',
+            subjectId: $limitKey,
+            status: 'blocked',
+            source: 'billing',
+            payload: [
+                'limit_key' => $limitKey,
+                'subscription_id' => $subscription?->id,
+                ...$payload,
+            ],
+        ));
     }
 }

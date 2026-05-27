@@ -4,9 +4,16 @@ namespace App\Modules\Billing\Application\Services;
 
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
+use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
+use App\Modules\Observability\Application\Services\BusinessEventRecorder;
 
-final class AssignFreeSubscription
+final readonly class AssignFreeSubscription
 {
+    public function __construct(
+        private BusinessEventRecorder $events,
+    ) {
+    }
+
     public function handle(int $organizationId): void
     {
         $freePlan = Plan::query()
@@ -18,7 +25,7 @@ final class AssignFreeSubscription
             return;
         }
 
-        Subscription::query()->firstOrCreate(
+        $subscription = Subscription::query()->firstOrCreate(
             [
                 'organization_id' => $organizationId,
                 'status' => 'active',
@@ -28,5 +35,22 @@ final class AssignFreeSubscription
                 'starts_at' => now(),
             ],
         );
+
+        if ($subscription->wasRecentlyCreated) {
+            $this->events->record(new RecordBusinessEventData(
+                eventType: 'subscription.activated',
+                organizationId: $organizationId,
+                planCode: $freePlan->code,
+                subjectType: 'subscription',
+                subjectId: (string) $subscription->id,
+                status: 'active',
+                source: 'billing',
+                payload: [
+                    'plan_id' => $freePlan->id,
+                    'price_cents' => $freePlan->price_cents,
+                    'currency' => $freePlan->currency,
+                ],
+            ));
+        }
     }
 }

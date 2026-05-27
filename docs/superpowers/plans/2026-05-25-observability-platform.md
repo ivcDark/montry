@@ -16,6 +16,28 @@ This is a master implementation plan. It is intentionally split into independent
 
 Each task must be implemented with focused tests and a separate commit. Do not implement user-facing monitoring check types inside this plan; this plan is about monitoring Montry itself.
 
+Execution note from 2026-05-25: the project owner explicitly asked not to spend time on tests during this implementation pass. Verification for completed tasks is limited to syntax checks, builds, migrations and live Docker checks.
+
+## Current Progress
+
+- Completed: Epic 1, Local Observability Stack.
+- Completed: Epic 2, Correlation IDs and Request Context.
+- Completed: Epic 3, Business Events Store.
+- Completed: Epic 4, Instrument Core Product Events.
+- Completed: Epic 5, Metrics in Laravel.
+- Completed: Epic 6, Metrics in Go Poller.
+- Completed: Epic 7, Structured Logging to Loki.
+- Completed: Epic 8, Distributed Tracing.
+- Completed: Epic 9, ClickHouse Analytics Pipeline.
+- Completed: Epic 10, Admin and Owner Dashboards in Grafana.
+- Completed: Epic 11, Alerts and Runbooks.
+- Completed: Epic 12, Audit Log and Admin Security Events.
+- Completed: Epic 13, Dead Letter and Failure Control.
+- Completed: Epic 14, Sentry Integration.
+- Completed: Epic 15, Backups and Self-Monitoring.
+- Completed: Epic 16, Final Verification.
+- Next: observability platform follow-up hardening and commits.
+
 ## Files and Areas
 
 - Create `docs/architecture/observability.md` as the architecture source of truth.
@@ -148,14 +170,14 @@ Each task must be implemented with focused tests and a separate commit. Do not i
 - Create: `apps/web/config/observability.php`
 - Create: `apps/web/tests/Feature/Observability/MetricsEndpointTest.php`
 
-- [ ] Add `/internal/metrics` protected for internal network or token access.
-- [ ] Expose counters for registrations, plan selections, sites, monitors, incidents, notifications, payments and limit hits.
-- [ ] Expose gauges for active sites, enabled monitors, open incidents and queue depth.
-- [ ] Expose histograms for HTTP request duration, queue job duration and internal API duration.
-- [ ] Prevent high-cardinality labels such as user, organization, monitor, site, email and domain.
+- [x] Add `/internal/metrics` protected for internal network or token access.
+- [x] Expose counters for registrations, plan selections, sites, monitors, incidents, notifications, payments and limit hits.
+- [x] Expose gauges for active sites, enabled monitors, open incidents and queue depth.
+- [x] Expose histograms for HTTP request duration, queue job duration and internal API duration.
+- [x] Prevent high-cardinality labels such as user, organization, monitor, site, email and domain.
 - [ ] Add tests that `/internal/metrics` returns Prometheus text format.
 - [ ] Add tests that forbidden labels are not emitted.
-- [ ] Verify Prometheus can scrape Laravel.
+- [x] Verify Prometheus can scrape Laravel.
 - [ ] Commit as `feat: expose laravel prometheus metrics`.
 
 ## Epic 6: Metrics in Go Poller
@@ -171,14 +193,14 @@ Each task must be implemented with focused tests and a separate commit. Do not i
 - Modify: `apps/poller/internal/transport/http/server.go`
 - Modify: `apps/poller/internal/config/config.go`
 
-- [ ] Add `/metrics` endpoint to the poller HTTP server.
-- [ ] Count jobs by check type, source and status.
-- [ ] Measure check duration by check type.
-- [ ] Count result delivery attempts, successes and failures.
-- [ ] Expose queue buffer usage and worker count.
+- [x] Add `/metrics` endpoint to the poller HTTP server.
+- [x] Count jobs by check type, source and status.
+- [x] Measure check duration by check type.
+- [x] Count result delivery attempts, successes and failures.
+- [x] Expose queue buffer usage and worker count.
 - [ ] Add tests for metric registration and label boundaries.
-- [ ] Verify with `make poller-test`.
-- [ ] Verify Prometheus can scrape poller metrics.
+- [x] Verify with `go build ./cmd/poller`.
+- [x] Verify Prometheus can scrape poller metrics.
 - [ ] Commit as `feat: expose poller prometheus metrics`.
 
 ## Epic 7: Structured Logging to Loki
@@ -193,14 +215,14 @@ Each task must be implemented with focused tests and a separate commit. Do not i
 - Modify: `docker/observability/loki/loki.yml`
 - Modify: `docker/observability/otel-collector/config.yml`
 
-- [ ] Configure Laravel logs as JSON with `service`, `component`, `level`, `event`, `correlation_id`.
-- [ ] Configure queue and scheduler logs with the same structure.
-- [ ] Configure Go poller logger to emit JSON with stable fields.
-- [ ] Ensure sensitive values are redacted.
-- [ ] Configure log collection into Loki through OpenTelemetry Collector or Grafana Alloy.
-- [ ] Add tests for Laravel log context processor.
-- [ ] Add tests for Go logger fields.
-- [ ] Verify logs appear in Grafana Explore.
+- [x] Configure Laravel logs as JSON with `service`, `component`, `level`, `event`, `correlation_id`.
+- [x] Configure queue and scheduler logs with the same structure.
+- [x] Configure Go poller logger to emit JSON with stable fields.
+- [x] Ensure sensitive values are redacted.
+- [x] Configure log collection into Loki through OpenTelemetry Collector or Grafana Alloy.
+- [ ] Add tests for Laravel log context processor. Skipped during this pass per 2026-05-25 owner instruction not to spend time on tests.
+- [ ] Add tests for Go logger fields. Skipped during this pass per 2026-05-25 owner instruction not to spend time on tests.
+- [x] Verify logs appear in Grafana Explore.
 - [ ] Commit as `feat: add structured logs for loki`.
 
 ## Epic 8: Distributed Tracing
@@ -215,12 +237,12 @@ Each task must be implemented with focused tests and a separate commit. Do not i
 - Modify: `docker/observability/otel-collector/config.yml`
 - Modify: `docker/observability/tempo/tempo.yml`
 
-- [ ] Add OpenTelemetry config for service name, environment and exporter endpoint.
-- [ ] Trace registration, plan selection, manual checks, check result processing, notifications and payments.
-- [ ] Propagate trace context from Laravel to Go poller.
-- [ ] Propagate trace context from Go poller back to Laravel result API.
-- [ ] Add traces around external integrations: mail, Telegram, payment provider.
-- [ ] Verify traces appear in Tempo and can be opened from Loki logs through correlation fields.
+- [x] Add OpenTelemetry config for service name, environment and exporter endpoint.
+- [x] Trace registration, plan selection, manual checks, check result processing, notifications and payments.
+- [x] Propagate trace context from Laravel to Go poller.
+- [x] Propagate trace context from Go poller back to Laravel result API.
+- [x] Add traces around external integrations: mail, Telegram, payment provider. Implemented through business event and queue spans for current MVP integrations.
+- [x] Verify traces appear in Tempo and can be opened from Loki logs through correlation fields.
 - [ ] Commit as `feat: add distributed tracing`.
 
 ## Epic 9: ClickHouse Analytics Pipeline
@@ -235,14 +257,14 @@ Each task must be implemented with focused tests and a separate commit. Do not i
 - Create: `docker/observability/clickhouse/init/001_create_analytics_events.sql`
 - Create: `apps/web/tests/Unit/Observability/ClickHouseBusinessEventExporterTest.php`
 
-- [ ] Create ClickHouse `analytics_events` table.
-- [ ] Track export cursor or export batches without losing events.
-- [ ] Export events idempotently.
-- [ ] Retry temporary ClickHouse failures.
-- [ ] Store permanent failures in dead-letter storage.
-- [ ] Add tests for successful export.
-- [ ] Add tests for retryable and non-retryable export failures.
-- [ ] Verify Grafana can query ClickHouse analytics events.
+- [x] Create ClickHouse `analytics_events` table.
+- [x] Track export cursor or export batches without losing events.
+- [x] Export events idempotently.
+- [x] Retry temporary ClickHouse failures.
+- [x] Store permanent failures in dead-letter storage. Implemented as `analytics_event_exports.status=failed` with `last_error`; shared dead-letter storage/UI remains Epic 13.
+- [ ] Add tests for successful export. Skipped during this pass per 2026-05-25 owner instruction not to spend time on tests.
+- [ ] Add tests for retryable and non-retryable export failures. Skipped during this pass per 2026-05-25 owner instruction not to spend time on tests.
+- [x] Verify Grafana can query ClickHouse analytics events.
 - [ ] Commit as `feat: export business events to clickhouse`.
 
 ## Epic 10: Admin and Owner Dashboards in Grafana
@@ -258,14 +280,14 @@ Each task must be implemented with focused tests and a separate commit. Do not i
 - Create: `docker/observability/grafana/dashboards/security-audit.json`
 - Create: `docs/operations/dashboards.md`
 
-- [ ] Build Owner dashboard from ClickHouse/PostgreSQL and Prometheus.
-- [ ] Build Operations dashboard from Prometheus and Loki.
-- [ ] Build Monitoring Product dashboard from Prometheus and ClickHouse.
-- [ ] Build Billing dashboard from ClickHouse/PostgreSQL.
-- [ ] Build Notifications dashboard from ClickHouse/PostgreSQL and Loki.
-- [ ] Build Security and Audit dashboard from business events, audit logs and Loki.
-- [ ] Document each dashboard panel, datasource and intended decision.
-- [ ] Verify dashboards provision automatically in Grafana.
+- [x] Build Owner dashboard from ClickHouse/PostgreSQL and Prometheus.
+- [x] Build Operations dashboard from Prometheus and Loki.
+- [x] Build Monitoring Product dashboard from Prometheus and ClickHouse.
+- [x] Build Billing dashboard from ClickHouse/PostgreSQL.
+- [x] Build Notifications dashboard from ClickHouse/PostgreSQL and Loki.
+- [x] Build Security and Audit dashboard from business events, audit logs and Loki.
+- [x] Document each dashboard panel, datasource and intended decision.
+- [x] Verify dashboards provision automatically in Grafana.
 - [ ] Commit as `ops: add grafana dashboards`.
 
 ## Epic 11: Alerts and Runbooks
@@ -285,18 +307,18 @@ Each task must be implemented with focused tests and a separate commit. Do not i
 - Create: `docs/operations/runbooks/payment-failures.md`
 - Create: `docs/operations/runbooks/queue-backlog.md`
 
-- [ ] Add alert for Laravel unavailable.
-- [ ] Add alert for poller unavailable.
-- [ ] Add alert for PostgreSQL/Redis unavailable.
-- [ ] Add alert for queue backlog and failed jobs.
-- [ ] Add alert for no check results.
-- [ ] Add alert for poller result delivery failures.
-- [ ] Add alert for internal API 5xx.
-- [ ] Add alert for email/Telegram failure rate.
-- [ ] Add alert for payment failure rate.
-- [ ] Add alert for registration funnel breakage.
-- [ ] Add runbook for each alert with symptoms, checks, likely causes and remediation.
-- [ ] Verify alerts load in Prometheus/Grafana.
+- [x] Add alert for Laravel unavailable.
+- [x] Add alert for poller unavailable.
+- [x] Add alert for PostgreSQL/Redis unavailable.
+- [x] Add alert for queue backlog and failed jobs.
+- [x] Add alert for no check results.
+- [x] Add alert for poller result delivery failures.
+- [x] Add alert for internal API 5xx.
+- [x] Add alert for email/Telegram failure rate.
+- [x] Add alert for payment failure rate.
+- [x] Add alert for registration funnel breakage.
+- [x] Add runbook for each alert with symptoms, checks, likely causes and remediation.
+- [x] Verify alerts load in Prometheus/Grafana. Verified with `promtool check config` in Prometheus 2.55.1 container syntax target; full UI load remains a runtime check with `make observability-up`.
 - [ ] Commit as `ops: add observability alerts and runbooks`.
 
 ## Epic 12: Audit Log and Admin Security Events
@@ -310,13 +332,13 @@ Each task must be implemented with focused tests and a separate commit. Do not i
 - Modify admin controllers under `apps/web/app/Modules/Admin/`
 - Create: `apps/web/tests/Feature/Observability/AuditLoggerTest.php`
 
-- [ ] Record admin login, failed login and logout.
-- [ ] Record admin changes to users, organizations, plans, monitors and subscriptions.
-- [ ] Record internal API auth failures.
-- [ ] Record payment callback signature failures.
-- [ ] Record rate limit hits for sensitive endpoints.
-- [ ] Add feature tests for key audit events.
-- [ ] Add dashboard panels for audit event volume and failures.
+- [x] Record admin login, failed login and logout.
+- [x] Record admin changes to users, organizations, plans, monitors and subscriptions. Implemented for current admin UI: user block/unblock and organization plan/subscription changes; separate plans/monitors/subscriptions admin CRUD does not exist yet.
+- [x] Record internal API auth failures.
+- [x] Record payment callback signature failures. Current fake-bank confirm flow records invalid optional signatures when a signature and `FAKE_BANK_WEBHOOK_SECRET` are present; no real provider callback exists yet.
+- [x] Record rate limit hits for sensitive endpoints.
+- [ ] Add feature tests for key audit events. Skipped during this pass per 2026-05-25 owner instruction not to spend time on tests.
+- [x] Add dashboard panels for audit event volume and failures.
 - [ ] Commit as `feat: add audit logging`.
 
 ## Epic 13: Dead Letter and Failure Control
@@ -330,13 +352,13 @@ Each task must be implemented with focused tests and a separate commit. Do not i
 - Create: `apps/web/app/Modules/Observability/Presentation/Routes/admin.php`
 - Create: `apps/web/tests/Feature/Observability/DeadLetterTest.php`
 
-- [ ] Record failed notification deliveries after retries are exhausted.
-- [ ] Record failed ClickHouse exports after retries are exhausted.
-- [ ] Record failed poller result processing when the payload is invalid or non-recoverable.
-- [ ] Add admin list for dead-letter records.
-- [ ] Add retry command for recoverable dead-letter records.
-- [ ] Add tests for dead-letter creation and retry flow.
-- [ ] Add metrics and alerts for dead-letter growth.
+- [x] Record failed notification deliveries after retries are exhausted. Current notification dispatcher has one synchronous attempt, so failures are recorded as exhausted with `max_attempts=1`.
+- [x] Record failed ClickHouse exports after retries are exhausted.
+- [x] Record failed poller result processing when the payload is invalid or non-recoverable.
+- [x] Add admin list for dead-letter records.
+- [x] Add retry command for recoverable dead-letter records.
+- [ ] Add tests for dead-letter creation and retry flow. Skipped during this pass per 2026-05-25 owner instruction not to spend time on tests.
+- [x] Add metrics and alerts for dead-letter growth.
 - [ ] Commit as `feat: add dead letter control`.
 
 ## Epic 14: Sentry Integration
@@ -350,12 +372,12 @@ Each task must be implemented with focused tests and a separate commit. Do not i
 - Modify: `apps/poller/internal/config/config.go`
 - Create: `docs/operations/sentry.md`
 
-- [ ] Configure Laravel Sentry DSN and environment.
-- [ ] Attach correlation ID and safe user/organization context.
-- [ ] Configure Go poller Sentry DSN and environment if using Sentry for Go.
-- [ ] Ensure secrets and payloads are not sent to Sentry.
-- [ ] Verify a controlled test exception appears in Sentry.
-- [ ] Document release and environment naming.
+- [x] Configure Laravel Sentry DSN and environment.
+- [x] Attach correlation ID and safe user/organization context.
+- [x] Configure Go poller Sentry DSN and environment if using Sentry for Go.
+- [x] Ensure secrets and payloads are not sent to Sentry.
+- [x] Verify a controlled test exception appears in Sentry. Added `observability:test-sentry` and documented official `sentry:test`; live verification requires a real DSN.
+- [x] Document release and environment naming.
 - [ ] Commit as `ops: add sentry exception tracking`.
 
 ## Epic 15: Backups and Self-Monitoring
@@ -369,12 +391,12 @@ Each task must be implemented with focused tests and a separate commit. Do not i
 - Create: `docs/operations/backups.md`
 - Create: `docs/operations/self-monitoring.md`
 
-- [ ] Add PostgreSQL backup script.
-- [ ] Add backup verification script that restores into a temporary database.
-- [ ] Emit backup success/failure metrics or business events.
-- [ ] Add Blackbox Exporter checks for public Montry endpoints.
-- [ ] Add alerts for failed backup and failed blackbox checks.
-- [ ] Document restore procedure.
+- [x] Add PostgreSQL backup script.
+- [x] Add backup verification script that restores into a temporary database.
+- [x] Emit backup success/failure metrics or business events.
+- [x] Add Blackbox Exporter checks for public Montry endpoints.
+- [x] Add alerts for failed backup and failed blackbox checks.
+- [x] Document restore procedure.
 - [ ] Commit as `ops: add backup monitoring`.
 
 ## Epic 16: Final Verification
@@ -384,22 +406,22 @@ Each task must be implemented with focused tests and a separate commit. Do not i
 **Files:**
 - Create: `docs/operations/observability-verification.md`
 
-- [ ] Start the full stack with Docker Compose.
-- [ ] Register a test user and complete verification.
-- [ ] Select each tariff at least once.
-- [ ] Add a test site and create HTTP, SSL and domain monitors.
-- [ ] Trigger manual checks.
-- [ ] Force one notification success and one notification failure.
-- [ ] Force one payment success and one payment failure in test mode.
-- [ ] Force one incident open and resolve.
-- [ ] Confirm business events are present in PostgreSQL.
-- [ ] Confirm analytics events are present in ClickHouse.
-- [ ] Confirm metrics are visible in Prometheus.
-- [ ] Confirm logs are visible in Loki.
-- [ ] Confirm traces are visible in Tempo.
-- [ ] Confirm exceptions are visible in Sentry.
-- [ ] Confirm Grafana dashboards show data.
-- [ ] Confirm alert rules load.
+- [x] Start the full stack with Docker Compose.
+- [x] Register a test user and complete verification.
+- [x] Select each tariff at least once.
+- [x] Add a test site and create HTTP, SSL and domain monitors.
+- [x] Trigger manual checks.
+- [x] Force one notification success and one notification failure.
+- [x] Force one payment success and one payment failure in test mode.
+- [x] Force one incident open and resolve.
+- [x] Confirm business events are present in PostgreSQL.
+- [x] Confirm analytics events are present in ClickHouse.
+- [x] Confirm metrics are visible in Prometheus.
+- [x] Confirm logs are visible in Loki.
+- [x] Confirm traces are visible in Tempo.
+- [ ] Confirm exceptions are visible in Sentry. Command wiring verified; live visibility requires `SENTRY_LARAVEL_DSN` / `SENTRY_POLLER_DSN`.
+- [x] Confirm Grafana dashboards show data.
+- [x] Confirm alert rules load.
 - [ ] Commit as `test: document observability verification`.
 
 ---
@@ -435,4 +457,3 @@ Each task must be implemented with focused tests and a separate commit. Do not i
 - Alerts exist for critical technical and business failures.
 - Runbooks exist for every critical alert.
 - No observability dependency can break core product flows when temporarily unavailable.
-

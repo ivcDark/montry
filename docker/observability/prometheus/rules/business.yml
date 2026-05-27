@@ -1,0 +1,25 @@
+groups:
+  - name: montry-business
+    rules:
+      - alert: MontryRegistrationFunnelBreakage
+        expr: sum(increase(montry_business_events_total{event_type="registration.email_submitted"}[1h])) > 3 and sum(increase(montry_business_events_total{event_type="registration.completed"}[1h])) == 0
+        for: 15m
+        labels:
+          severity: warning
+          service: product
+          runbook: docs/operations/runbooks/email-failures.md
+        annotations:
+          summary: "Registration funnel appears broken"
+          description: "Registration email submissions occurred in the last hour, but no registrations completed."
+
+      - alert: MontryCheckProcessingFailures
+        expr: sum(rate(montry_business_events_total{event_type="check.failed"}[15m])) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          service: monitoring
+          runbook: docs/operations/runbooks/poller-no-results.md
+        annotations:
+          summary: "Check processing failures are elevated"
+          description: "Laravel is recording check.failed business events above 0.1 events/sec."
+

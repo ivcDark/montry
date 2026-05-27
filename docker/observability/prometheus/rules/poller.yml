@@ -1,0 +1,47 @@
+groups:
+  - name: montry-poller
+    rules:
+      - alert: MontryPollerUnavailable
+        expr: up{job="poller"} == 0 or probe_success{job="blackbox-montry",instance="http://poller:8090/health"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: poller
+          runbook: docs/operations/runbooks/poller-no-results.md
+        annotations:
+          summary: "Poller is unavailable"
+          description: "Poller metrics scrape or health blackbox probe has failed for more than 2 minutes."
+
+      - alert: MontryNoCheckResults
+        expr: sum(increase(montry_poller_jobs_total{status="success"}[30m])) == 0 and sum(montry_monitors_total{enabled="true"}) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: poller
+          runbook: docs/operations/runbooks/poller-no-results.md
+        annotations:
+          summary: "No successful check results"
+          description: "Poller has not completed a successful job in 30 minutes while enabled monitors exist."
+
+      - alert: MontryPollerResultDeliveryFailures
+        expr: sum(rate(montry_poller_result_delivery_total{status="failed"}[10m])) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          service: poller
+          runbook: docs/operations/runbooks/poller-no-results.md
+        annotations:
+          summary: "Poller result delivery failures"
+          description: "Poller is failing to deliver results to Laravel at a sustained rate above 0.02 attempts/sec."
+
+      - alert: MontryPollerQueueBufferHigh
+        expr: montry_poller_queue_buffer_capacity > 0 and (montry_poller_queue_buffer_used / montry_poller_queue_buffer_capacity) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: poller
+          runbook: docs/operations/runbooks/poller-no-results.md
+        annotations:
+          summary: "Poller in-memory queue is near capacity"
+          description: "Poller queue buffer has been above 80% for more than 10 minutes."
+

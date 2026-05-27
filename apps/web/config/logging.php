@@ -3,7 +3,9 @@
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Processor\PsrLogMessageProcessor;
+use App\Modules\Observability\Infrastructure\Logging\ConfigureStructuredLogging;
 
 return [
 
@@ -63,6 +65,11 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
+            'formatter' => JsonFormatter::class,
+            'formatter_with' => [
+                'appendNewline' => true,
+            ],
+            'tap' => [ConfigureStructuredLogging::class],
         ],
 
         'daily' => [
@@ -71,6 +78,11 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+            'formatter' => JsonFormatter::class,
+            'formatter_with' => [
+                'appendNewline' => true,
+            ],
+            'tap' => [ConfigureStructuredLogging::class],
         ],
 
         'slack' => [
@@ -101,8 +113,11 @@ return [
             'handler_with' => [
                 'stream' => 'php://stderr',
             ],
-            'formatter' => env('LOG_STDERR_FORMATTER'),
-            'processors' => [PsrLogMessageProcessor::class],
+            'formatter' => env('LOG_STDERR_FORMATTER', JsonFormatter::class),
+            'formatter_with' => [
+                'appendNewline' => true,
+            ],
+            'tap' => [ConfigureStructuredLogging::class],
         ],
 
         'syslog' => [

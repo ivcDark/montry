@@ -4,6 +4,10 @@ namespace App\Modules\WorkerGateway\Presentation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
+use App\Modules\Observability\Application\Context\CorrelationContext;
+use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
+use App\Modules\Observability\Application\Services\BusinessEventRecorder;
+use App\Modules\Observability\Infrastructure\Tracing\OpenTelemetryService;
 use App\Modules\WorkerGateway\Presentation\Http\Requests\ListDueMonitorsRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
@@ -12,8 +16,12 @@ use Illuminate\Support\Str;
 
 final class DueMonitorController extends Controller
 {
-    public function index(ListDueMonitorsRequest $request): JsonResponse
-    {
+    public function index(
+        ListDueMonitorsRequest $request,
+        CorrelationContext $correlationContext,
+        BusinessEventRecorder $events,
+        OpenTelemetryService $tracer,
+    ): JsonResponse {
         $limit = (int) ($request->validated('limit') ?? 100);
         $now = Carbon::now();
 
@@ -53,6 +61,23 @@ final class DueMonitorController extends Controller
             return $monitors;
         });
 
+        $monitors->each(function (Monitor $monitor) use ($events): void {
+            $events->record(new RecordBusinessEventData(
+                eventType: 'check.scheduled',
+                organizationId: $monitor->organization_id,
+                subjectType: 'monitor',
+                subjectId: (string) $monitor->id,
+                status: 'scheduled',
+                source: 'poller_due_api',
+                payload: [
+                    'event_id' => $monitor->last_check_event_id,
+                    'check_type' => $monitor->type,
+                    'monitored_resource_id' => $monitor->monitored_resource_id,
+                    'timeout_ms' => $monitor->timeout_ms,
+                ],
+            ));
+        });
+
         return response()->json([
             'data' => $monitors->map(fn (Monitor $monitor): array => [
                 'id' => (string) Str::uuid(),
@@ -68,6 +93,8 @@ final class DueMonitorController extends Controller
                 'expected' => $monitor->expected ?? [],
                 'timeout_ms' => $monitor->timeout_ms,
                 'requested_at' => $now->toAtomString(),
+                'correlation_id' => $correlationContext->id(),
+                'traceparent' => $tracer->currentTraceparent(),
             ])->values(),
         ]);
     }

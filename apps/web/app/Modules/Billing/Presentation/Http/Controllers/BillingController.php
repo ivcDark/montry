@@ -13,6 +13,9 @@ use App\Modules\Billing\Presentation\Http\Requests\ScheduleDowngradeRequest;
 use App\Modules\Billing\Presentation\Http\Requests\StartCheckoutRequest;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
+use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
+use App\Modules\Observability\Application\Services\AuditLogger;
+use App\Modules\Observability\Application\Services\BusinessEventRecorder;
 use App\Modules\Sites\Actions\GetCurrentOrganization;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -76,6 +79,7 @@ final class BillingController extends Controller
         CheckoutService $checkout,
         ScheduleDowngrade $scheduleDowngrade,
         PlanChangeClassifier $planChangeClassifier,
+        BusinessEventRecorder $events,
     ): RedirectResponse {
         $organization = $getCurrentOrganization->handle($request->user());
         $planCode = $request->string('plan_code')->toString();
@@ -90,6 +94,24 @@ final class BillingController extends Controller
         if ($changeType === 'same') {
             return to_route('billing.index');
         }
+
+        $events->record(new RecordBusinessEventData(
+            eventType: 'plan.selected',
+            organizationId: $organization->id,
+            userId: $request->user()?->id,
+            planCode: $plan->code,
+            subjectType: 'plan',
+            subjectId: (string) $plan->id,
+            status: $changeType,
+            source: 'web',
+            payload: [
+                'current_plan_code' => $currentSubscription?->plan?->code,
+                'selected_plan_code' => $plan->code,
+                'change_type' => $changeType,
+                'price_cents' => $plan->price_cents,
+                'currency' => $plan->currency,
+            ],
+        ));
 
         if ($changeType === 'downgrade') {
             $scheduleDowngrade->handle($organization->id, $plan->code);
@@ -185,12 +207,15 @@ final class BillingController extends Controller
         Payment $payment,
         GetCurrentOrganization $getCurrentOrganization,
         CheckoutService $checkout,
+        AuditLogger $audit,
     ): RedirectResponse {
         $organization = $getCurrentOrganization->handle($request->user());
 
         if ($payment->organization_id !== $organization->id) {
             throw new NotFoundHttpException;
         }
+
+        $this->verifyOptionalPaymentSignature($request, $payment, $audit);
 
         $checkout->confirm($payment);
 
@@ -237,5 +262,44 @@ final class BillingController extends Controller
                 ->mapWithKeys(fn ($limit): array => [$limit->key => $limit->value])
                 ->all(),
         ];
+    }
+
+    private function verifyOptionalPaymentSignature(Request $request, Payment $payment, AuditLogger $audit): void
+    {
+        $secret = (string) config('services.fake_bank.webhook_secret', '');
+        $signatureValue = $request->headers->get('X-Montry-Payment-Signature') ?? $request->input('signature', '');
+        $signature = is_scalar($signatureValue) ? (string) $signatureValue : '';
+
+        if ($secret === '' || $signature === '') {
+            return;
+        }
+
+        $expected = hash_hmac(
+            'sha256',
+            implode('|', [$payment->id, $payment->amount_cents, $payment->currency]),
+            $secret,
+        );
+
+        if (hash_equals($expected, $signature)) {
+            return;
+        }
+
+        $audit->record(
+            category: 'security',
+            action: 'payment.signature_failed',
+            outcome: 'failed',
+            request: $request,
+            actorUserId: $request->user()?->id,
+            organizationId: $payment->organization_id,
+            targetType: 'payment',
+            targetId: (string) $payment->id,
+            source: 'billing',
+            metadata: [
+                'provider' => $payment->provider,
+                'signature_hash' => $audit->hashValue($signature),
+            ],
+        );
+
+        abort(403, 'Invalid payment signature.');
     }
 }

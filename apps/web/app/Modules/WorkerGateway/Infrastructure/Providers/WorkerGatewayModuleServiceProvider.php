@@ -5,6 +5,7 @@ namespace App\Modules\WorkerGateway\Infrastructure\Providers;
 use App\Modules\WorkerGateway\Domain\Contracts\MonitoringWorkerClientInterface;
 use App\Modules\WorkerGateway\Infrastructure\Clients\HttpMonitoringWorkerClient;
 use App\Modules\WorkerGateway\Infrastructure\Clients\NullMonitoringWorkerClient;
+use App\Modules\Observability\Infrastructure\Tracing\OpenTelemetryService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -21,6 +22,7 @@ final class WorkerGatewayModuleServiceProvider extends ServiceProvider
 
             return new HttpMonitoringWorkerClient(
                 baseUrl: $baseUrl,
+                tracer: app(OpenTelemetryService::class),
                 token: config('services.poller.token'),
             );
         });

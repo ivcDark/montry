@@ -1,0 +1,36 @@
+groups:
+  - name: montry-notifications
+    rules:
+      - alert: MontryNotificationFailureRateHigh
+        expr: sum(increase(montry_business_events_total{event_type=~"notification\\..*\\.failed"}[30m])) > 3 and sum(increase(montry_business_events_total{event_type=~"notification\\..*\\.failed"}[30m])) / (sum(increase(montry_business_events_total{event_type=~"notification\\..*\\.sent"}[30m])) + sum(increase(montry_business_events_total{event_type=~"notification\\..*\\.failed"}[30m]))) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          service: notifications
+          runbook: docs/operations/runbooks/email-failures.md
+        annotations:
+          summary: "Notification failure rate is high"
+          description: "More than 20% of email/Telegram notification delivery attempts failed in the last 30 minutes."
+
+      - alert: MontryNotificationQueueBacklog
+        expr: sum(montry_queue_jobs_total{queue=~"notifications|default"}) > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: queue
+          runbook: docs/operations/runbooks/queue-backlog.md
+        annotations:
+          summary: "Notification queue backlog is high"
+          description: "Notification/default queue backlog has stayed above 100 jobs for more than 10 minutes."
+
+      - alert: MontryFailedJobsPresent
+        expr: sum(montry_failed_jobs_total) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: queue
+          runbook: docs/operations/runbooks/queue-backlog.md
+        annotations:
+          summary: "Laravel failed jobs are present"
+          description: "Laravel failed_jobs contains one or more records."
+

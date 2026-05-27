@@ -1,0 +1,41 @@
+<?php
+
+return [
+    'dsn' => env('SENTRY_LARAVEL_DSN', env('SENTRY_DSN')),
+    'release' => env('SENTRY_RELEASE'),
+    'environment' => env('SENTRY_ENVIRONMENT', env('APP_ENV', 'local')),
+    'send_default_pii' => false,
+    'sample_rate' => env('SENTRY_SAMPLE_RATE') === null ? 1.0 : (float) env('SENTRY_SAMPLE_RATE'),
+    'traces_sample_rate' => env('SENTRY_TRACES_SAMPLE_RATE') === null ? null : (float) env('SENTRY_TRACES_SAMPLE_RATE'),
+    'profiles_sample_rate' => null,
+    'enable_logs' => env('SENTRY_ENABLE_LOGS', false),
+    'breadcrumbs' => [
+        'logs' => env('SENTRY_BREADCRUMBS_LOGS_ENABLED', true),
+        'cache' => false,
+        'livewire' => false,
+        'sql_queries' => false,
+        'sql_bindings' => false,
+        'queue_info' => env('SENTRY_BREADCRUMBS_QUEUE_INFO_ENABLED', true),
+        'command_info' => env('SENTRY_BREADCRUMBS_COMMAND_JOBS_ENABLED', true),
+        'http_client_requests' => false,
+        'notifications' => false,
+    ],
+    'tracing' => [
+        'queue_job_transactions' => false,
+        'queue_jobs' => false,
+        'sql_queries' => false,
+        'sql_bindings' => false,
+        'sql_origin' => false,
+        'views' => false,
+        'livewire' => false,
+        'http_client_requests' => false,
+        'cache' => false,
+        'redis_commands' => false,
+        'redis_origin' => false,
+        'notifications' => false,
+        'missing_routes' => false,
+        'continue_after_response' => false,
+        'default_integrations' => env('SENTRY_TRACE_DEFAULT_INTEGRATIONS_ENABLED', false),
+    ],
+];
+

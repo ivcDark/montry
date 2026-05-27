@@ -9,6 +9,7 @@ use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
+use App\Modules\Observability\Application\Services\AuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -189,18 +190,35 @@ final class AdminUserController extends Controller
         ]);
     }
 
-    public function toggleBlock(Request $request, User $user): RedirectResponse
+    public function toggleBlock(Request $request, User $user, AuditLogger $audit): RedirectResponse
     {
         abort_if($request->user()?->is($user), 422, 'You cannot block your own admin account.');
+
+        $wasBlocked = (bool) $user->is_blocked;
 
         $user->forceFill([
             'is_blocked' => ! $user->is_blocked,
         ])->save();
 
+        $audit->record(
+            category: 'admin',
+            action: $user->is_blocked ? 'admin.user.blocked' : 'admin.user.unblocked',
+            outcome: 'success',
+            request: $request,
+            actorUserId: $request->user()?->id,
+            targetType: 'user',
+            targetId: (string) $user->id,
+            source: 'admin',
+            metadata: [
+                'was_blocked' => $wasBlocked,
+                'is_blocked' => (bool) $user->is_blocked,
+            ],
+        );
+
         return back()->with('success', $user->is_blocked ? 'User blocked.' : 'User unblocked.');
     }
 
-    public function updatePlan(Request $request, User $user, Organization $organization): RedirectResponse
+    public function updatePlan(Request $request, User $user, Organization $organization, AuditLogger $audit): RedirectResponse
     {
         abort_unless($user->organizations()->whereKey($organization->id)->exists(), 404);
 
@@ -208,7 +226,15 @@ final class AdminUserController extends Controller
             'plan_id' => ['required', 'integer', 'exists:plans,id'],
         ]);
 
-        DB::transaction(function () use ($organization, $validated): void {
+        $previousSubscription = Subscription::query()
+            ->where('organization_id', $organization->id)
+            ->where('status', 'active')
+            ->latest('starts_at')
+            ->first(['id', 'plan_id']);
+
+        $newSubscriptionId = null;
+
+        DB::transaction(function () use ($organization, $validated, &$newSubscriptionId): void {
             Subscription::query()
                 ->where('organization_id', $organization->id)
                 ->where('status', 'active')
@@ -217,13 +243,34 @@ final class AdminUserController extends Controller
                     'ends_at' => now(),
                 ]);
 
-            Subscription::query()->create([
+            $subscription = Subscription::query()->create([
                 'organization_id' => $organization->id,
                 'plan_id' => $validated['plan_id'],
                 'status' => 'active',
                 'starts_at' => now(),
             ]);
+
+            $newSubscriptionId = $subscription->id;
         });
+
+        $audit->record(
+            category: 'admin',
+            action: 'admin.organization.plan_changed',
+            outcome: 'success',
+            request: $request,
+            actorUserId: $request->user()?->id,
+            organizationId: $organization->id,
+            targetType: 'organization',
+            targetId: (string) $organization->id,
+            source: 'admin',
+            metadata: [
+                'user_id' => $user->id,
+                'previous_subscription_id' => $previousSubscription?->id,
+                'previous_plan_id' => $previousSubscription?->plan_id,
+                'new_subscription_id' => $newSubscriptionId,
+                'new_plan_id' => (int) $validated['plan_id'],
+            ],
+        );
 
         return back()->with('success', 'Organization plan changed.');
     }

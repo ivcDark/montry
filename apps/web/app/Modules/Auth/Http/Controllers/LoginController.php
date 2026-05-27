@@ -25,7 +25,7 @@ final class LoginController extends Controller
 
     public function store(LoginRequest $request, LoginUser $loginUser, StartIntendedCheckout $startIntendedCheckout): RedirectResponse
     {
-        $loginUser->handle($request->toData());
+        $loginUser->handle($request->toData(), $request);
 
         $request->session()->regenerate();
 

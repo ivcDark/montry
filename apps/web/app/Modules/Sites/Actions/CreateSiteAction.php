@@ -6,6 +6,8 @@ use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Monitoring\Application\Commands\CreateMonitorCommand;
 use App\Modules\Monitoring\Application\Handlers\CreateMonitorHandler;
+use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
+use App\Modules\Observability\Application\Services\BusinessEventRecorder;
 use App\Modules\Sites\DTO\CreateSiteData;
 use App\Modules\Sites\Enums\SiteStatus;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +17,7 @@ final readonly class CreateSiteAction
     public function __construct(
         private CreateMonitorHandler $createMonitor,
         private LimitChecker $limits,
+        private BusinessEventRecorder $events,
     ) {}
 
     public function handle(CreateSiteData $data, array $monitors = []): MonitoredResource
@@ -36,6 +39,24 @@ final readonly class CreateSiteAction
                 'status' => SiteStatus::Unknown->value,
                 'notes' => $data->notes,
             ]);
+
+            $this->events->record(new RecordBusinessEventData(
+                eventType: 'site.created',
+                organizationId: (int) $data->organizationId,
+                userId: (int) $data->createdUserId,
+                subjectType: 'monitored_resource',
+                subjectId: (string) $site->id,
+                status: $site->status,
+                source: 'web',
+                payload: [
+                    'project_id' => $site->project_id,
+                    'type' => $site->type,
+                    'host' => $site->host,
+                    'scheme' => $site->scheme,
+                    'port' => $site->port,
+                    'initial_monitors_count' => count($monitors),
+                ],
+            ));
 
             foreach ($monitors as $monitor) {
                 $this->createMonitor->handle(new CreateMonitorCommand(

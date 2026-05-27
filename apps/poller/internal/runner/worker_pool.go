@@ -8,11 +8,15 @@ import (
 
 	"montry/apps/poller/internal/checks"
 	"montry/apps/poller/internal/jobs"
+	"montry/apps/poller/internal/observability"
 )
 
 type WorkerPoolConfig struct {
 	Workers      int
 	CheckTimeout time.Duration
+	Metrics      *observability.Metrics
+	Tracer       *observability.Tracer
+	Sentry       *observability.SentryReporter
 }
 
 type WorkerPool struct {
@@ -20,6 +24,9 @@ type WorkerPool struct {
 	publisher    ResultPublisher
 	workers      int
 	checkTimeout time.Duration
+	metrics      *observability.Metrics
+	tracer       *observability.Tracer
+	sentry       *observability.SentryReporter
 }
 
 func NewWorkerPool(registry checks.Registry, publisher ResultPublisher, cfg WorkerPoolConfig) (*WorkerPool, error) {
@@ -44,14 +51,20 @@ func NewWorkerPool(registry checks.Registry, publisher ResultPublisher, cfg Work
 		publisher:    publisher,
 		workers:      cfg.Workers,
 		checkTimeout: cfg.CheckTimeout,
+		metrics:      cfg.Metrics,
+		tracer:       cfg.Tracer,
+		sentry:       cfg.Sentry,
 	}, nil
 }
 
 func (p *WorkerPool) Run(ctx context.Context, jobCh <-chan jobs.CheckJob) error {
 	var wg sync.WaitGroup
+	if p.metrics != nil {
+		p.metrics.SetWorkerCount(p.workers)
+	}
 
 	for workerID := 1; workerID <= p.workers; workerID++ {
-		worker := NewWorker(workerID, p.registry, p.publisher, p.checkTimeout)
+		worker := NewWorker(workerID, p.registry, p.publisher, p.checkTimeout, p.metrics, p.tracer, p.sentry)
 		wg.Add(1)
 
 		go func() {

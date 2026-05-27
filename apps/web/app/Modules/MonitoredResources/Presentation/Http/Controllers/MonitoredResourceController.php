@@ -12,6 +12,8 @@ use App\Modules\MonitoredResources\Presentation\Http\Requests\StoreMonitoredReso
 use App\Modules\Monitoring\Application\Services\CheckTypeRegistry;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\CheckResult;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
+use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
+use App\Modules\Observability\Application\Services\BusinessEventRecorder;
 use App\Modules\Sites\Actions\CreateDefaultFolderForOrganization;
 use App\Modules\Sites\Actions\CreateSiteAction;
 use App\Modules\Sites\Actions\GetCurrentOrganization;
@@ -183,6 +185,7 @@ final class MonitoredResourceController extends Controller
         Request $request,
         MonitoredResource $site,
         GetCurrentOrganization $getCurrentOrganization,
+        BusinessEventRecorder $events,
     ): RedirectResponse {
         $organization = $getCurrentOrganization->handle($request->user());
 
@@ -190,7 +193,23 @@ final class MonitoredResourceController extends Controller
             throw new NotFoundHttpException;
         }
 
-        DB::transaction(function () use ($site): void {
+        DB::transaction(function () use ($site, $request, $events): void {
+            $events->record(new RecordBusinessEventData(
+                eventType: 'site.deleted',
+                organizationId: $site->organization_id,
+                userId: $request->user()?->id,
+                subjectType: 'monitored_resource',
+                subjectId: (string) $site->id,
+                status: 'deleted',
+                source: 'web',
+                payload: [
+                    'project_id' => $site->project_id,
+                    'type' => $site->type,
+                    'host' => $site->host,
+                    'monitors_count' => $site->monitors()->count(),
+                ],
+            ));
+
             $site->monitors()->delete();
             $site->delete();
         });

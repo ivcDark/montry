@@ -43,6 +43,12 @@ services:
     build: *web-build
     container_name: montry-web
     <<: *web-env
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: "127.0.0.1:${OTEL_FLUENT_FORWARD_PORT:-8006}"
+        fluentd-async: "true"
+        tag: "montry.web"
     networks:
       - montry-net
 
@@ -106,6 +112,12 @@ services:
     build: *poller-build
     container_name: montry-poller
     <<: *poller-env
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: "127.0.0.1:${OTEL_FLUENT_FORWARD_PORT:-8006}"
+        fluentd-async: "true"
+        tag: "montry.poller"
     command: ["go", "run", "./cmd/poller"]
     environment:
       POLLER_MODE: ${POLLER_MODE:-service}
@@ -124,6 +136,15 @@ services:
       POLLER_FETCH_DUE_LIMIT: ${POLLER_FETCH_DUE_LIMIT:-100}
       POLLER_MANUAL_API_TOKEN: ${POLLER_MANUAL_API_TOKEN:-${POLLER_TOKEN:-}}
       POLLER_MANUAL_REQUEST_TIMEOUT_SECONDS: ${POLLER_MANUAL_REQUEST_TIMEOUT_SECONDS:-5}
+      OTEL_TRACES_ENABLED: ${OTEL_TRACES_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_SERVICE_NAME: ${OTEL_POLLER_SERVICE_NAME:-montry-poller}
+      SENTRY_ENABLED: ${SENTRY_ENABLED:-false}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_POLLER_DSN: ${SENTRY_POLLER_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-local}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_FLUSH_TIMEOUT: ${SENTRY_FLUSH_TIMEOUT:-2s}
     ports:
       - "${POLLER_PORT:-8090}:8090"
 
@@ -160,6 +181,15 @@ services:
       POLLER_FETCH_DUE_LIMIT: ${POLLER_FETCH_DUE_LIMIT:-100}
       POLLER_MANUAL_API_TOKEN: ""
       POLLER_MANUAL_REQUEST_TIMEOUT_SECONDS: ${POLLER_MANUAL_REQUEST_TIMEOUT_SECONDS:-5}
+      OTEL_TRACES_ENABLED: ${OTEL_TRACES_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_SERVICE_NAME: ${OTEL_POLLER_SERVICE_NAME:-montry-poller}
+      SENTRY_ENABLED: ${SENTRY_ENABLED:-false}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_POLLER_DSN: ${SENTRY_POLLER_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-local}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_FLUSH_TIMEOUT: ${SENTRY_FLUSH_TIMEOUT:-2s}
     ports:
       - "${POLLER_MOCK_PORT:-8091}:8090"
     profiles:
@@ -295,10 +325,195 @@ services:
     networks:
       - montry-net
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.12
+    container_name: montry-clickhouse
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-montry_analytics}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-montry}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-montry_secret}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "${CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "${CLICKHOUSE_NATIVE_PORT:-9000}:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./docker/observability/clickhouse/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    profiles:
+      - observability
+    networks:
+      - montry-net
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: montry-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+      - --web.enable-lifecycle
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./docker/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/observability/prometheus/blackbox_targets.yml:/etc/prometheus/blackbox_targets.yml:ro
+      - ./docker/observability/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - otel-collector
+      - node-exporter
+      - cadvisor
+      - blackbox-exporter
+    profiles:
+      - observability
+    networks:
+      - montry-net
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: montry-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+      POSTGRES_DB: ${POSTGRES_DB:-montry}
+      POSTGRES_USER: ${POSTGRES_USER:-montry}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-montry}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-montry_analytics}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-montry}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-montry_secret}
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+      - clickhouse
+      - postgres
+    profiles:
+      - observability
+    networks:
+      - montry-net
+
+  loki:
+    image: grafana/loki:2.9.10
+    container_name: montry-loki
+    command: ["-config.file=/etc/loki/loki.yml"]
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./docker/observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+    profiles:
+      - observability
+    networks:
+      - montry-net
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: montry-tempo
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    ports:
+      - "${TEMPO_PORT:-3200}:3200"
+      - "${TEMPO_OTLP_GRPC_PORT:-4317}:4317"
+      - "${TEMPO_OTLP_HTTP_PORT:-4318}:4318"
+    volumes:
+      - ./docker/observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+    profiles:
+      - observability
+    networks:
+      - montry-net
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    container_name: montry-otel-collector
+    command: ["--config=/etc/otel-collector/config.yml"]
+    ports:
+      - "${OTEL_GRPC_PORT:-4319}:4317"
+      - "${OTEL_HTTP_PORT:-4320}:4318"
+      - "${OTEL_FLUENT_FORWARD_PORT:-8006}:8006"
+      - "${OTEL_METRICS_PORT:-8888}:8888"
+      - "${OTEL_PROMETHEUS_EXPORTER_PORT:-8889}:8889"
+    volumes:
+      - ./docker/observability/otel-collector/config.yml:/etc/otel-collector/config.yml:ro
+      - ./apps/web/storage/logs:/var/log/montry/web:ro
+    depends_on:
+      - loki
+      - tempo
+    profiles:
+      - observability
+    networks:
+      - montry-net
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: montry-node-exporter
+    command:
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/var/lib/node_exporter/textfile_collector
+    pid: host
+    volumes:
+      - /:/host:ro
+      - ./docker/observability/node-exporter/textfile_collector:/var/lib/node_exporter/textfile_collector:ro
+    ports:
+      - "${NODE_EXPORTER_PORT:-9100}:9100"
+    profiles:
+      - observability
+    networks:
+      - montry-net
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: montry-cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "${CADVISOR_PORT:-8088}:8080"
+    profiles:
+      - observability
+    networks:
+      - montry-net
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: montry-blackbox-exporter
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    ports:
+      - "${BLACKBOX_EXPORTER_PORT:-9115}:9115"
+    volumes:
+      - ./docker/observability/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    profiles:
+      - observability
+    networks:
+      - montry-net
+
 volumes:
   postgres-data:
   redis-data:
   rabbitmq-data:
+  clickhouse-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  tempo-data:
 
 networks:
   montry-net:

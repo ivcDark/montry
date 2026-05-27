@@ -1,0 +1,81 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "format": "table", "query": "SELECT countIf(event_type = 'registration.completed') AS registrations FROM analytics_events WHERE occurred_at >= now() - INTERVAL 30 DAY", "rawSql": "SELECT countIf(event_type = 'registration.completed') AS registrations FROM analytics_events WHERE occurred_at >= now() - INTERVAL 30 DAY", "refId": "A" }],
+      "title": "Registrations 30d",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "format": "table", "query": "SELECT countIf(event_type = 'plan.selected') AS plan_selections FROM analytics_events WHERE occurred_at >= now() - INTERVAL 30 DAY", "rawSql": "SELECT countIf(event_type = 'plan.selected') AS plan_selections FROM analytics_events WHERE occurred_at >= now() - INTERVAL 30 DAY", "refId": "A" }],
+      "title": "Plan Selections 30d",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "expr": "sum(montry_monitors_total{enabled=\"true\"})", "legendFormat": "enabled monitors", "refId": "A" }],
+      "title": "Enabled Monitors",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "expr": "sum(montry_open_incidents_total)", "legendFormat": "open incidents", "refId": "A" }],
+      "title": "Open Incidents",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 15, "lineInterpolation": "linear", "lineWidth": 1, "showPoints": "never" } }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 5,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [{ "format": "time_series", "query": "SELECT toStartOfDay(occurred_at) AS time, event_type, count() AS value FROM analytics_events WHERE event_type IN ('registration.completed','plan.selected','site.created','monitor.created') AND occurred_at >= now() - INTERVAL 30 DAY GROUP BY time, event_type ORDER BY time", "rawSql": "SELECT toStartOfDay(occurred_at) AS time, event_type, count() AS value FROM analytics_events WHERE event_type IN ('registration.completed','plan.selected','site.created','monitor.created') AND occurred_at >= now() - INTERVAL 30 DAY GROUP BY time, event_type ORDER BY time", "refId": "A" }],
+      "title": "Product Activity 30d",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "postgres" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 6,
+      "options": { "showHeader": true },
+      "targets": [{ "format": "table", "rawSql": "select plan_code, status, count(*) as events from business_events where occurred_at >= now() - interval '30 days' and plan_code is not null group by plan_code, status order by events desc limit 20", "refId": "A" }],
+      "title": "Plan Activity by Status",
+      "type": "table"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 40,
+  "tags": ["montry", "owner"],
+  "templating": { "list": [] },
+  "time": { "from": "now-30d", "to": "now" },
+  "timezone": "browser",
+  "title": "Montry Owner",
+  "uid": "montry-owner",
+  "version": 1,
+  "weekStart": ""
+}

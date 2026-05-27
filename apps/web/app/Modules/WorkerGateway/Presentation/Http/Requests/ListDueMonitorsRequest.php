@@ -2,6 +2,7 @@
 
 namespace App\Modules\WorkerGateway\Presentation\Http\Requests;
 
+use App\Modules\Observability\Application\Services\AuditLogger;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class ListDueMonitorsRequest extends FormRequest
@@ -14,7 +15,22 @@ final class ListDueMonitorsRequest extends FormRequest
             return true;
         }
 
-        return hash_equals((string) $token, (string) $this->bearerToken());
+        $authorized = hash_equals((string) $token, (string) $this->bearerToken());
+
+        if (! $authorized) {
+            app(AuditLogger::class)->record(
+                category: 'security',
+                action: 'internal_api.auth_failed',
+                outcome: 'failed',
+                request: $this,
+                source: 'internal_api',
+                metadata: [
+                    'endpoint' => 'monitors.due',
+                ],
+            );
+        }
+
+        return $authorized;
     }
 
     public function rules(): array

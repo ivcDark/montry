@@ -45,9 +45,11 @@ func (a *App) Run(ctx context.Context) error {
 
 		a.log.Info("shutting down poller")
 		if err := a.server.Shutdown(shutdownCtx); err != nil {
+			a.captureError(err, "poller_shutdown_failed")
 			return err
 		}
 
+		a.sentry.Flush(a.cfg.SentryFlushTimeout)
 		a.log.Info("poller stopped")
 		return nil
 	case err := <-errCh:
@@ -55,6 +57,21 @@ func (a *App) Run(ctx context.Context) error {
 			return nil
 		}
 
+		a.captureError(err, "poller_stopped_with_error")
+		a.sentry.Flush(a.cfg.SentryFlushTimeout)
 		return err
 	}
+}
+
+func (a *App) captureError(err error, event string) {
+	if a.sentry == nil {
+		return
+	}
+
+	a.sentry.CaptureException(err, map[string]string{
+		"event":       event,
+		"environment": a.cfg.AppEnv,
+	}, map[string]any{
+		"mode": a.cfg.Mode,
+	})
 }

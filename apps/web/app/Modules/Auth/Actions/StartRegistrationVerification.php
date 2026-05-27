@@ -6,6 +6,8 @@ use App\Modules\Auth\DTO\RegisterUserData;
 use App\Modules\Auth\Infrastructure\Persistence\Models\EmailVerificationCode;
 use App\Modules\Auth\Mail\RegistrationVerificationCodeMail;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
+use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
+use App\Modules\Observability\Application\Services\BusinessEventRecorder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 
@@ -13,6 +15,7 @@ final readonly class StartRegistrationVerification
 {
     public function __construct(
         private RegisterUser $registerUser,
+        private BusinessEventRecorder $events,
     ) {}
 
     public function handle(RegisterUserData $data): User
@@ -37,6 +40,19 @@ final readonly class StartRegistrationVerification
         ]);
 
         Mail::to($user->email)->send(new RegistrationVerificationCodeMail($code));
+
+        $this->events->record(new RecordBusinessEventData(
+            eventType: 'registration.code_sent',
+            userId: $user->id,
+            subjectType: 'user',
+            subjectId: (string) $user->id,
+            status: 'sent',
+            source: 'mail',
+            payload: [
+                'email_domain' => str($user->email)->after('@')->lower()->toString(),
+                'ttl_minutes' => $this->ttlMinutes(),
+            ],
+        ));
     }
 
     private function generateCode(): string

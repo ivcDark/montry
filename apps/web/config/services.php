@@ -46,4 +46,8 @@ return [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
     ],
 
+    'fake_bank' => [
+        'webhook_secret' => env('FAKE_BANK_WEBHOOK_SECRET'),
+    ],
+
 ];
