@@ -4,6 +4,7 @@ use App\Modules\Billing\Application\Services\ApplySubscriptionLimits;
 use App\Modules\Billing\Application\Services\ProcessPastDueSubscriptions;
 use App\Modules\Billing\Application\Services\SendSubscriptionRenewalReminders;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
+use App\Modules\Incidents\Application\Services\SendWeeklyIncidentDigests;
 use App\Modules\Observability\Infrastructure\ClickHouse\ClickHouseBusinessEventExporter;
 use App\Modules\Observability\Infrastructure\Persistence\Models\AnalyticsEventExport;
 use App\Modules\Observability\Infrastructure\Persistence\Models\DeadLetter;
@@ -213,7 +214,16 @@ Artisan::command('observability:test-sentry', function (): int {
     return self::SUCCESS;
 })->purpose('Submit a controlled Laravel exception event to Sentry.');
 
+Artisan::command('incidents:send-weekly-digests', function (SendWeeklyIncidentDigests $digests): int {
+    $sent = $digests->handle();
+
+    $this->info("Sent {$sent} weekly incident digests.");
+
+    return self::SUCCESS;
+})->purpose('Send weekly incident digest emails to paid users.');
+
 Schedule::command('billing:send-renewal-reminders')->dailyAt('09:00');
 Schedule::command('billing:activate-scheduled-subscriptions')->dailyAt('09:10');
 Schedule::command('billing:process-past-due-subscriptions')->dailyAt('09:20');
 Schedule::command('observability:export-business-events')->everyMinute();
+Schedule::command('incidents:send-weekly-digests')->everyFiveMinutes();
