@@ -1,7 +1,19 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
+import {
+    ArcElement,
+    BarElement,
+    CategoryScale,
+    Chart as ChartJS,
+    Legend,
+    LinearScale,
+    Tooltip,
+} from 'chart.js'
+import { Bar, Doughnut } from 'vue-chartjs'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
 type Organization = {
     id: number | string
@@ -19,6 +31,9 @@ type Filters = {
     search: string
     period: string
     type: string
+    date_from: string
+    date_to: string
+    project_id: number | null
 }
 
 type Incident = {
@@ -39,10 +54,64 @@ type Incident = {
     current_duration_seconds: number | null
 }
 
+type AnalyticsAccess = {
+    enabled: boolean
+    plan_code: string
+    retention_days: number
+}
+
+type AnalyticsProject = {
+    id: number
+    name: string
+    incident_count: number
+    downtime_seconds: number
+    mttr_seconds: number
+    affected_sites: number
+}
+
+type AnalyticsSite = {
+    id: number
+    name: string
+    incident_count: number
+    downtime_seconds: number
+    mttr_seconds: number
+    last_incident_at: string | null
+}
+
+type IncidentAnalytics = {
+    kpi: {
+        total_incidents: number
+        active_incidents: number
+        downtime_seconds: number
+        mttr_seconds: number
+    }
+    comparison: {
+        total_incidents_delta: number
+        downtime_seconds_delta: number
+        mttr_seconds_delta: number
+    }
+    series: {
+        incident_counts: Array<{ date: string; value: number }>
+        downtime_seconds: Array<{ date: string; value: number }>
+    }
+    type_distribution: {
+        http: number
+        ssl: number
+        domain: number
+    }
+    projects: AnalyticsProject[]
+    selected_project_id: number | null
+    selected_project: { id: number; name: string } | null
+    sites: AnalyticsSite[]
+    top_sites: Array<Pick<AnalyticsSite, 'id' | 'name' | 'incident_count' | 'downtime_seconds'>>
+}
+
 const props = defineProps<{
     organization: Organization
     summary: Summary
     filters: Filters
+    analyticsAccess: AnalyticsAccess
+    analytics: IncidentAnalytics | null
     activeIncidents: Incident[]
     resolvedIncidents: Incident[]
     warnings: Incident[]
@@ -51,14 +120,85 @@ const props = defineProps<{
 const search = ref(props.filters.search)
 const period = ref(props.filters.period)
 const type = ref(props.filters.type)
+const dateFrom = ref(props.filters.date_from)
+const dateTo = ref(props.filters.date_to)
+const projectId = ref(props.filters.project_id ? String(props.filters.project_id) : '')
 
 const totalVisibleItems = computed(() => props.activeIncidents.length + props.resolvedIncidents.length + props.warnings.length)
+const selectedProjectId = computed(() => props.analytics?.selected_project_id ? String(props.analytics.selected_project_id) : '')
+const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: {
+            display: false,
+        },
+    },
+    scales: {
+        y: {
+            beginAtZero: true,
+            ticks: {
+                precision: 0,
+            },
+        },
+    },
+}
+const doughnutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: {
+            position: 'bottom' as const,
+        },
+    },
+}
+
+const incidentCountChartData = computed(() => ({
+    labels: props.analytics?.series.incident_counts.map((point) => shortDate(point.date)) ?? [],
+    datasets: [
+        {
+            label: 'Инциденты',
+            data: props.analytics?.series.incident_counts.map((point) => point.value) ?? [],
+            backgroundColor: '#0F6BFF',
+            borderRadius: 6,
+        },
+    ],
+}))
+
+const downtimeChartData = computed(() => ({
+    labels: props.analytics?.series.downtime_seconds.map((point) => shortDate(point.date)) ?? [],
+    datasets: [
+        {
+            label: 'Downtime, мин',
+            data: props.analytics?.series.downtime_seconds.map((point) => Math.round(point.value / 60)) ?? [],
+            backgroundColor: '#EF4444',
+            borderRadius: 6,
+        },
+    ],
+}))
+
+const typeDistributionChartData = computed(() => ({
+    labels: ['HTTP', 'SSL', 'Domain'],
+    datasets: [
+        {
+            data: [
+                props.analytics?.type_distribution.http ?? 0,
+                props.analytics?.type_distribution.ssl ?? 0,
+                props.analytics?.type_distribution.domain ?? 0,
+            ],
+            backgroundColor: ['#0F6BFF', '#12B3A8', '#F59E0B'],
+        },
+    ],
+}))
 
 function applyFilters(): void {
     router.get('/incidents', {
         search: search.value || undefined,
         period: period.value,
         type: type.value,
+        date_from: dateFrom.value || undefined,
+        date_to: dateTo.value || undefined,
+        project_id: projectId.value || undefined,
     }, {
         preserveState: true,
         preserveScroll: true,
@@ -68,9 +208,22 @@ function applyFilters(): void {
 
 function resetFilters(): void {
     search.value = ''
-    period.value = '30'
+    period.value = 'max'
     type.value = 'all'
+    dateFrom.value = ''
+    dateTo.value = ''
+    projectId.value = ''
     applyFilters()
+}
+
+function selectProject(id: number): void {
+    projectId.value = String(id)
+    applyFilters()
+}
+
+function handleProjectChange(event: Event): void {
+    const target = event.target as HTMLSelectElement
+    selectProject(Number(target.value))
 }
 
 function checkNow(incident: Incident): void {
@@ -97,6 +250,18 @@ function formatDuration(seconds: number | null): string {
     if (seconds < 86400) return `${Math.round(seconds / 3600)} ч`
 
     return `${Math.round(seconds / 86400)} дн`
+}
+
+function shortDate(value: string): string {
+    return new Intl.DateTimeFormat('ru-RU', {
+        day: '2-digit',
+        month: 'short',
+    }).format(new Date(value))
+}
+
+function signedNumber(value: number): string {
+    if (value > 0) return `+${value}`
+    return String(value)
 }
 
 function typeLabel(value: string): string {
@@ -176,7 +341,7 @@ function severityClass(value: string): string {
                     <select v-model="period" class="h-11 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15" @change="applyFilters">
                         <option value="1">24 часа</option>
                         <option value="7">7 дней</option>
-                        <option value="30">30 дней</option>
+                        <option value="max">Доступный период</option>
                     </select>
                     <select v-model="type" class="h-11 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15" @change="applyFilters">
                         <option value="all">Все проверки</option>
@@ -184,11 +349,156 @@ function severityClass(value: string): string {
                         <option value="ssl">SSL</option>
                         <option value="domain">Domain</option>
                     </select>
+                    <input v-model="dateFrom" type="date" class="h-11 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15" @change="applyFilters">
+                    <input v-model="dateTo" type="date" class="h-11 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15" @change="applyFilters">
                     <button type="button" class="h-11 rounded-xl border border-[#E5E7EB] px-4 text-sm font-extrabold text-[#667085] transition hover:border-[#CBD5E1] hover:text-[#111827]" @click="resetFilters">
                         Сбросить
                     </button>
                 </div>
                 <p class="text-sm font-bold text-[#667085]">Найдено: {{ totalVisibleItems }}</p>
+            </section>
+
+            <section v-if="!analyticsAccess.enabled" class="rounded-2xl border border-[#D8E2F0] bg-white p-6 shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
+                <p class="text-sm font-bold text-[#0F6BFF]">Аналитика инцидентов</p>
+                <h2 class="mt-2 text-2xl font-extrabold text-[#111827]">Доступна на Pro и Plus</h2>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-[#667085]">
+                    Смотрите динамику инцидентов, downtime, проблемные проекты и сайты за период. На текущем тарифе доступен оперативный список инцидентов без аналитических отчетов.
+                </p>
+                <Link href="/billing" class="mt-5 inline-flex h-11 items-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-extrabold text-white transition hover:bg-[#0757D8]">
+                    Перейти на тариф
+                </Link>
+            </section>
+
+            <section v-else-if="analytics" class="grid gap-6">
+                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <div class="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
+                        <p class="text-sm font-bold text-[#667085]">Инциденты за период</p>
+                        <p class="mt-3 text-4xl font-extrabold text-[#111827]">{{ analytics.kpi.total_incidents }}</p>
+                        <p class="mt-2 text-xs font-bold" :class="analytics.comparison.total_incidents_delta > 0 ? 'text-[#EF4444]' : 'text-[#16A34A]'">
+                            {{ signedNumber(analytics.comparison.total_incidents_delta) }} к прошлому периоду
+                        </p>
+                    </div>
+                    <div class="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
+                        <p class="text-sm font-bold text-[#667085]">Активные</p>
+                        <p class="mt-3 text-4xl font-extrabold" :class="analytics.kpi.active_incidents ? 'text-[#EF4444]' : 'text-[#16A34A]'">{{ analytics.kpi.active_incidents }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
+                        <p class="text-sm font-bold text-[#667085]">Downtime</p>
+                        <p class="mt-3 text-4xl font-extrabold text-[#111827]">{{ formatDuration(analytics.kpi.downtime_seconds) }}</p>
+                        <p class="mt-2 text-xs font-bold" :class="analytics.comparison.downtime_seconds_delta > 0 ? 'text-[#EF4444]' : 'text-[#16A34A]'">
+                            {{ formatDuration(Math.abs(analytics.comparison.downtime_seconds_delta)) }} {{ analytics.comparison.downtime_seconds_delta > 0 ? 'хуже' : 'лучше/без изменений' }}
+                        </p>
+                    </div>
+                    <div class="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
+                        <p class="text-sm font-bold text-[#667085]">MTTR</p>
+                        <p class="mt-3 text-4xl font-extrabold text-[#111827]">{{ formatDuration(analytics.kpi.mttr_seconds) }}</p>
+                        <p class="mt-2 text-xs font-bold text-[#667085]">Среднее время восстановления</p>
+                    </div>
+                </div>
+
+                <div class="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
+                    <aside class="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <h2 class="text-lg font-extrabold text-[#111827]">Проекты</h2>
+                                <p class="mt-1 text-sm text-[#667085]">Рейтинг по инцидентам</p>
+                            </div>
+                            <span class="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-extrabold text-[#0F6BFF]">{{ analyticsAccess.retention_days }} дн.</span>
+                        </div>
+
+                        <select
+                            class="mt-4 h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15 xl:hidden"
+                            :value="selectedProjectId"
+                            @change="handleProjectChange"
+                        >
+                            <option v-for="project in analytics.projects" :key="project.id" :value="project.id">{{ project.name }}</option>
+                        </select>
+
+                        <div class="mt-4 hidden gap-2 xl:grid">
+                            <button
+                                v-for="project in analytics.projects"
+                                :key="project.id"
+                                type="button"
+                                class="rounded-xl border p-4 text-left transition"
+                                :class="project.id === analytics.selected_project_id ? 'border-[#0F6BFF] bg-[#EEF4FF]' : 'border-[#E5E7EB] bg-white hover:border-[#CBD5E1]'"
+                                @click="selectProject(project.id)"
+                            >
+                                <span class="block text-sm font-extrabold text-[#111827]">{{ project.name }}</span>
+                                <span class="mt-2 block text-xs font-bold text-[#667085]">{{ project.incident_count }} инц. · {{ formatDuration(project.downtime_seconds) }} · {{ project.affected_sites }} сайт.</span>
+                            </button>
+                            <p v-if="!analytics.projects.length" class="rounded-xl border border-dashed border-[#CBD5E1] p-4 text-sm text-[#667085]">За период инцидентов по проектам нет.</p>
+                        </div>
+                    </aside>
+
+                    <div class="grid gap-6">
+                        <div class="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.6fr)]">
+                            <div class="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
+                                <h2 class="text-lg font-extrabold text-[#111827]">Динамика инцидентов</h2>
+                                <p class="mt-1 text-sm text-[#667085]">{{ analytics.selected_project?.name ?? 'Все проекты' }}</p>
+                                <div class="mt-5 h-64">
+                                    <Bar :data="incidentCountChartData" :options="chartOptions" />
+                                </div>
+                            </div>
+                            <div class="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
+                                <h2 class="text-lg font-extrabold text-[#111827]">Типы</h2>
+                                <p class="mt-1 text-sm text-[#667085]">HTTP, SSL и домены</p>
+                                <div class="mt-5 h-64">
+                                    <Doughnut :data="typeDistributionChartData" :options="doughnutOptions" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
+                            <div class="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
+                                <h2 class="text-lg font-extrabold text-[#111827]">Downtime по дням</h2>
+                                <p class="mt-1 text-sm text-[#667085]">Минуты простоя за выбранный период</p>
+                                <div class="mt-5 h-64">
+                                    <Bar :data="downtimeChartData" :options="chartOptions" />
+                                </div>
+                            </div>
+                            <div class="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
+                                <h2 class="text-lg font-extrabold text-[#111827]">Проблемные сайты</h2>
+                                <div v-if="analytics.top_sites.length" class="mt-4 grid gap-3">
+                                    <div v-for="site in analytics.top_sites" :key="site.id" class="rounded-xl border border-[#E5E7EB] p-3">
+                                        <p class="font-extrabold text-[#111827]">{{ site.name }}</p>
+                                        <p class="mt-1 text-xs font-bold text-[#667085]">{{ site.incident_count }} инц. · {{ formatDuration(site.downtime_seconds) }}</p>
+                                    </div>
+                                </div>
+                                <p v-else class="mt-4 text-sm text-[#667085]">За период проблемных сайтов нет.</p>
+                            </div>
+                        </div>
+
+                        <div class="rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
+                            <div class="border-b border-[#E5E7EB] px-5 py-5">
+                                <h2 class="text-lg font-extrabold text-[#111827]">Сайты проекта</h2>
+                                <p class="mt-1 text-sm text-[#667085]">Инциденты, downtime и MTTR по выбранному проекту.</p>
+                            </div>
+                            <div v-if="analytics.sites.length" class="overflow-x-auto">
+                                <table class="min-w-full text-left text-sm">
+                                    <thead class="text-xs uppercase tracking-normal text-[#98A2B3]">
+                                        <tr>
+                                            <th class="px-5 py-3 font-extrabold">Сайт</th>
+                                            <th class="px-5 py-3 font-extrabold">Инциденты</th>
+                                            <th class="px-5 py-3 font-extrabold">Downtime</th>
+                                            <th class="px-5 py-3 font-extrabold">MTTR</th>
+                                            <th class="px-5 py-3 font-extrabold">Последний</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="site in analytics.sites" :key="site.id">
+                                            <td class="border-t border-[#E5E7EB] px-5 py-4 font-extrabold text-[#111827]">{{ site.name }}</td>
+                                            <td class="border-t border-[#E5E7EB] px-5 py-4 text-[#667085]">{{ site.incident_count }}</td>
+                                            <td class="border-t border-[#E5E7EB] px-5 py-4 text-[#667085]">{{ formatDuration(site.downtime_seconds) }}</td>
+                                            <td class="border-t border-[#E5E7EB] px-5 py-4 text-[#667085]">{{ formatDuration(site.mttr_seconds) }}</td>
+                                            <td class="border-t border-[#E5E7EB] px-5 py-4 text-[#667085]">{{ formatDateTime(site.last_incident_at) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p v-else class="px-5 py-8 text-sm text-[#667085]">В выбранном проекте за период инцидентов нет.</p>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <section class="rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_16px_44px_rgba(15,23,42,0.06)]">

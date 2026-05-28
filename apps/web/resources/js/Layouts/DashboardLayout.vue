@@ -45,7 +45,6 @@ const navigation: NavigationItem[] = [
     { key: 'monitors', label: 'Мониторинги', href: '/monitors', icon: '◌' },
     { key: 'incidents', label: 'Инциденты', href: '/incidents', icon: '!' },
     { key: 'notifications', label: 'Уведомления', icon: '✉' },
-    { key: 'reports', label: 'Отчеты', icon: '▤' },
     { key: 'billing', label: 'Тариф', href: '/billing', icon: '₽' },
     { key: 'settings', label: 'Настройки', icon: '⚙' },
 ]
