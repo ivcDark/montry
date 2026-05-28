@@ -60,6 +60,12 @@ type AnalyticsAccess = {
     retention_days: number
 }
 
+type WeeklyDigestPreference = {
+    enabled: boolean
+    send_time: string
+    timezone: string
+}
+
 type AnalyticsProject = {
     id: number
     name: string
@@ -111,6 +117,7 @@ const props = defineProps<{
     summary: Summary
     filters: Filters
     analyticsAccess: AnalyticsAccess
+    weeklyDigestPreference: WeeklyDigestPreference
     analytics: IncidentAnalytics | null
     activeIncidents: Incident[]
     resolvedIncidents: Incident[]
@@ -123,6 +130,8 @@ const type = ref(props.filters.type)
 const dateFrom = ref(props.filters.date_from)
 const dateTo = ref(props.filters.date_to)
 const projectId = ref(props.filters.project_id ? String(props.filters.project_id) : '')
+const weeklyDigestEnabled = ref(props.weeklyDigestPreference.enabled)
+const weeklyDigestTime = ref(props.weeklyDigestPreference.send_time)
 
 const totalVisibleItems = computed(() => props.activeIncidents.length + props.resolvedIncidents.length + props.warnings.length)
 const selectedProjectId = computed(() => props.analytics?.selected_project_id ? String(props.analytics.selected_project_id) : '')
@@ -224,6 +233,16 @@ function selectProject(id: number): void {
 function handleProjectChange(event: Event): void {
     const target = event.target as HTMLSelectElement
     selectProject(Number(target.value))
+}
+
+function saveWeeklyDigestPreference(): void {
+    router.put('/incidents/weekly-digest-preference', {
+        enabled: weeklyDigestEnabled.value,
+        send_time: weeklyDigestTime.value,
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+    })
 }
 
 function checkNow(incident: Incident): void {
@@ -370,6 +389,21 @@ function severityClass(value: string): string {
             </section>
 
             <section v-else-if="analytics" class="grid gap-6">
+                <div class="flex flex-col gap-4 rounded-2xl border border-[#D8E2F0] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <p class="text-sm font-bold text-[#0F6BFF]">Еженедельный отчет</p>
+                        <h2 class="mt-1 text-xl font-extrabold text-[#111827]">Email-итоги по инцидентам</h2>
+                        <p class="mt-1 text-sm text-[#667085]">Отправляем по понедельникам за прошлую календарную неделю. Время указано по Москве.</p>
+                    </div>
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <label class="inline-flex items-center gap-3 text-sm font-extrabold text-[#111827]">
+                            <input v-model="weeklyDigestEnabled" type="checkbox" class="h-5 w-5 rounded border-[#CBD5E1] text-[#0F6BFF]" @change="saveWeeklyDigestPreference">
+                            Получать отчет
+                        </label>
+                        <input v-model="weeklyDigestTime" type="time" class="h-11 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15" @change="saveWeeklyDigestPreference">
+                    </div>
+                </div>
+
                 <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <div class="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
                         <p class="text-sm font-bold text-[#667085]">Инциденты за период</p>

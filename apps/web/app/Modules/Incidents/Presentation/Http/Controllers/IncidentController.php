@@ -7,6 +7,7 @@ use App\Modules\Incidents\Application\Queries\IncidentAnalyticsQuery;
 use App\Modules\Incidents\Application\Services\IncidentAnalyticsAccessResolver;
 use App\Modules\Incidents\Application\Services\IncidentAnalyticsCache;
 use App\Modules\Incidents\Infrastructure\Persistence\Models\Incident;
+use App\Modules\Incidents\Infrastructure\Persistence\Models\IncidentWeeklyDigestPreference;
 use App\Modules\Sites\Actions\GetCurrentOrganization;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -30,6 +31,10 @@ final class IncidentController extends Controller
         $type = $request->string('type', 'all')->toString();
         $analyticsAccess = $accessResolver->resolve($organization->id);
         $analyticsFilters = $accessResolver->normalizeFilters($organization->id, $request->query());
+        $weeklyDigestPreference = IncidentWeeklyDigestPreference::query()
+            ->where('user_id', $request->user()->id)
+            ->where('organization_id', $organization->id)
+            ->first();
         $analytics = null;
 
         if ($analyticsAccess->enabled) {
@@ -98,6 +103,11 @@ final class IncidentController extends Controller
                 'enabled' => $analyticsAccess->enabled,
                 'plan_code' => $analyticsAccess->planCode,
                 'retention_days' => $analyticsAccess->retentionDays,
+            ],
+            'weeklyDigestPreference' => [
+                'enabled' => $weeklyDigestPreference?->enabled ?? true,
+                'send_time' => substr((string) ($weeklyDigestPreference?->send_time ?? '09:00'), 0, 5),
+                'timezone' => 'Europe/Moscow',
             ],
             'analytics' => $analytics,
             'summary' => [
