@@ -3,6 +3,9 @@
 namespace App\Modules\Incidents\Presentation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Incidents\Application\Queries\IncidentAnalyticsQuery;
+use App\Modules\Incidents\Application\Services\IncidentAnalyticsAccessResolver;
+use App\Modules\Incidents\Application\Services\IncidentAnalyticsCache;
 use App\Modules\Incidents\Infrastructure\Persistence\Models\Incident;
 use App\Modules\Sites\Actions\GetCurrentOrganization;
 use Illuminate\Database\Eloquent\Builder;
@@ -12,13 +15,32 @@ use Inertia\Response;
 
 final class IncidentController extends Controller
 {
-    public function index(Request $request, GetCurrentOrganization $getCurrentOrganization): Response
+    public function index(
+        Request $request,
+        GetCurrentOrganization $getCurrentOrganization,
+        IncidentAnalyticsAccessResolver $accessResolver,
+        IncidentAnalyticsQuery $analyticsQuery,
+        IncidentAnalyticsCache $analyticsCache,
+    ): Response
     {
         $organization = $getCurrentOrganization->handle($request->user());
         $periodDays = $this->periodDays($request->string('period', '30')->toString());
         $periodStart = now()->subDays($periodDays);
         $search = trim($request->string('search')->toString());
         $type = $request->string('type', 'all')->toString();
+        $analyticsAccess = $accessResolver->resolve($organization->id);
+        $analyticsFilters = $accessResolver->normalizeFilters($organization->id, $request->query());
+        $analytics = null;
+
+        if ($analyticsAccess->enabled) {
+            $analytics = $analyticsCache->remember(
+                organizationId: $organization->id,
+                planCode: $analyticsAccess->planCode,
+                filters: $analyticsFilters,
+                projectId: $analyticsFilters->projectId,
+                callback: fn (): array => $analyticsQuery->build($organization->id, $analyticsFilters),
+            );
+        }
 
         $baseQuery = Incident::query()
             ->with([
@@ -68,7 +90,16 @@ final class IncidentController extends Controller
                 'search' => $search,
                 'period' => (string) $periodDays,
                 'type' => $type,
+                'date_from' => $request->string('date_from')->toString(),
+                'date_to' => $request->string('date_to')->toString(),
+                'project_id' => $analyticsFilters->projectId,
             ],
+            'analyticsAccess' => [
+                'enabled' => $analyticsAccess->enabled,
+                'plan_code' => $analyticsAccess->planCode,
+                'retention_days' => $analyticsAccess->retentionDays,
+            ],
+            'analytics' => $analytics,
             'summary' => [
                 'open_incidents' => (clone $baseQuery)
                     ->where('status', 'open')
