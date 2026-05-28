@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head, Link, usePage } from '@inertiajs/vue3'
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
+import { onBeforeUnmount, ref } from 'vue'
 import MarketingHeader from '@/Components/MarketingHeader.vue'
 
 type User = {
@@ -85,30 +86,79 @@ const plans = [
     {
         code: 'free',
         name: 'Free',
-        caption: 'для старта',
+        caption: 'для знакомства',
         price: '0 ₽',
-        description: '3 сайта, HTTP и SSL, история 3 дня и email-уведомления.',
+        description: 'Для знакомства с сервисом и личных сайтов.',
         cta: 'Начать бесплатно',
+        badge: '',
         featured: false,
+        agency: false,
+        highlights: [
+            '3 сайта и 9 мониторингов',
+            'HTTP-интервал от 15 минут',
+            'HTTP/HTTPS, SSL и Domain',
+            'Telegram и email-уведомления',
+            'Ручная проверка',
+            'История 7 дней и 1 проект',
+        ],
     },
     {
         code: 'pro',
         name: 'Pro',
-        caption: 'для владельца нескольких сайтов',
-        price: '990 ₽/мес',
-        description: '15 сайтов, 35 мониторингов, HTTP, SSL, домены, Telegram и email.',
+        caption: 'для специалистов',
+        price: '390 ₽/мес',
+        description: 'Для фрилансеров, SEO-специалистов и владельцев нескольких сайтов.',
         cta: 'Выбрать Pro',
+        badge: 'Популярный',
         featured: true,
+        agency: false,
+        highlights: [
+            '15 сайтов и 45 мониторингов',
+            'HTTP-интервал от 5 минут',
+            'HTTP/HTTPS, SSL и Domain',
+            'Telegram и email-уведомления',
+            'История 30 дней и 5 проектов',
+            'Отчёты и 2 получателя уведомлений',
+        ],
     },
     {
         code: 'plus',
         name: 'Plus',
-        caption: 'для веб-студий и фрилансеров',
-        price: '2490 ₽/мес',
-        description: '50 сайтов, проекты, все доступные типы мониторинга и история 60 дней.',
+        caption: 'для агентств',
+        price: '1 190 ₽/мес',
+        description: 'Для веб-студий, агентств и большого числа клиентских сайтов.',
         cta: 'Выбрать Plus',
+        badge: 'Для веб-студий',
         featured: false,
+        agency: true,
+        highlights: [
+            '60 сайтов и 180 мониторингов',
+            'HTTP-интервал от 1 минуты',
+            'HTTP/HTTPS, SSL и Domain',
+            'Telegram и email-уведомления',
+            'История 180 дней и 25 проектов',
+            'Отчёты и 10 получателей уведомлений',
+        ],
     },
+]
+
+const comparisonRows = [
+    { feature: 'Сайты', free: '3', pro: '15', plus: '60' },
+    { feature: 'Мониторинги', free: '9', pro: '45', plus: '180' },
+    { feature: 'Минимальный интервал мониторинга', free: 'от 15 минут', pro: 'от 5 минут', plus: 'от 1 минуты' },
+    { feature: 'HTTP/HTTPS мониторинг', free: 'да', pro: 'да', plus: 'да' },
+    { feature: 'SSL мониторинг', free: 'да', pro: 'да', plus: 'да' },
+    { feature: 'Domain мониторинг', free: 'да', pro: 'да', plus: 'да' },
+    { feature: 'Telegram-уведомления', free: 'да', pro: 'да', plus: 'да' },
+    { feature: 'Email-уведомления', free: 'да', pro: 'да', plus: 'да' },
+    { feature: 'Ручная проверка', free: 'да', pro: 'да', plus: 'да' },
+    { feature: 'История проверок', free: '7 дней', pro: '30 дней', plus: '180 дней' },
+    { feature: 'Проекты', free: '1', pro: '5', plus: '25' },
+    { feature: 'Отчёты', free: 'нет', pro: 'да', plus: 'да' },
+    { feature: 'Получатели уведомлений', free: '1', pro: '2', plus: '10' },
+    { feature: 'Командный доступ', free: 'нет', pro: 'нет', plus: 'позже' },
+    { feature: 'White label отчёты', free: 'нет', pro: 'нет', plus: 'позже' },
+    { feature: 'Приоритетная поддержка', free: 'нет', pro: 'нет', plus: 'позже' },
 ]
 
 const faq = [
@@ -132,22 +182,76 @@ const faq = [
 
 const ctaHref = user ? '/dashboard' : '/register'
 const ctaLabel = user ? 'Перейти в кабинет' : 'Начать бесплатно'
+const feedbackForm = useForm({
+    name: '',
+    email: '',
+    message: '',
+})
+const isFeedbackModalVisible = ref(false)
+let feedbackModalTimer: ReturnType<typeof setTimeout> | null = null
 
 function planHref(planCode: string): string {
-    return user ? '/billing/checkout' : `/register?plan=${planCode}`
+    return user ? '/billing' : `/register?plan=${planCode}`
 }
 
-function planMethod(): 'get' | 'post' {
-    return user ? 'post' : 'get'
+function comparisonValueClass(value: string): string {
+    if (value === 'да') {
+        return 'font-extrabold text-[#16A34A]'
+    }
+
+    if (value === 'нет') {
+        return 'font-semibold text-[#98A2B3]'
+    }
+
+    if (value === 'позже') {
+        return 'font-extrabold text-[#F59E0B]'
+    }
+
+    return 'font-semibold text-[#475467]'
 }
 
-function planAs(): 'a' | 'button' {
-    return user ? 'button' : 'a'
+function scrollToFeedbackForm(): void {
+    document.getElementById('feedback-form')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+    })
 }
 
-function planData(planCode: string): Record<string, string> {
-    return user ? { plan_code: planCode } : {}
+function clearFeedbackModalTimer(): void {
+    if (feedbackModalTimer) {
+        clearTimeout(feedbackModalTimer)
+        feedbackModalTimer = null
+    }
 }
+
+function closeFeedbackModal(): void {
+    isFeedbackModalVisible.value = false
+    clearFeedbackModalTimer()
+}
+
+function showFeedbackSuccessModal(): void {
+    isFeedbackModalVisible.value = true
+    clearFeedbackModalTimer()
+
+    feedbackModalTimer = setTimeout(() => {
+        isFeedbackModalVisible.value = false
+        feedbackModalTimer = null
+    }, 10000)
+}
+
+function submitFeedbackForm(): void {
+    feedbackForm.post('/feedback', {
+        preserveScroll: true,
+        onSuccess: () => {
+            feedbackForm.reset()
+            showFeedbackSuccessModal()
+        },
+    })
+}
+
+onBeforeUnmount(() => {
+    clearFeedbackModalTimer()
+})
 </script>
 
 <template>
@@ -335,10 +439,10 @@ function planData(planCode: string): Record<string, string> {
                 <div class="mx-auto max-w-3xl text-center">
                     <p class="text-sm font-extrabold text-[#12B3A8]">Тарифы</p>
                     <h2 class="mt-4 text-4xl font-extrabold leading-tight text-[#111827] sm:text-5xl">
-                        Начните бесплатно, масштабируйтесь по мере роста
+                        Простые тарифы для сайтов, SSL и доменов
                     </h2>
                     <p class="mt-5 text-lg leading-8 text-[#667085]">
-                        Три простых тарифа для разных сценариев: от первого сайта до клиентского портфеля.
+                        Начните бесплатно, а когда сайтов станет больше — перейдите на Pro или Plus.
                     </p>
                 </div>
 
@@ -346,38 +450,92 @@ function planData(planCode: string): Record<string, string> {
                     <article
                         v-for="plan in plans"
                         :key="plan.name"
-                        class="relative rounded-3xl border bg-white p-7 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
-                        :class="plan.featured ? 'border-2 border-[#0F6BFF]' : 'border-[#E5E7EB]'"
+                        class="relative flex rounded-3xl border bg-white p-7 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
+                        :class="plan.featured || plan.agency ? 'border-2 border-[#0F6BFF]' : 'border-[#E5E7EB]'"
                     >
-                        <span
-                            v-if="plan.featured"
-                            class="absolute right-6 top-6 inline-flex h-7 items-center rounded-full bg-[#ECFDF3] px-3 text-xs font-extrabold text-[#16A34A]"
-                        >
-                            Популярный
-                        </span>
-                        <h3 class="text-2xl font-extrabold text-[#111827]">{{ plan.name }}</h3>
-                        <p class="mt-1 text-sm font-semibold text-[#667085]">{{ plan.caption }}</p>
-                        <p class="mt-6 text-4xl font-extrabold text-[#111827]">{{ plan.price }}</p>
-                        <p class="mt-4 min-h-16 leading-7 text-[#667085]">{{ plan.description }}</p>
+                        <div class="flex w-full flex-col">
+                            <div class="flex min-h-8 items-start justify-between gap-4">
+                                <div>
+                                    <h3 class="text-2xl font-extrabold text-[#111827]">{{ plan.name }}</h3>
+                                    <p class="mt-1 text-sm font-semibold text-[#667085]">{{ plan.caption }}</p>
+                                </div>
+                                <span
+                                    v-if="plan.badge"
+                                    class="inline-flex shrink-0 items-center rounded-full px-3 py-1 text-xs font-extrabold"
+                                    :class="plan.agency ? 'bg-[#EAF2FF] text-[#0F6BFF]' : 'bg-[#ECFDF3] text-[#16A34A]'"
+                                >
+                                    {{ plan.badge }}
+                                </span>
+                            </div>
 
-                        <ul class="mt-6 space-y-3 text-[#667085]">
-                            <li class="flex gap-2"><span class="font-extrabold text-[#16A34A]">✓</span>HTTP/HTTPS-мониторинг</li>
-                            <li class="flex gap-2"><span class="font-extrabold text-[#16A34A]">✓</span>SSL и домены по тарифу</li>
-                            <li class="flex gap-2"><span class="font-extrabold text-[#16A34A]">✓</span>Email и Telegram по тарифу</li>
-                            <li class="flex gap-2"><span class="font-extrabold text-[#16A34A]">✓</span>История инцидентов</li>
-                        </ul>
+                            <p class="mt-6 text-4xl font-extrabold text-[#111827]">{{ plan.price }}</p>
+                            <p class="mt-4 min-h-20 leading-7 text-[#667085]">{{ plan.description }}</p>
 
-                        <Link
-                            :href="planHref(plan.code)"
-                            :method="planMethod()"
-                            :as="planAs()"
-                            :data="planData(plan.code)"
-                            class="mt-8 inline-flex h-12 w-full items-center justify-center rounded-xl px-5 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-[#0F6BFF]/30 focus:ring-offset-2"
-                            :class="plan.featured ? 'bg-[#0F6BFF] text-white hover:bg-[#0757D8]' : 'border border-[#E5E7EB] bg-white text-[#111827] hover:border-[#CBD5E1]'"
-                        >
-                            {{ user ? 'Выбрать тариф' : plan.cta }}
-                        </Link>
+                            <ul class="mt-6 space-y-3 text-sm font-semibold text-[#475467]">
+                                <li
+                                    v-for="highlight in plan.highlights"
+                                    :key="highlight"
+                                    class="flex gap-2 leading-6"
+                                >
+                                    <span class="font-extrabold text-[#16A34A]">✓</span>
+                                    <span>{{ highlight }}</span>
+                                </li>
+                            </ul>
+
+                            <Link
+                                :href="planHref(plan.code)"
+                                class="mt-8 inline-flex h-12 w-full items-center justify-center rounded-xl px-5 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-[#0F6BFF]/30 focus:ring-offset-2"
+                                :class="plan.featured || plan.agency ? 'bg-[#0F6BFF] text-white hover:bg-[#0757D8]' : 'border border-[#E5E7EB] bg-white text-[#111827] hover:border-[#CBD5E1]'"
+                            >
+                                {{ plan.cta }}
+                            </Link>
+                        </div>
                     </article>
+                </div>
+
+                <div class="mt-16">
+                    <div class="mx-auto max-w-3xl text-center">
+                        <p class="text-sm font-extrabold text-[#12B3A8]">Сравнение тарифов</p>
+                        <h2 class="mt-4 text-4xl font-extrabold leading-tight text-[#111827] sm:text-5xl">
+                            Сравнение возможностей
+                        </h2>
+                    </div>
+
+                    <div class="mt-10 overflow-hidden rounded-3xl border border-[#E5E7EB] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+                        <div class="overflow-x-auto">
+                            <table class="w-full min-w-[820px] text-left text-sm">
+                                <thead class="bg-[#F8FAFC] text-xs font-extrabold uppercase tracking-normal text-[#667085]">
+                                <tr>
+                                    <th class="px-6 py-4">Возможность</th>
+                                    <th class="px-6 py-4">Free</th>
+                                    <th class="px-6 py-4">Pro</th>
+                                    <th class="px-6 py-4">Plus</th>
+                                </tr>
+                                </thead>
+                                <tbody class="divide-y divide-[#E5E7EB]">
+                                <tr v-for="row in comparisonRows" :key="row.feature">
+                                    <td class="px-6 py-4 font-bold text-[#111827]">{{ row.feature }}</td>
+                                    <td class="px-6 py-4" :class="comparisonValueClass(row.free)">{{ row.free }}</td>
+                                    <td class="px-6 py-4" :class="comparisonValueClass(row.pro)">{{ row.pro }}</td>
+                                    <td class="px-6 py-4" :class="comparisonValueClass(row.plus)">{{ row.plus }}</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="mx-auto mt-10 max-w-3xl rounded-3xl border border-[#E5E7EB] bg-white p-6 text-center shadow-[0_10px_28px_rgba(15,23,42,0.06)] sm:p-8">
+                        <p class="text-base font-semibold leading-7 text-[#667085] sm:text-lg sm:leading-8">
+                            Если у вас много сайтов, особые лимиты или нужен индивидуальный набор возможностей — напишите нам, и мы подберём тариф под вашу задачу.
+                        </p>
+                        <button
+                            type="button"
+                            class="mt-6 inline-flex h-12 items-center justify-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-bold text-white transition hover:bg-[#0757D8] focus:outline-none focus:ring-2 focus:ring-[#0F6BFF]/30 focus:ring-offset-2"
+                            @click="scrollToFeedbackForm"
+                        >
+                            Обсудить индивидуальный тариф
+                        </button>
+                    </div>
                 </div>
             </div>
         </section>
@@ -403,6 +561,84 @@ function planData(planCode: string): Record<string, string> {
                         <h3 class="text-lg font-extrabold text-[#111827]">{{ item.question }}</h3>
                         <p class="leading-7 text-[#667085]">{{ item.answer }}</p>
                     </article>
+                </div>
+            </div>
+        </section>
+
+        <section id="feedback-form" class="bg-white pb-20">
+            <div class="mx-auto max-w-7xl px-5 sm:px-8">
+                <div class="grid gap-8 rounded-3xl border border-[#E5E7EB] bg-[#F8FAFC] p-6 shadow-[0_10px_28px_rgba(15,23,42,0.06)] sm:p-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start lg:p-10">
+                    <div>
+                        <p class="text-sm font-extrabold text-[#12B3A8]">Обратная связь</p>
+                        <h2 class="mt-4 text-4xl font-extrabold leading-tight text-[#111827] sm:text-5xl">
+                            Напишите нам
+                        </h2>
+                        <p class="mt-5 text-lg leading-8 text-[#667085]">
+                            Расскажите, сколько сайтов нужно мониторить, какие лимиты важны и какие возможности нужны вашей команде. Мы вернёмся с подходящим вариантом тарифа.
+                        </p>
+                    </div>
+
+                    <form class="rounded-3xl border border-[#E5E7EB] bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.06)]" @submit.prevent="submitFeedbackForm">
+                        <div class="space-y-5">
+                            <label class="block">
+                                <span class="text-sm font-bold text-[#111827]">Имя</span>
+                                <input
+                                    v-model="feedbackForm.name"
+                                    type="text"
+                                    required
+                                    :aria-invalid="Boolean(feedbackForm.errors.name)"
+                                    aria-describedby="feedback-name-error"
+                                    class="mt-2 h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#111827] outline-none transition placeholder:text-[#98A2B3] focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/20"
+                                    placeholder="Как к вам обращаться"
+                                >
+                                <p id="feedback-name-error" v-if="feedbackForm.errors.name" class="mt-2 text-sm font-semibold text-[#EF4444]">
+                                    {{ feedbackForm.errors.name }}
+                                </p>
+                            </label>
+
+                            <label class="block">
+                                <span class="text-sm font-bold text-[#111827]">Почта</span>
+                                <input
+                                    v-model="feedbackForm.email"
+                                    type="email"
+                                    required
+                                    inputmode="email"
+                                    :aria-invalid="Boolean(feedbackForm.errors.email)"
+                                    aria-describedby="feedback-email-error"
+                                    class="mt-2 h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#111827] outline-none transition placeholder:text-[#98A2B3] focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/20"
+                                    placeholder="name@example.ru"
+                                >
+                                <p id="feedback-email-error" v-if="feedbackForm.errors.email" class="mt-2 text-sm font-semibold text-[#EF4444]">
+                                    {{ feedbackForm.errors.email }}
+                                </p>
+                            </label>
+
+                            <label class="block">
+                                <span class="text-sm font-bold text-[#111827]">Текст обращения</span>
+                                <textarea
+                                    v-model="feedbackForm.message"
+                                    required
+                                    rows="5"
+                                    :aria-invalid="Boolean(feedbackForm.errors.message)"
+                                    aria-describedby="feedback-message-error"
+                                    class="mt-2 w-full resize-y rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm font-semibold leading-6 text-[#111827] outline-none transition placeholder:text-[#98A2B3] focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/20"
+                                    placeholder="Опишите задачу, количество сайтов и нужные возможности"
+                                ></textarea>
+                                <p id="feedback-message-error" v-if="feedbackForm.errors.message" class="mt-2 text-sm font-semibold text-[#EF4444]">
+                                    {{ feedbackForm.errors.message }}
+                                </p>
+                            </label>
+                        </div>
+
+                        <button
+                            type="submit"
+                            :disabled="feedbackForm.processing"
+                            class="mt-6 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-bold text-white transition hover:bg-[#0757D8] focus:outline-none focus:ring-2 focus:ring-[#0F6BFF]/30 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                        >
+                            <span v-if="feedbackForm.processing">Отправляем...</span>
+                            <span v-else>Отправить</span>
+                        </button>
+                    </form>
                 </div>
             </div>
         </section>
@@ -445,6 +681,39 @@ function planData(planCode: string): Record<string, string> {
                 </div>
             </div>
         </section>
+
+        <Transition
+            enter-active-class="transition duration-200 ease-out"
+            enter-from-class="opacity-0"
+            enter-to-class="opacity-100"
+            leave-active-class="transition duration-150 ease-in"
+            leave-from-class="opacity-100"
+            leave-to-class="opacity-0"
+        >
+            <div
+                v-if="isFeedbackModalVisible"
+                class="fixed inset-0 z-50 grid place-items-center bg-[#0B1220]/55 px-5 py-8"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="feedback-modal-title"
+            >
+                <div class="w-full max-w-md rounded-3xl border border-[#E5E7EB] bg-white p-6 text-center shadow-[0_24px_64px_rgba(15,23,42,0.18)] sm:p-8">
+                    <div class="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#ECFDF3] text-xl font-extrabold text-[#16A34A]">
+                        ✓
+                    </div>
+                    <h2 id="feedback-modal-title" class="mt-5 text-2xl font-extrabold leading-tight text-[#111827]">
+                        Спасибо, Ваш вопрос отправлен администратору
+                    </h2>
+                    <button
+                        type="button"
+                        class="mt-6 inline-flex h-12 items-center justify-center rounded-xl bg-[#0F6BFF] px-7 text-sm font-bold text-white transition hover:bg-[#0757D8] focus:outline-none focus:ring-2 focus:ring-[#0F6BFF]/30 focus:ring-offset-2"
+                        @click="closeFeedbackModal"
+                    >
+                        Ок
+                    </button>
+                </div>
+            </div>
+        </Transition>
 
         <footer class="border-t border-[#E5E7EB] bg-white">
             <div class="mx-auto flex max-w-7xl flex-col gap-6 px-5 py-8 sm:px-8 lg:flex-row lg:items-center lg:justify-between">

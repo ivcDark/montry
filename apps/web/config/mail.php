@@ -115,4 +115,9 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    'feedback_to' => [
+        'address' => env('FEEDBACK_TO_ADDRESS', env('MAIL_FROM_ADDRESS', 'hello@example.com')),
+        'name' => env('FEEDBACK_TO_NAME', 'Montry Admin'),
+    ],
+
 ];

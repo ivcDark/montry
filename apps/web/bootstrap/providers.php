@@ -4,6 +4,7 @@ use App\Modules\Admin\Infrastructure\Providers\AdminModuleServiceProvider;
 use App\Modules\Auth\Providers\AuthModuleServiceProvider;
 use App\Modules\Billing\Infrastructure\Providers\BillingModuleServiceProvider;
 use App\Modules\CheckTypes\Infrastructure\Providers\CheckTypesModuleServiceProvider;
+use App\Modules\Feedback\Infrastructure\Providers\FeedbackModuleServiceProvider;
 use App\Modules\Dashboard\Infrastructure\Providers\DashboardModuleServiceProvider;
 use App\Modules\Identity\Infrastructure\Providers\IdentityModuleServiceProvider;
 use App\Modules\Incidents\Infrastructure\Providers\IncidentsModuleServiceProvider;
@@ -30,6 +31,7 @@ return [
     CheckTypesModuleServiceProvider::class,
     IncidentsModuleServiceProvider::class,
     NotificationsModuleServiceProvider::class,
+    FeedbackModuleServiceProvider::class,
     ObservabilityServiceProvider::class,
     ReportsModuleServiceProvider::class,
     WorkerGatewayModuleServiceProvider::class,
