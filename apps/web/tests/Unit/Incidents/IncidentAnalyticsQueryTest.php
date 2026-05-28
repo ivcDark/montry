@@ -6,12 +6,14 @@ use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Incidents\Application\DTO\IncidentAnalyticsFilters;
 use App\Modules\Incidents\Application\Queries\IncidentAnalyticsQuery;
+use App\Modules\Incidents\Application\Services\IncidentAnalyticsCache;
 use App\Modules\Incidents\Infrastructure\Persistence\Models\Incident;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 final class IncidentAnalyticsQueryTest extends TestCase
@@ -49,6 +51,27 @@ final class IncidentAnalyticsQueryTest extends TestCase
         $this->assertCount(2, $dashboard['sites']);
         $this->assertSame('alpha.test', $dashboard['sites'][0]['name']);
         $this->assertSame(3600, $dashboard['sites'][0]['downtime_seconds']);
+    }
+
+    public function test_it_reuses_cached_analytics_until_version_changes(): void
+    {
+        Cache::store('array')->flush();
+        config(['cache.default' => 'array']);
+
+        [$organization, $filters] = $this->createAnalyticsFixture();
+        $cache = app(IncidentAnalyticsCache::class);
+
+        $first = $cache->remember($organization->id, 'pro', $filters, null, fn (): array => ['value' => 1]);
+        $second = $cache->remember($organization->id, 'pro', $filters, null, fn (): array => ['value' => 2]);
+
+        $this->assertSame(['value' => 1], $first);
+        $this->assertSame(['value' => 1], $second);
+
+        $cache->incrementVersion($organization->id);
+
+        $third = $cache->remember($organization->id, 'pro', $filters, null, fn (): array => ['value' => 3]);
+
+        $this->assertSame(['value' => 3], $third);
     }
 
     /**
@@ -144,5 +167,29 @@ final class IncidentAnalyticsQueryTest extends TestCase
             'resolved_at' => $startedAt->addSeconds($durationSeconds),
             'duration_seconds' => $durationSeconds,
         ]);
+    }
+
+    /**
+     * @return array{Organization, IncidentAnalyticsFilters}
+     */
+    private function createAnalyticsFixture(): array
+    {
+        $organization = Organization::query()->create([
+            'name' => 'Acme Cache',
+            'slug' => 'acme-cache',
+            'timezone' => '+3',
+            'status' => 'active',
+        ]);
+
+        return [
+            $organization,
+            new IncidentAnalyticsFilters(
+                start: CarbonImmutable::now()->subDays(6)->startOfDay(),
+                end: CarbonImmutable::now()->endOfDay(),
+                type: 'all',
+                projectId: null,
+                search: '',
+            ),
+        ];
     }
 }
