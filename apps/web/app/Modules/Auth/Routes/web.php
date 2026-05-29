@@ -4,6 +4,7 @@ use App\Modules\Auth\Http\Controllers\LoginController;
 use App\Modules\Auth\Http\Controllers\LogoutController;
 use App\Modules\Auth\Http\Controllers\RegisterController;
 use App\Modules\Auth\Http\Controllers\RegisterVerificationController;
+use App\Modules\Auth\Http\Controllers\YandexAuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function (): void {
@@ -12,6 +13,12 @@ Route::middleware('guest')->group(function (): void {
 
     Route::post('/login', [LoginController::class, 'store'])
         ->name('login.store');
+
+    Route::get('/auth/yandex/redirect', [YandexAuthController::class, 'redirect'])
+        ->name('auth.yandex.redirect');
+
+    Route::get('/auth/yandex/callback', [YandexAuthController::class, 'callback'])
+        ->name('auth.yandex.callback');
 
     Route::get('/register', [RegisterController::class, 'create'])
         ->name('register');

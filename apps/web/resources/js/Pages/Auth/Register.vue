@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import MarketingHeader from '@/Components/MarketingHeader.vue'
-import { Head, Link, useForm } from '@inertiajs/vue3'
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
 import { computed } from 'vue'
 
 const props = defineProps<{
     intendedPlanCode?: string | null
 }>()
 
+const page = usePage<{ errors?: { yandex?: string } }>()
+
 const loginHref = computed(() => props.intendedPlanCode ? `/login?plan=${props.intendedPlanCode}` : '/login')
+const yandexHref = computed(() => props.intendedPlanCode ? `/auth/yandex/redirect?plan=${props.intendedPlanCode}` : '/auth/yandex/redirect')
+const yandexError = computed(() => page.props.errors?.yandex)
 
 const form = useForm({
     name: '',
@@ -74,7 +78,27 @@ function submit() {
                     </p>
                 </div>
 
-                <form class="mt-8 space-y-5" @submit.prevent="submit">
+                <div class="mt-8">
+                    <a
+                        :href="yandexHref"
+                        class="inline-flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#E5E7EB] bg-white px-5 text-sm font-extrabold text-[#111827] shadow-[0_10px_28px_rgba(15,23,42,0.06)] transition hover:border-[#0F6BFF]/40 hover:bg-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#0F6BFF]/20 focus:ring-offset-2"
+                    >
+                        <span class="grid h-6 w-6 place-items-center rounded-lg bg-[#FC3F1D] text-sm font-black text-white">Я</span>
+                        Зарегистрироваться через Яндекс
+                    </a>
+
+                    <p v-if="yandexError" class="mt-3 text-sm font-semibold text-[#EF4444]">
+                        {{ yandexError }}
+                    </p>
+                </div>
+
+                <div class="my-6 flex items-center gap-4 text-xs font-bold uppercase tracking-[0.18em] text-[#98A2B3]">
+                    <span class="h-px flex-1 bg-[#E5E7EB]"></span>
+                    или
+                    <span class="h-px flex-1 bg-[#E5E7EB]"></span>
+                </div>
+
+                <form class="space-y-5" @submit.prevent="submit">
                     <div>
                         <label for="name" class="mb-2 block text-sm font-bold text-[#111827]">
                             Имя

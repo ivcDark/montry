@@ -17,6 +17,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'yandex_id',
         'is_admin',
         'is_blocked',
     ];

@@ -46,6 +46,16 @@ return [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
     ],
 
+    'yandex' => [
+        'client_id' => env('YANDEX_CLIENT_ID'),
+        'client_secret' => env('YANDEX_CLIENT_SECRET'),
+        'redirect_uri' => env('YANDEX_REDIRECT_URI', rtrim((string) env('APP_URL', 'http://localhost'), '/') . '/auth/yandex/callback'),
+        'scope' => env('YANDEX_SCOPE', 'login:info,login:email'),
+        'authorize_url' => env('YANDEX_AUTHORIZE_URL', 'https://oauth.yandex.com/authorize'),
+        'token_url' => env('YANDEX_TOKEN_URL', 'https://oauth.yandex.com/token'),
+        'user_info_url' => env('YANDEX_USER_INFO_URL', 'https://login.yandex.ru/info'),
+    ],
+
     'fake_bank' => [
         'webhook_secret' => env('FAKE_BANK_WEBHOOK_SECRET'),
     ],
