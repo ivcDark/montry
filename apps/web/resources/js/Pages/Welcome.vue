@@ -15,6 +15,24 @@ type PageProps = {
     }
 }
 
+type PlanLimitValue = Record<string, boolean | number | string | null | string[]>
+
+type Plan = {
+    code: string
+    name: string
+    description: string | null
+    price_cents: number
+    currency: string
+    sort_order: number
+    limits: Record<string, PlanLimitValue>
+}
+
+const props = defineProps<{
+    plans: Plan[]
+}>()
+
+const plans = props.plans
+
 const page = usePage<PageProps>()
 const user = page.props.auth.user
 
@@ -82,83 +100,38 @@ const audiences = [
     ['Малый бизнес', 'Понятно, что происходит с сайтом'],
 ]
 
-const plans = [
-    {
-        code: 'free',
-        name: 'Free',
-        caption: 'для знакомства',
-        price: '0 ₽',
-        description: 'Для знакомства с сервисом и личных сайтов.',
-        cta: 'Начать бесплатно',
-        badge: '',
-        featured: false,
-        agency: false,
-        highlights: [
-            '3 сайта и 9 мониторингов',
-            'HTTP-интервал от 15 минут',
-            'HTTP/HTTPS, SSL и Domain',
-            'Telegram и email-уведомления',
-            'Ручная проверка',
-            'История 7 дней и 1 проект',
-        ],
-    },
-    {
-        code: 'pro',
-        name: 'Pro',
-        caption: 'для специалистов',
-        price: '390 ₽/мес',
-        description: 'Для фрилансеров, SEO-специалистов и владельцев нескольких сайтов.',
-        cta: 'Выбрать Pro',
-        badge: 'Популярный',
-        featured: true,
-        agency: false,
-        highlights: [
-            '15 сайтов и 45 мониторингов',
-            'HTTP-интервал от 5 минут',
-            'HTTP/HTTPS, SSL и Domain',
-            'Telegram и email-уведомления',
-            'История 30 дней и 5 проектов',
-            'Отчёты и 2 получателя уведомлений',
-        ],
-    },
-    {
-        code: 'plus',
-        name: 'Plus',
-        caption: 'для агентств',
-        price: '1 190 ₽/мес',
-        description: 'Для веб-студий, агентств и большого числа клиентских сайтов.',
-        cta: 'Выбрать Plus',
-        badge: 'Для веб-студий',
-        featured: false,
-        agency: true,
-        highlights: [
-            '60 сайтов и 180 мониторингов',
-            'HTTP-интервал от 1 минуты',
-            'HTTP/HTTPS, SSL и Domain',
-            'Telegram и email-уведомления',
-            'История 180 дней и 25 проектов',
-            'Отчёты и 10 получателей уведомлений',
-        ],
-    },
-]
+const planCaptions: Record<string, string> = {
+    free: 'для знакомства',
+    pro: 'для специалистов',
+    plus: 'для агентств',
+}
+
+const planBadges: Record<string, string> = {
+    pro: 'Популярный',
+    plus: 'Для веб-студий',
+}
+
+const monitorTypeNames: Record<string, string> = {
+    http: 'HTTP/HTTPS',
+    ssl: 'SSL',
+    domain: 'Domain',
+}
+
+const notificationChannelNames: Record<string, string> = {
+    email: 'email',
+    telegram: 'Telegram',
+}
 
 const comparisonRows = [
-    { feature: 'Сайты', free: '3', pro: '15', plus: '60' },
-    { feature: 'Мониторинги', free: '9', pro: '45', plus: '180' },
-    { feature: 'Минимальный интервал мониторинга', free: 'от 15 минут', pro: 'от 5 минут', plus: 'от 1 минуты' },
-    { feature: 'HTTP/HTTPS мониторинг', free: 'да', pro: 'да', plus: 'да' },
-    { feature: 'SSL мониторинг', free: 'да', pro: 'да', plus: 'да' },
-    { feature: 'Domain мониторинг', free: 'да', pro: 'да', plus: 'да' },
-    { feature: 'Telegram-уведомления', free: 'да', pro: 'да', plus: 'да' },
-    { feature: 'Email-уведомления', free: 'да', pro: 'да', plus: 'да' },
-    { feature: 'Ручная проверка', free: 'да', pro: 'да', plus: 'да' },
-    { feature: 'История проверок', free: '7 дней', pro: '30 дней', plus: '180 дней' },
-    { feature: 'Проекты', free: '1', pro: '5', plus: '25' },
-    { feature: 'Отчёты', free: 'нет', pro: 'да', plus: 'да' },
-    { feature: 'Получатели уведомлений', free: '1', pro: '2', plus: '10' },
-    { feature: 'Командный доступ', free: 'нет', pro: 'нет', plus: 'позже' },
-    { feature: 'White label отчёты', free: 'нет', pro: 'нет', plus: 'позже' },
-    { feature: 'Приоритетная поддержка', free: 'нет', pro: 'нет', plus: 'позже' },
+    { key: 'price', label: 'Стоимость' },
+    { key: 'max_sites', label: 'Сайты' },
+    { key: 'max_monitors', label: 'Мониторинги' },
+    { key: 'minimum_check_interval_seconds', label: 'Минимальный интервал мониторинга' },
+    { key: 'allowed_monitor_types', label: 'Типы мониторинга' },
+    { key: 'notification_channels', label: 'Уведомления' },
+    { key: 'manual_checks_per_day', label: 'Ручные проверки в день' },
+    { key: 'history_retention_days', label: 'История проверок' },
+    { key: 'can_create_projects', label: 'Проекты' },
 ]
 
 const faq = [
@@ -194,16 +167,184 @@ function planHref(planCode: string): string {
     return user ? '/billing' : `/register?plan=${planCode}`
 }
 
+function money(plan: Plan): string {
+    if (plan.price_cents === 0) {
+        return '0 ₽'
+    }
+
+    return `${new Intl.NumberFormat('ru-RU').format(plan.price_cents / 100)} ₽/мес`
+}
+
+function planCaption(plan: Plan): string {
+    return planCaptions[plan.code] ?? 'тариф'
+}
+
+function planBadge(plan: Plan): string {
+    return planBadges[plan.code] ?? ''
+}
+
+function isFeaturedPlan(plan: Plan): boolean {
+    return plan.code === 'pro'
+}
+
+function isAgencyPlan(plan: Plan): boolean {
+    return plan.code === 'plus'
+}
+
+function planCta(plan: Plan): string {
+    return plan.code === 'free' ? 'Начать бесплатно' : `Выбрать ${plan.name}`
+}
+
+function limitNumber(plan: Plan, limitKey: string, valueKey = 'limit'): number | null {
+    const value = plan.limits[limitKey]?.[valueKey]
+
+    return typeof value === 'number' ? value : null
+}
+
+function limitBoolean(plan: Plan, limitKey: string, valueKey = 'enabled'): boolean {
+    return plan.limits[limitKey]?.[valueKey] === true
+}
+
+function limitList(plan: Plan, limitKey: string, valueKey: string): string[] {
+    const value = plan.limits[limitKey]?.[valueKey]
+
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+function numberOrUnlimited(value: number | null): string {
+    return value === null ? 'без лимита' : String(value)
+}
+
+function dayWord(value: number): string {
+    const mod10 = value % 10
+    const mod100 = value % 100
+
+    if (mod10 === 1 && mod100 !== 11) {
+        return 'день'
+    }
+
+    if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) {
+        return 'дня'
+    }
+
+    return 'дней'
+}
+
+function minuteWord(value: number): string {
+    const mod10 = value % 10
+    const mod100 = value % 100
+
+    if (mod10 === 1 && mod100 !== 11) {
+        return 'минута'
+    }
+
+    if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) {
+        return 'минуты'
+    }
+
+    return 'минут'
+}
+
+function monitorTypesText(plan: Plan): string {
+    const types = limitList(plan, 'allowed_monitor_types', 'types')
+
+    if (types.includes('*')) {
+        return 'все доступные типы'
+    }
+
+    if (types.length === 0) {
+        return 'не указано'
+    }
+
+    return types.map((type) => monitorTypeNames[type] ?? type.toUpperCase()).join(', ')
+}
+
+function notificationChannelsText(plan: Plan): string {
+    const channels = limitList(plan, 'notification_channels', 'channels')
+
+    if (channels.length === 0) {
+        return 'не указано'
+    }
+
+    return channels.map((channel) => notificationChannelNames[channel] ?? channel).join(', ')
+}
+
+function intervalText(plan: Plan): string {
+    const seconds = limitNumber(plan, 'minimum_check_interval_seconds', 'seconds') ?? 300
+    const minutes = Math.max(1, Math.round(seconds / 60))
+
+    return `от ${minutes} ${minuteWord(minutes)}`
+}
+
+function historyText(plan: Plan): string {
+    const days = limitNumber(plan, 'history_retention_days', 'days') ?? 0
+
+    return `${days} ${dayWord(days)}`
+}
+
+function planHighlights(plan: Plan): string[] {
+    return [
+        `Сайты: ${numberOrUnlimited(limitNumber(plan, 'max_sites'))}`,
+        `Мониторинги: ${numberOrUnlimited(limitNumber(plan, 'max_monitors'))}`,
+        `Интервал проверки: ${intervalText(plan)}`,
+        `Типы: ${monitorTypesText(plan)}`,
+        `Уведомления: ${notificationChannelsText(plan)}`,
+        `История: ${historyText(plan)}`,
+    ]
+}
+
+function comparisonValue(plan: Plan, key: string): string {
+    if (key === 'price') {
+        return money(plan)
+    }
+
+    if (key === 'max_sites') {
+        return numberOrUnlimited(limitNumber(plan, 'max_sites'))
+    }
+
+    if (key === 'max_monitors') {
+        return numberOrUnlimited(limitNumber(plan, 'max_monitors'))
+    }
+
+    if (key === 'minimum_check_interval_seconds') {
+        return intervalText(plan)
+    }
+
+    if (key === 'allowed_monitor_types') {
+        return monitorTypesText(plan)
+    }
+
+    if (key === 'notification_channels') {
+        return notificationChannelsText(plan)
+    }
+
+    if (key === 'manual_checks_per_day') {
+        return numberOrUnlimited(limitNumber(plan, 'manual_checks_per_day'))
+    }
+
+    if (key === 'history_retention_days') {
+        return historyText(plan)
+    }
+
+    if (key === 'can_create_projects') {
+        return limitBoolean(plan, 'can_create_projects') ? 'да' : 'нет'
+    }
+
+    return ''
+}
+
 function comparisonValueClass(value: string): string {
-    if (value === 'да') {
+    const normalizedValue = value.toLowerCase()
+
+    if (normalizedValue === 'да') {
         return 'font-extrabold text-[#16A34A]'
     }
 
-    if (value === 'нет') {
+    if (normalizedValue === 'нет') {
         return 'font-semibold text-[#98A2B3]'
     }
 
-    if (value === 'позже') {
+    if (normalizedValue === 'позже') {
         return 'font-extrabold text-[#F59E0B]'
     }
 
@@ -449,31 +590,31 @@ onBeforeUnmount(() => {
                 <div class="mt-12 grid gap-5 lg:grid-cols-3">
                     <article
                         v-for="plan in plans"
-                        :key="plan.name"
+                        :key="plan.code"
                         class="relative flex rounded-3xl border bg-white p-7 shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
-                        :class="plan.featured || plan.agency ? 'border-2 border-[#0F6BFF]' : 'border-[#E5E7EB]'"
+                        :class="isFeaturedPlan(plan) || isAgencyPlan(plan) ? 'border-2 border-[#0F6BFF]' : 'border-[#E5E7EB]'"
                     >
                         <div class="flex w-full flex-col">
                             <div class="flex min-h-8 items-start justify-between gap-4">
                                 <div>
                                     <h3 class="text-2xl font-extrabold text-[#111827]">{{ plan.name }}</h3>
-                                    <p class="mt-1 text-sm font-semibold text-[#667085]">{{ plan.caption }}</p>
+                                    <p class="mt-1 text-sm font-semibold text-[#667085]">{{ planCaption(plan) }}</p>
                                 </div>
                                 <span
-                                    v-if="plan.badge"
+                                    v-if="planBadge(plan)"
                                     class="inline-flex shrink-0 items-center rounded-full px-3 py-1 text-xs font-extrabold"
-                                    :class="plan.agency ? 'bg-[#EAF2FF] text-[#0F6BFF]' : 'bg-[#ECFDF3] text-[#16A34A]'"
+                                    :class="isAgencyPlan(plan) ? 'bg-[#EAF2FF] text-[#0F6BFF]' : 'bg-[#ECFDF3] text-[#16A34A]'"
                                 >
-                                    {{ plan.badge }}
+                                    {{ planBadge(plan) }}
                                 </span>
                             </div>
 
-                            <p class="mt-6 text-4xl font-extrabold text-[#111827]">{{ plan.price }}</p>
-                            <p class="mt-4 min-h-20 leading-7 text-[#667085]">{{ plan.description }}</p>
+                            <p class="mt-6 text-4xl font-extrabold text-[#111827]">{{ money(plan) }}</p>
+                            <p class="mt-4 min-h-20 leading-7 text-[#667085]">{{ plan.description || 'Тариф мониторинга сайтов, SSL и доменов.' }}</p>
 
                             <ul class="mt-6 space-y-3 text-sm font-semibold text-[#475467]">
                                 <li
-                                    v-for="highlight in plan.highlights"
+                                    v-for="highlight in planHighlights(plan)"
                                     :key="highlight"
                                     class="flex gap-2 leading-6"
                                 >
@@ -485,9 +626,9 @@ onBeforeUnmount(() => {
                             <Link
                                 :href="planHref(plan.code)"
                                 class="mt-8 inline-flex h-12 w-full items-center justify-center rounded-xl px-5 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-[#0F6BFF]/30 focus:ring-offset-2"
-                                :class="plan.featured || plan.agency ? 'bg-[#0F6BFF] text-white hover:bg-[#0757D8]' : 'border border-[#E5E7EB] bg-white text-[#111827] hover:border-[#CBD5E1]'"
+                                :class="isFeaturedPlan(plan) || isAgencyPlan(plan) ? 'bg-[#0F6BFF] text-white hover:bg-[#0757D8]' : 'border border-[#E5E7EB] bg-white text-[#111827] hover:border-[#CBD5E1]'"
                             >
-                                {{ plan.cta }}
+                                {{ planCta(plan) }}
                             </Link>
                         </div>
                     </article>
@@ -507,17 +648,20 @@ onBeforeUnmount(() => {
                                 <thead class="bg-[#F8FAFC] text-xs font-extrabold uppercase tracking-normal text-[#667085]">
                                 <tr>
                                     <th class="px-6 py-4">Возможность</th>
-                                    <th class="px-6 py-4">Free</th>
-                                    <th class="px-6 py-4">Pro</th>
-                                    <th class="px-6 py-4">Plus</th>
+                                    <th v-for="plan in plans" :key="`header-${plan.code}`" class="px-6 py-4">{{ plan.name }}</th>
                                 </tr>
                                 </thead>
                                 <tbody class="divide-y divide-[#E5E7EB]">
-                                <tr v-for="row in comparisonRows" :key="row.feature">
-                                    <td class="px-6 py-4 font-bold text-[#111827]">{{ row.feature }}</td>
-                                    <td class="px-6 py-4" :class="comparisonValueClass(row.free)">{{ row.free }}</td>
-                                    <td class="px-6 py-4" :class="comparisonValueClass(row.pro)">{{ row.pro }}</td>
-                                    <td class="px-6 py-4" :class="comparisonValueClass(row.plus)">{{ row.plus }}</td>
+                                <tr v-for="row in comparisonRows" :key="row.key">
+                                    <td class="px-6 py-4 font-bold text-[#111827]">{{ row.label }}</td>
+                                    <td
+                                        v-for="plan in plans"
+                                        :key="`${row.key}-${plan.code}`"
+                                        class="px-6 py-4"
+                                        :class="comparisonValueClass(comparisonValue(plan, row.key))"
+                                    >
+                                        {{ comparisonValue(plan, row.key) }}
+                                    </td>
                                 </tr>
                                 </tbody>
                             </table>
