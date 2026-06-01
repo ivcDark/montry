@@ -28,9 +28,11 @@ final class TelegramNotificationSender implements NotificationSenderInterface
         }
 
         Http::asForm()
+            ->timeout(10)
             ->post("https://api.telegram.org/bot{$token}/sendMessage", [
                 'chat_id' => (string) $chatId,
                 'text' => $message->body,
+                'disable_web_page_preview' => true,
             ])
             ->throw();
     }

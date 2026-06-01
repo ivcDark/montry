@@ -11,6 +11,7 @@ use App\Modules\Observability\Infrastructure\Persistence\Models\DeadLetter;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -99,6 +100,47 @@ Artisan::command('billing:activate-scheduled-subscriptions', function (ApplySubs
 
     return self::SUCCESS;
 })->purpose('Activate scheduled billing downgrades and apply new plan limits.');
+
+
+Artisan::command('telegram:set-webhook {--url= : Public HTTPS webhook URL}', function (): int {
+    $token = trim((string) config('services.telegram.bot_token', ''));
+    $url = trim((string) ($this->option('url') ?: config('services.telegram.webhook_url') ?: route('telegram.webhook')));
+    $secret = trim((string) config('services.telegram.webhook_secret', ''));
+
+    if ($token === '') {
+        $this->error('TELEGRAM_BOT_TOKEN is not configured.');
+
+        return self::FAILURE;
+    }
+
+    if (! str_starts_with($url, 'https://')) {
+        $this->error('Telegram webhook URL must start with https://. Pass --url= or set TELEGRAM_WEBHOOK_URL.');
+
+        return self::FAILURE;
+    }
+
+    $payload = [
+        'url' => $url,
+        'allowed_updates' => ['message'],
+    ];
+
+    if ($secret !== '') {
+        $payload['secret_token'] = $secret;
+    }
+
+    $response = Http::timeout(10)
+        ->post("https://api.telegram.org/bot{$token}/setWebhook", $payload);
+
+    if ($response->failed()) {
+        $this->error('Telegram webhook setup failed: ' . $response->body());
+
+        return self::FAILURE;
+    }
+
+    $this->info("Telegram webhook set to {$url}.");
+
+    return self::SUCCESS;
+})->purpose('Register Telegram Bot API webhook for incoming bot updates.');
 
 Artisan::command('observability:export-business-events {--batch= : Maximum business events to export}', function (ClickHouseBusinessEventExporter $exporter): int {
     $batch = $this->option('batch');

@@ -12,4 +12,7 @@ Route::middleware('auth')->group(function (): void {
 
     Route::patch('/settings/telegram', [UserSettingsController::class, 'updateTelegram'])
         ->name('settings.telegram.update');
+
+    Route::post('/settings/telegram/confirm', [UserSettingsController::class, 'confirmTelegram'])
+        ->name('settings.telegram.confirm');
 });

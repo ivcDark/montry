@@ -61,8 +61,12 @@ const shouldShowTelegramConnect = computed(() => (
 ))
 
 const telegramStatusLabel = computed(() => {
-    if (props.settings.telegram.is_connected) {
+    if (props.settings.telegram.is_connected && telegramForm.telegram_notifications_enabled) {
         return 'Подключен'
+    }
+
+    if (props.settings.telegram.is_connected && !telegramForm.telegram_notifications_enabled) {
+        return 'Подключен, выключен'
     }
 
     if (telegramForm.processing) {
@@ -77,7 +81,7 @@ const telegramStatusLabel = computed(() => {
 })
 
 const telegramStatusClass = computed(() => {
-    if (props.settings.telegram.is_connected) {
+    if (props.settings.telegram.is_connected && telegramForm.telegram_notifications_enabled) {
         return 'bg-[#ECFDF3] text-[#16A34A]'
     }
 
@@ -89,23 +93,47 @@ const telegramStatusClass = computed(() => {
 })
 
 const telegramHelperText = computed(() => {
-    if (props.settings.telegram.is_connected) {
-        return 'Аккаунт Telegram подключен. Когда отправка инцидентов будет включена, сообщения будут приходить в этот чат.'
+    if (props.settings.telegram.is_connected && telegramForm.telegram_notifications_enabled) {
+        return 'Аккаунт Telegram подключен. Уведомления об инцидентах будут приходить в этот чат.'
     }
 
-    if (shouldShowTelegramConnect.value && props.settings.telegram.setup_url) {
-        return 'Нажмите кнопку подтверждения. Telegram откроет бота Montry и передаст код подключения автоматически.'
+    if (props.settings.telegram.is_connected && !telegramForm.telegram_notifications_enabled) {
+        return 'Telegram уже подключен к аккаунту. Нажмите кнопку сохранения, чтобы отключить отправку уведомлений.'
+    }
+
+    if (shouldShowTelegramConnect.value && props.settings.telegram.bot_username) {
+        return 'Нажмите «Подтвердить». Montri сохранит настройку и откроет нашего Telegram-бота с командой /start и кодом подключения.'
     }
 
     if (shouldShowTelegramConnect.value && props.settings.telegram.connection_token) {
-        return 'Бот Montry еще не настроен для прямого открытия. Отправьте команду подключения боту вручную.'
+        return 'Telegram-бот не настроен для прямого открытия. Отправьте команду подключения боту вручную.'
+    }
+
+    if (shouldShowTelegramConnect.value) {
+        return 'Telegram-бот не настроен. Укажите TELEGRAM_BOT_USERNAME в .env, чтобы открыть бота из настроек.'
     }
 
     if (telegramForm.processing) {
         return 'Сохраняем настройку и готовим подключение к Telegram.'
     }
 
-    return 'Включите Telegram-уведомления, после сохранения здесь появится кнопка подключения.'
+    return 'Включите Telegram-уведомления и нажмите «Подтвердить», чтобы перейти в бота Montri.'
+})
+
+const telegramSubmitLabel = computed(() => {
+    if (telegramForm.processing) {
+        return 'Сохраняем'
+    }
+
+    if (shouldShowTelegramConnect.value) {
+        return 'Подтвердить'
+    }
+
+    if (!telegramForm.telegram_notifications_enabled && props.settings.telegram.notifications_enabled) {
+        return 'Отключить уведомления'
+    }
+
+    return 'Сохранить настройки'
 })
 
 function submitProfile(): void {
@@ -114,13 +142,21 @@ function submitProfile(): void {
     })
 }
 
-function updateTelegramSettings(): void {
-    telegramForm.patch('/settings/telegram', {
+function submitTelegramSettings(): void {
+    const options = {
         preserveScroll: true,
         onError: () => {
             telegramForm.telegram_notifications_enabled = props.settings.telegram.notifications_enabled
         },
-    })
+    }
+
+    if (shouldShowTelegramConnect.value) {
+        telegramForm.post('/settings/telegram/confirm', options)
+
+        return
+    }
+
+    telegramForm.patch('/settings/telegram', options)
 }
 
 async function copyConnectionCommand(): Promise<void> {
@@ -151,6 +187,13 @@ async function copyConnectionCommand(): Promise<void> {
                 class="rounded-2xl border border-[#D1FADF] bg-[#ECFDF3] px-5 py-4 text-sm font-bold text-[#15803D]"
             >
                 {{ page.props.flash.success }}
+            </div>
+
+            <div
+                v-if="page.props.flash?.error"
+                class="rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-5 py-4 text-sm font-bold text-[#B91C1C]"
+            >
+                {{ page.props.flash.error }}
             </div>
 
             <section class="rounded-2xl border border-[#E5E7EB] bg-white p-6">
@@ -199,23 +242,22 @@ async function copyConnectionCommand(): Promise<void> {
                         </div>
                         <h2 class="mt-2 text-2xl font-extrabold text-[#111827]">Уведомления в Telegram</h2>
                         <p class="mt-2 max-w-2xl text-sm leading-6 text-[#667085]">
-                            Подключите Telegram к Montry, чтобы позже получать уведомления об инцидентах в личный чат.
+                            Подключите Telegram к Montri, чтобы получать уведомления об открытии и восстановлении инцидентов в личный чат.
                         </p>
                     </div>
                 </div>
 
-                <div class="mt-6 grid gap-5">
+                <form class="mt-6 grid gap-5" @submit.prevent="submitTelegramSettings">
                     <label class="flex cursor-pointer items-center justify-between gap-4 rounded-2xl bg-[#F8FAFC] p-4">
                         <span>
                             <span class="block text-sm font-extrabold text-[#111827]">Получать уведомления в Telegram</span>
-                            <span class="mt-1 block text-sm leading-6 text-[#667085]">Переключатель сохраняется автоматически. После включения появится кнопка подключения.</span>
+                            <span class="mt-1 block text-sm leading-6 text-[#667085]">Включите переключатель и нажмите «Подтвердить», чтобы привязать Telegram-чат через нашего бота.</span>
                         </span>
                         <input
                             v-model="telegramForm.telegram_notifications_enabled"
                             type="checkbox"
                             class="sr-only"
                             :disabled="telegramForm.processing"
-                            @change="updateTelegramSettings"
                         >
                         <span
                             class="relative h-7 w-12 shrink-0 rounded-full transition"
@@ -228,6 +270,10 @@ async function copyConnectionCommand(): Promise<void> {
                         </span>
                     </label>
 
+                    <span v-if="telegramForm.errors.telegram_notifications_enabled" class="text-sm font-semibold text-[#EF4444]">
+                        {{ telegramForm.errors.telegram_notifications_enabled }}
+                    </span>
+
                     <div
                         v-if="telegramForm.processing || shouldShowTelegramConnect || settings.telegram.is_connected"
                         class="grid gap-4 rounded-2xl border border-[#E5E7EB] p-4"
@@ -236,20 +282,13 @@ async function copyConnectionCommand(): Promise<void> {
                             <div>
                                 <p class="text-sm font-extrabold text-[#111827]">Подключение бота</p>
                                 <p class="mt-1 max-w-xl text-sm leading-6 text-[#667085]">{{ telegramHelperText }}</p>
+                                <p v-if="settings.telegram.username" class="mt-2 text-xs font-bold text-[#64748B]">
+                                    Подключенный Telegram: {{ settings.telegram.username }}
+                                </p>
                             </div>
-
-                            <a
-                                v-if="shouldShowTelegramConnect && settings.telegram.setup_url"
-                                :href="settings.telegram.setup_url"
-                                target="_blank"
-                                rel="noreferrer"
-                                class="inline-flex h-11 items-center justify-center rounded-xl bg-[#111827] px-5 text-sm font-extrabold text-white transition hover:bg-[#0B1220]"
-                            >
-                                Подтвердить подключение
-                            </a>
                         </div>
 
-                        <div v-if="shouldShowTelegramConnect && connectionCommand && !settings.telegram.setup_url" class="grid gap-2">
+                        <div v-if="shouldShowTelegramConnect && connectionCommand && !settings.telegram.bot_username" class="grid gap-2">
                             <span class="text-sm font-bold text-[#344054]">Команда для бота</span>
                             <div class="flex flex-col gap-3 sm:flex-row">
                                 <code class="min-h-11 flex-1 rounded-xl bg-[#F1F5F9] px-4 py-3 text-sm font-bold text-[#111827] break-all">
@@ -266,7 +305,16 @@ async function copyConnectionCommand(): Promise<void> {
                         </div>
                     </div>
 
-                </div>
+                    <div class="flex justify-end">
+                        <button
+                            type="submit"
+                            class="inline-flex h-11 items-center justify-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-extrabold text-white transition hover:bg-[#0757D8] disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="telegramForm.processing"
+                        >
+                            {{ telegramSubmitLabel }}
+                        </button>
+                    </div>
+                </form>
             </section>
         </section>
     </DashboardLayout>

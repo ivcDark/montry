@@ -25,7 +25,11 @@ export default defineConfig({
         origin: 'http://localhost:5173',
 
         cors: {
-            origin: 'http://localhost:8080',
+            origin: [
+                'http://localhost:8080',
+                'http://127.0.0.1:8080',
+                /^https:\/\/[a-z0-9-]+\.tunnelmole\.net$/,
+            ],
         },
 
         hmr: {

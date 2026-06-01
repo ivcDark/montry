@@ -31,7 +31,17 @@ final class NotificationRecipientResolver
             ->whereIn('type', ['email', 'telegram']);
 
         if ($hasEventRules) {
-            $query->whereIn('id', $ruleChannelIds);
+            $query->where(function ($query) use ($ruleChannelIds, $eventType): void {
+                $query
+                    ->whereIn('id', $ruleChannelIds)
+                    ->orWhereJsonContains('settings->event_types', $eventType);
+            });
+        } else {
+            $query->where(function ($query) use ($eventType): void {
+                $query
+                    ->whereNull('settings->event_types')
+                    ->orWhereJsonContains('settings->event_types', $eventType);
+            });
         }
 
         return $query->get();

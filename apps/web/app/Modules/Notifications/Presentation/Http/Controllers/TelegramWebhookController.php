@@ -4,6 +4,7 @@ namespace App\Modules\Notifications\Presentation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
+use App\Modules\Notifications\Application\Services\SyncTelegramNotificationChannels;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -13,7 +14,7 @@ use Illuminate\Support\Str;
 
 final class TelegramWebhookController extends Controller
 {
-    public function __invoke(Request $request): Response
+    public function __invoke(Request $request, SyncTelegramNotificationChannels $syncTelegramChannels): Response
     {
         $secret = (string) config('services.telegram.webhook_secret', '');
 
@@ -32,7 +33,7 @@ final class TelegramWebhookController extends Controller
         $token = $this->startToken($text);
 
         if ($token === null) {
-            $this->sendMessage((string) $chatId, 'Откройте подключение Telegram из настроек Montry.');
+            $this->sendMessage((string) $chatId, 'Откройте подключение Telegram из настроек Montri.');
 
             return response(status: 200);
         }
@@ -54,7 +55,9 @@ final class TelegramWebhookController extends Controller
             'telegram_connected_at' => now(),
         ])->save();
 
-        $this->sendMessage((string) $chatId, 'Telegram подключен к Montry. Уведомления появятся после включения отправки инцидентов.');
+        $syncTelegramChannels->handle($user->refresh());
+
+        $this->sendMessage((string) $chatId, 'Telegram подключен к Montri. Теперь вы будете получать уведомления об инцидентах.');
 
         return response(status: 200);
     }
