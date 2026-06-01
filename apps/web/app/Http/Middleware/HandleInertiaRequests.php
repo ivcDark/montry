@@ -2,6 +2,10 @@
 
 namespace App\Http\Middleware;
 
+use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
+use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
+use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
+use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -52,6 +56,74 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
             ],
+
+            'billing' => fn () => $this->billingSummary($request),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function billingSummary(Request $request): ?array
+    {
+        $user = $request->user();
+
+        if ($user === null) {
+            return null;
+        }
+
+        $organization = $user->organizations()->first(['organizations.id']);
+
+        if ($organization === null) {
+            return null;
+        }
+
+        $subscription = Subscription::query()
+            ->with('plan.limits')
+            ->where('organization_id', $organization->id)
+            ->where('status', 'active')
+            ->where('starts_at', '<=', now())
+            ->where(function ($query): void {
+                $query->whereNull('ends_at')->orWhere('ends_at', '>', now());
+            })
+            ->latest('starts_at')
+            ->first();
+
+        $plan = $subscription?->plan ?? Plan::query()
+            ->with('limits')
+            ->where('code', 'free')
+            ->first();
+
+        return [
+            'plan' => $plan === null ? null : [
+                'name' => $plan->name,
+            ],
+            'monitors' => [
+                'current' => Monitor::query()
+                    ->where('organization_id', $organization->id)
+                    ->count(),
+                'limit' => $this->planLimit($plan, 'max_monitors'),
+            ],
+            'sites' => [
+                'current' => MonitoredResource::query()
+                    ->where('organization_id', $organization->id)
+                    ->where('type', 'website')
+                    ->count(),
+                'limit' => $this->planLimit($plan, 'max_sites'),
+            ],
+        ];
+    }
+
+    private function planLimit(?Plan $plan, string $key): ?int
+    {
+        $value = $plan?->limits->firstWhere('key', $key)?->value;
+
+        if (! is_array($value) || ! array_key_exists('limit', $value)) {
+            return null;
+        }
+
+        $limit = $value['limit'];
+
+        return is_numeric($limit) ? (int) $limit : null;
     }
 }

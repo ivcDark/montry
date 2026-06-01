@@ -41,6 +41,10 @@ final class NotificationsModuleServiceProvider extends ServiceProvider
         Route::middleware('web')
             ->group(__DIR__ . '/../../Presentation/Routes/web.php');
 
+        Route::middleware('api')
+            ->prefix('api')
+            ->group(__DIR__ . '/../../Presentation/Routes/api.php');
+
         Event::listen(IncidentOpened::class, SendIncidentOpenedNotification::class);
         Event::listen(IncidentResolved::class, SendIncidentResolvedNotification::class);
         Event::listen(SslExpiring::class, SendSslExpiringNotification::class);

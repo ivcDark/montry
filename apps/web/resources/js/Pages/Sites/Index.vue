@@ -156,22 +156,6 @@ function rowClass(status: string): string {
     return 'bg-white'
 }
 
-function typeLabel(type: string): string {
-    if (type === 'http') return 'HTTP'
-    if (type === 'ssl') return 'SSL'
-    if (type === 'domain') return 'Domain'
-
-    return type.toUpperCase()
-}
-
-function typeClass(type: string): string {
-    if (type === 'http') return 'bg-[#EAF2FF] text-[#0F6BFF]'
-    if (type === 'ssl') return 'bg-[#ECFDF3] text-[#16A34A]'
-    if (type === 'domain') return 'bg-[#FFF7E8] text-[#F59E0B]'
-
-    return 'bg-[#F1F5F9] text-[#64748B]'
-}
-
 function formatDate(value: string | null): string {
     if (!value) return 'еще не было'
 
@@ -185,48 +169,36 @@ function formatDate(value: string | null): string {
 
 function monitorStatus(monitor: Monitor): string {
     if (!monitor.is_enabled || monitor.status === 'paused') return 'paused'
+    if (monitor.latest_result?.status === 'success') return 'ok'
+    if (monitor.latest_result?.status === 'failure') return 'down'
+    if (monitor.latest_result?.status === 'warning') return 'warning'
     if (monitor.status === 'success' || monitor.status === 'up') return 'ok'
     if (monitor.status === 'failure' || monitor.status === 'down') return 'down'
-    if (monitor.status === 'degraded' || monitor.status === 'warning' || monitor.latest_result?.status === 'warning') return 'warning'
+    if (monitor.status === 'degraded' || monitor.status === 'warning') return 'warning'
 
     return 'unknown'
 }
 
-function monitorByType(site: Site, type: string): Monitor | null {
-    return site.monitors.find((monitor) => monitor.type === type) ?? null
+function successfulMonitorsCount(site: Site): number {
+    return site.monitors.filter((monitor) => monitorStatus(monitor) === 'ok').length
 }
 
-function monitorSummary(site: Site, type: string): string {
-    const monitor = monitorByType(site, type)
+function monitorsSummaryClass(site: Site): string {
+    if (site.monitors_count === 0) return 'text-[#64748B]'
 
-    if (!monitor) return 'Не настроен'
-    if (!monitor.is_enabled) return 'На паузе'
-    if (monitor.latest_result?.error_message) return monitor.latest_result.error_message
-
-    if (type === 'http') {
-        const statusCode = monitor.latest_result?.status_code ? `${monitor.latest_result.status_code}` : statusLabel(monitorStatus(monitor))
-        const responseTime = monitor.latest_result?.response_time_ms ? ` · ${monitor.latest_result.response_time_ms} мс` : ''
-
-        return `${statusCode}${responseTime}`
-    }
-
-    const days = monitor.latest_result?.normalized_result.days_until_expiration
-
-    if (typeof days === 'number') {
-        return `${days} ${dayWord(days)}`
-    }
-
-    return statusLabel(monitorStatus(monitor))
+    return successfulMonitorsCount(site) === site.monitors_count
+        ? 'text-[#16A34A]'
+        : 'text-[#EF4444]'
 }
 
-function dayWord(days: number): string {
-    const mod10 = days % 10
-    const mod100 = days % 100
+function monitorsSummaryTitle(site: Site): string {
+    if (site.monitors_count === 0) return 'Мониторинги не настроены'
 
-    if (mod10 === 1 && mod100 !== 11) return 'день'
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'дня'
+    const successful = successfulMonitorsCount(site)
 
-    return 'дней'
+    return successful === site.monitors_count
+        ? 'Все мониторы успешно отработали в последней проверке'
+        : `${successful} из ${site.monitors_count} мониторов успешно отработали в последней проверке`
 }
 
 function isChecking(site: Site): boolean {
@@ -284,7 +256,7 @@ function checkNow(site: Site): void {
         :organization="organization"
         active-item="sites"
         title="Сайты"
-        subtitle="Сайты пользователя и состояние их HTTP, SSL и доменных проверок"
+        subtitle="Сайты пользователя и состояние их мониторингов"
         :usage-current="stats.monitors"
     >
         <template #actions>
@@ -336,7 +308,7 @@ function checkNow(site: Site): void {
                     <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
                         <p class="text-sm font-bold text-[#667085]">Предупреждения</p>
                         <p class="mt-3 text-4xl font-extrabold text-[#F59E0B]">{{ stats.warning }}</p>
-                        <p class="mt-2 text-sm text-[#667085]">SSL или домен требуют внимания</p>
+                        <p class="mt-2 text-sm text-[#667085]">Часть проверок требует внимания</p>
                     </article>
                     <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
                         <p class="text-sm font-bold text-[#667085]">Без мониторингов</p>
@@ -366,21 +338,26 @@ function checkNow(site: Site): void {
                 <div class="flex flex-col gap-4 border-b border-[#E5E7EB] p-5 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                         <h2 class="text-xl font-extrabold text-[#111827]">Список сайтов</h2>
-                        <p class="mt-1 text-sm text-[#667085]">В строке видны общий статус сайта и ключевые проверки: HTTP, SSL и домен.</p>
+                        <p class="mt-1 text-sm text-[#667085]">В строке видны общий статус сайта и сколько мониторингов успешно отработали в последней проверке.</p>
                     </div>
                     <p class="text-sm font-bold text-[#667085]">Показано: {{ filteredSites.length }}</p>
                 </div>
 
                 <div v-if="filteredSites.length" class="hidden overflow-x-auto lg:block">
-                    <table class="min-w-[1080px] w-full border-separate border-spacing-0 text-left text-sm">
+                    <table class="min-w-[1130px] w-full table-fixed border-separate border-spacing-0 text-left text-sm">
+                        <colgroup>
+                            <col class="w-[240px]">
+                            <col class="w-[150px]">
+                            <col class="w-[180px]">
+                            <col class="w-[140px]">
+                            <col class="w-[150px]">
+                            <col class="w-[270px]">
+                        </colgroup>
                         <thead class="bg-[#F8FAFC] text-xs font-extrabold text-[#667085]">
                         <tr>
                             <th class="px-5 py-4">Сайт / домен</th>
                             <th class="px-5 py-4">Проект</th>
                             <th class="px-5 py-4">Статус</th>
-                            <th class="px-5 py-4">HTTP</th>
-                            <th class="px-5 py-4">SSL</th>
-                            <th class="px-5 py-4">Домен</th>
                             <th class="px-5 py-4">Мониторы</th>
                             <th class="px-5 py-4">Последняя проверка</th>
                             <th class="px-5 py-4 text-right">Действия</th>
@@ -407,26 +384,21 @@ function checkNow(site: Site): void {
                                 </span>
                                 <p class="mt-2 text-xs font-semibold text-[#667085]">{{ site.problem_label }}</p>
                             </td>
-                            <td class="border-t border-[#E5E7EB] px-5 py-4">
-                                <span class="rounded-full px-3 py-1 text-xs font-extrabold" :class="typeClass('http')">{{ monitorSummary(site, 'http') }}</span>
+                            <td
+                                class="whitespace-nowrap border-t border-[#E5E7EB] px-5 py-4 text-base font-extrabold"
+                                :class="monitorsSummaryClass(site)"
+                                :title="monitorsSummaryTitle(site)"
+                            >
+                                {{ successfulMonitorsCount(site) }} / {{ site.monitors_count }}
                             </td>
-                            <td class="border-t border-[#E5E7EB] px-5 py-4">
-                                <span class="rounded-full px-3 py-1 text-xs font-extrabold" :class="typeClass('ssl')">{{ monitorSummary(site, 'ssl') }}</span>
-                            </td>
-                            <td class="border-t border-[#E5E7EB] px-5 py-4">
-                                <span class="rounded-full px-3 py-1 text-xs font-extrabold" :class="typeClass('domain')">{{ monitorSummary(site, 'domain') }}</span>
-                            </td>
-                            <td class="border-t border-[#E5E7EB] px-5 py-4 font-extrabold text-[#111827]">
-                                {{ site.enabled_monitors_count }} / {{ site.monitors_count }}
-                            </td>
-                            <td class="border-t border-[#E5E7EB] px-5 py-4 text-[#667085]">
+                            <td class="whitespace-nowrap border-t border-[#E5E7EB] px-5 py-4 text-[#667085]">
                                 {{ formatDate(site.last_checked_at) }}
                             </td>
                             <td class="border-t border-[#E5E7EB] px-5 py-4">
                                 <div class="flex justify-end gap-2">
                                     <button
                                         type="button"
-                                        class="inline-flex h-9 min-w-[104px] items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] px-3 text-xs font-extrabold text-[#111827] transition enabled:hover:border-[#0F6BFF] enabled:hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-60"
+                                        class="inline-flex h-9 w-[128px] shrink-0 items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] px-3 text-xs font-extrabold text-[#111827] transition enabled:hover:border-[#0F6BFF] enabled:hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-60"
                                         :disabled="site.enabled_monitors_count === 0 || isChecking(site)"
                                         @click="checkNow(site)"
                                     >
@@ -439,7 +411,7 @@ function checkNow(site: Site): void {
                                     </button>
                                     <Link
                                         :href="`/sites/${site.id}`"
-                                        class="inline-flex h-9 items-center rounded-xl border border-[#E5E7EB] px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF]"
+                                        class="inline-flex h-9 w-[84px] shrink-0 items-center justify-center rounded-xl border border-[#E5E7EB] px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF]"
                                     >
                                         Открыть
                                     </Link>
@@ -469,22 +441,23 @@ function checkNow(site: Site): void {
 
                         <p class="mt-3 text-sm font-semibold text-[#667085]">{{ site.problem_label }}</p>
 
-                        <div class="mt-4 grid gap-2 sm:grid-cols-3">
-                            <span
-                                v-for="type in ['http', 'ssl', 'domain']"
-                                :key="type"
-                                class="rounded-xl bg-[#F8FAFC] px-3 py-2 text-xs font-extrabold text-[#64748B]"
+                        <div class="mt-4 grid gap-2 text-xs font-semibold text-[#667085]">
+                            <p>Последняя проверка: {{ formatDate(site.last_checked_at) }}</p>
+                            <p
+                                class="text-sm font-extrabold"
+                                :class="monitorsSummaryClass(site)"
+                                :title="monitorsSummaryTitle(site)"
                             >
-                                {{ typeLabel(type) }}: {{ monitorSummary(site, type) }}
-                            </span>
+                                Мониторы: {{ successfulMonitorsCount(site) }} / {{ site.monitors_count }} успешно
+                            </p>
                         </div>
 
                         <div class="mt-4 flex items-center justify-between gap-3">
-                            <p class="text-xs font-semibold text-[#667085]">{{ site.enabled_monitors_count }} / {{ site.monitors_count }} мониторов</p>
+                            <p class="text-xs font-semibold text-[#667085]">{{ site.project?.name ?? 'Без проекта' }}</p>
                             <div class="flex items-center gap-3">
                                 <button
                                     type="button"
-                                    class="inline-flex h-9 min-w-[104px] items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition enabled:hover:border-[#0F6BFF] enabled:hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-60"
+                                    class="inline-flex h-9 w-[128px] shrink-0 items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition enabled:hover:border-[#0F6BFF] enabled:hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-60"
                                     :disabled="site.enabled_monitors_count === 0 || isChecking(site)"
                                     @click="checkNow(site)"
                                 >

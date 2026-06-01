@@ -20,6 +20,11 @@ class User extends Authenticatable
         'yandex_id',
         'is_admin',
         'is_blocked',
+        'telegram_notifications_enabled',
+        'telegram_connection_token',
+        'telegram_chat_id',
+        'telegram_username',
+        'telegram_connected_at',
     ];
 
     protected $hidden = [
@@ -39,6 +44,8 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_admin' => 'boolean',
             'is_blocked' => 'boolean',
+            'telegram_notifications_enabled' => 'boolean',
+            'telegram_connected_at' => 'datetime',
         ];
     }
 

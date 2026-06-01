@@ -13,10 +13,24 @@ type User = {
     email: string
 }
 
+type BillingUsage = {
+    current: number
+    limit: number | null
+}
+
+type BillingSummary = {
+    plan: {
+        name: string
+    } | null
+    monitors: BillingUsage
+    sites: BillingUsage
+}
+
 type PageProps = {
     auth: {
         user: User | null
     }
+    billing?: BillingSummary | null
 }
 
 type NavigationItem = {
@@ -46,12 +60,34 @@ const navigation: NavigationItem[] = [
     { key: 'incidents', label: 'Инциденты', href: '/incidents', icon: '!' },
     { key: 'notifications', label: 'Уведомления', icon: '✉' },
     { key: 'billing', label: 'Тариф', href: '/billing', icon: '₽' },
-    { key: 'settings', label: 'Настройки', icon: '⚙' },
+    { key: 'settings', label: 'Настройки', href: '/settings', icon: '⚙' },
 ]
 
 const page = usePage<PageProps>()
 const user = page.props.auth.user
-const usagePercent = computed(() => Math.min((props.usageCurrent / props.usageLimit) * 100, 100))
+const billingSummary = computed(() => page.props.billing ?? null)
+
+const planName = computed(() => billingSummary.value?.plan?.name ?? 'Free')
+const monitorsCurrent = computed(() => billingSummary.value?.monitors.current ?? props.usageCurrent)
+const monitorsLimit = computed(() => billingSummary.value ? billingSummary.value.monitors.limit : props.usageLimit)
+const sitesCurrent = computed(() => billingSummary.value?.sites.current ?? 0)
+const sitesLimit = computed(() => billingSummary.value ? billingSummary.value.sites.limit : null)
+
+function usagePercent(current: number, limit: number | null): number {
+    if (limit === null) {
+        return 100
+    }
+
+    if (limit <= 0) {
+        return 0
+    }
+
+    return Math.min((current / limit) * 100, 100)
+}
+
+function limitLabel(limit: number | null): string {
+    return limit === null ? '∞' : String(limit)
+}
 </script>
 
 <template>
@@ -83,14 +119,29 @@ const usagePercent = computed(() => Math.min((props.usageCurrent / props.usageLi
                 </nav>
 
                 <div class="mt-10 rounded-3xl bg-[#17233A] p-4">
-                    <p class="font-extrabold text-white">Тариф</p>
-                    <p class="mt-1 text-sm text-[#94A3B8]">{{ usageCurrent }} из {{ usageLimit }} мониторов</p>
-                    <div class="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-                        <div class="h-full rounded-full bg-[#0F6BFF]" :style="{ width: `${usagePercent}%` }" />
+                    <p class="font-extrabold text-white">Тариф {{ planName }}</p>
+
+                    <div class="mt-4 space-y-4">
+                        <div>
+                            <div class="flex items-center justify-between gap-3 text-sm">
+                                <span class="font-bold text-[#94A3B8]">Мониторинги</span>
+                                <span class="font-extrabold text-white">{{ monitorsCurrent }} / {{ limitLabel(monitorsLimit) }}</span>
+                            </div>
+                            <div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                                <div class="h-full rounded-full bg-[#0F6BFF]" :style="{ width: `${usagePercent(monitorsCurrent, monitorsLimit)}%` }" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between gap-3 text-sm">
+                                <span class="font-bold text-[#94A3B8]">Сайты</span>
+                                <span class="font-extrabold text-white">{{ sitesCurrent }} / {{ limitLabel(sitesLimit) }}</span>
+                            </div>
+                            <div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                                <div class="h-full rounded-full bg-[#12B3A8]" :style="{ width: `${usagePercent(sitesCurrent, sitesLimit)}%` }" />
+                            </div>
+                        </div>
                     </div>
-                    <a href="/billing" class="mt-4 flex h-10 w-full items-center justify-center rounded-xl bg-white text-sm font-extrabold text-[#111827]">
-                        Управлять тарифом
-                    </a>
                 </div>
             </div>
 
