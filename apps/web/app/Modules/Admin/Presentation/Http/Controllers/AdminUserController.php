@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Presentation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Billing\Application\Services\ApplySubscriptionLimits;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
@@ -218,13 +219,22 @@ final class AdminUserController extends Controller
         return back()->with('success', $user->is_blocked ? 'User blocked.' : 'User unblocked.');
     }
 
-    public function updatePlan(Request $request, User $user, Organization $organization, AuditLogger $audit): RedirectResponse
-    {
+    public function updatePlan(
+        Request $request,
+        User $user,
+        Organization $organization,
+        AuditLogger $audit,
+        ApplySubscriptionLimits $applySubscriptionLimits,
+    ): RedirectResponse {
         abort_unless($user->organizations()->whereKey($organization->id)->exists(), 404);
 
         $validated = $request->validate([
             'plan_id' => ['required', 'integer', 'exists:plans,id'],
         ]);
+
+        $plan = Plan::query()
+            ->with('limits')
+            ->findOrFail($validated['plan_id']);
 
         $previousSubscription = Subscription::query()
             ->where('organization_id', $organization->id)
@@ -234,7 +244,7 @@ final class AdminUserController extends Controller
 
         $newSubscriptionId = null;
 
-        DB::transaction(function () use ($organization, $validated, &$newSubscriptionId): void {
+        DB::transaction(function () use ($organization, $plan, $applySubscriptionLimits, &$newSubscriptionId): void {
             Subscription::query()
                 ->where('organization_id', $organization->id)
                 ->where('status', 'active')
@@ -245,12 +255,14 @@ final class AdminUserController extends Controller
 
             $subscription = Subscription::query()->create([
                 'organization_id' => $organization->id,
-                'plan_id' => $validated['plan_id'],
+                'plan_id' => $plan->id,
                 'status' => 'active',
                 'starts_at' => now(),
             ]);
 
             $newSubscriptionId = $subscription->id;
+
+            $applySubscriptionLimits->handle($organization->id, $plan);
         });
 
         $audit->record(
@@ -268,7 +280,7 @@ final class AdminUserController extends Controller
                 'previous_subscription_id' => $previousSubscription?->id,
                 'previous_plan_id' => $previousSubscription?->plan_id,
                 'new_subscription_id' => $newSubscriptionId,
-                'new_plan_id' => (int) $validated['plan_id'],
+                'new_plan_id' => $plan->id,
             ],
         );
 

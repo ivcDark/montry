@@ -3,6 +3,7 @@
 namespace App\Modules\Identity\Presentation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Identity\Presentation\Http\Requests\UpdateProfileSettingsRequest;
 use App\Modules\Identity\Presentation\Http\Requests\UpdateTelegramSettingsRequest;
@@ -17,10 +18,14 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 final class UserSettingsController extends Controller
 {
-    public function index(Request $request, GetCurrentOrganization $getCurrentOrganization): Response
-    {
+    public function index(
+        Request $request,
+        GetCurrentOrganization $getCurrentOrganization,
+        LimitChecker $limits,
+    ): Response {
         $user = $request->user();
         $organization = $getCurrentOrganization->handle($user);
+        $telegramIsAvailable = $limits->canUseNotificationChannel((int) $organization->id, 'telegram');
 
         return Inertia::render('Settings/Index', [
             'organization' => [
@@ -40,6 +45,7 @@ final class UserSettingsController extends Controller
                     'connection_token' => $user->telegram_connection_token,
                     'bot_username' => $this->telegramBotUsername(),
                     'setup_url' => $this->telegramSetupUrl($user),
+                    'is_available' => $telegramIsAvailable,
                 ],
             ],
         ]);
@@ -59,10 +65,17 @@ final class UserSettingsController extends Controller
     public function updateTelegram(
         UpdateTelegramSettingsRequest $request,
         SyncTelegramNotificationChannels $syncTelegramChannels,
+        GetCurrentOrganization $getCurrentOrganization,
+        LimitChecker $limits,
     ): RedirectResponse {
         $user = $request->user();
+        $notificationsEnabled = $request->boolean('telegram_notifications_enabled');
 
-        $this->saveTelegramSettings($user, $request->boolean('telegram_notifications_enabled'));
+        if ($notificationsEnabled && ! $this->telegramIsAvailable($user, $getCurrentOrganization, $limits)) {
+            return $this->telegramUnavailableRedirect();
+        }
+
+        $this->saveTelegramSettings($user, $notificationsEnabled);
 
         $syncTelegramChannels->handle($user->refresh());
 
@@ -74,9 +87,15 @@ final class UserSettingsController extends Controller
     public function confirmTelegram(
         UpdateTelegramSettingsRequest $request,
         SyncTelegramNotificationChannels $syncTelegramChannels,
+        GetCurrentOrganization $getCurrentOrganization,
+        LimitChecker $limits,
     ): RedirectResponse|SymfonyResponse {
         $user = $request->user();
         $notificationsEnabled = $request->boolean('telegram_notifications_enabled');
+
+        if ($notificationsEnabled && ! $this->telegramIsAvailable($user, $getCurrentOrganization, $limits)) {
+            return $this->telegramUnavailableRedirect();
+        }
 
         $this->saveTelegramSettings($user, $notificationsEnabled);
 
@@ -132,5 +151,22 @@ final class UserSettingsController extends Controller
         } while (User::query()->where('telegram_connection_token', $token)->exists());
 
         return $token;
+    }
+
+    private function telegramIsAvailable(
+        User $user,
+        GetCurrentOrganization $getCurrentOrganization,
+        LimitChecker $limits,
+    ): bool {
+        $organization = $getCurrentOrganization->handle($user);
+
+        return $limits->canUseNotificationChannel((int) $organization->id, 'telegram');
+    }
+
+    private function telegramUnavailableRedirect(): RedirectResponse
+    {
+        return redirect()
+            ->route('settings.index')
+            ->with('error', 'Telegram доступен только на подписке Pro и Plus.');
     }
 }

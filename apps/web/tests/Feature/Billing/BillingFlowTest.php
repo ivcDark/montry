@@ -410,6 +410,69 @@ final class BillingFlowTest extends TestCase
         ]);
     }
 
+    public function test_activating_free_plan_keeps_only_latest_three_sites_with_http_and_ssl_monitors(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $project = $this->createProject($organization);
+        $free = $this->createPlan('free', 0, 10, [
+            'max_sites' => ['limit' => 3],
+            'max_monitors' => ['limit' => 6],
+            'allowed_monitor_types' => ['types' => ['http', 'ssl']],
+        ]);
+        $pro = $this->createPlan('pro', 99000, 20, [
+            'max_sites' => ['limit' => 50],
+            'max_monitors' => ['limit' => 150],
+            'allowed_monitor_types' => ['types' => ['http', 'ssl', 'domain']],
+        ]);
+        Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $pro->id,
+            'status' => 'active',
+            'starts_at' => now()->subMonth(),
+            'ends_at' => now()->subMinute(),
+        ]);
+        Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $free->id,
+            'status' => 'scheduled',
+            'starts_at' => now()->subMinute(),
+        ]);
+
+        $resources = collect(range(1, 5))->map(function (int $number) use ($organization, $project, $user): MonitoredResource {
+            $resource = $this->createResource($organization, $project, $user, "site-{$number}.example.com");
+            $resource->forceFill([
+                'created_at' => now()->subDays(6 - $number),
+                'updated_at' => now()->subDays(6 - $number),
+            ])->save();
+
+            foreach (['http', 'ssl', 'domain'] as $type) {
+                $this->createMonitor($organization, $project, $resource, $type, now()->subDays(6 - $number));
+            }
+
+            return $resource;
+        });
+
+        $this->artisan('billing:activate-scheduled-subscriptions')
+            ->assertSuccessful();
+
+        $oldResources = $resources->take(2);
+        $latestResources = $resources->slice(2);
+
+        foreach ($oldResources as $resource) {
+            $resource->refresh();
+            $this->assertSame('paused', $resource->status);
+            $this->assertFalse($resource->monitors()->where('enabled', true)->exists());
+        }
+
+        foreach ($latestResources as $resource) {
+            $resource->refresh();
+            $enabledTypes = $resource->monitors()->where('enabled', true)->pluck('type')->sort()->values()->all();
+
+            $this->assertSame(['http', 'ssl'], $enabledTypes);
+            $this->assertFalse($resource->monitors()->where('type', 'domain')->firstOrFail()->enabled);
+        }
+    }
+
     public function test_activating_scheduled_paid_plan_starts_grace_period_automatically(): void
     {
         [, $organization] = $this->createOrganizationContext();
@@ -744,17 +807,21 @@ final class BillingFlowTest extends TestCase
         ]);
     }
 
-    private function createResource(Organization $organization, Project $project, User $user): MonitoredResource
-    {
+    private function createResource(
+        Organization $organization,
+        Project $project,
+        User $user,
+        string $host = 'example.com',
+    ): MonitoredResource {
         return MonitoredResource::query()->create([
             'organization_id' => $organization->id,
             'project_id' => $project->id,
             'created_user_id' => $user->id,
             'type' => 'website',
-            'name' => 'example.com',
-            'target' => 'https://example.com',
+            'name' => $host,
+            'target' => "https://{$host}",
             'scheme' => 'https',
-            'host' => 'example.com',
+            'host' => $host,
             'path' => '/',
             'status' => 'unknown',
         ]);

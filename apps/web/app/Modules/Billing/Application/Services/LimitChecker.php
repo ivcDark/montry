@@ -13,8 +13,7 @@ final readonly class LimitChecker
 {
     public function __construct(
         private BusinessEventRecorder $events,
-    ) {
-    }
+    ) {}
 
     /**
      * @throws AuthorizationException
@@ -34,6 +33,32 @@ final readonly class LimitChecker
         if ($monitorCount >= $limit) {
             $this->recordLimitHit($organizationId, 'max_monitors', [
                 'current_count' => $monitorCount,
+                'limit' => $limit,
+            ]);
+
+            throw new AuthorizationException('Monitor limit reached for the current plan.');
+        }
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    public function assertCanEnableMonitor(int $organizationId): void
+    {
+        $limit = $this->limitValue($organizationId, 'max_monitors');
+
+        if ($limit === null) {
+            return;
+        }
+
+        $enabledMonitorCount = Monitor::query()
+            ->where('organization_id', $organizationId)
+            ->where('enabled', true)
+            ->count();
+
+        if ($enabledMonitorCount >= $limit) {
+            $this->recordLimitHit($organizationId, 'max_monitors', [
+                'current_enabled_count' => $enabledMonitorCount,
                 'limit' => $limit,
             ]);
 
@@ -138,11 +163,11 @@ final readonly class LimitChecker
      */
     public function assertCanUseNotificationChannel(int $organizationId, string $channel): void
     {
-        $allowedChannels = $this->listLimit($organizationId, 'notification_channels', 'channels');
-
-        if ($allowedChannels === null || in_array($channel, $allowedChannels, true)) {
+        if ($this->canUseNotificationChannel($organizationId, $channel)) {
             return;
         }
+
+        $allowedChannels = $this->listLimit($organizationId, 'notification_channels', 'channels');
 
         $this->recordLimitHit($organizationId, 'notification_channels', [
             'requested_channel' => $channel,
@@ -150,6 +175,13 @@ final readonly class LimitChecker
         ]);
 
         throw new AuthorizationException('Notification channel is not available for the current plan.');
+    }
+
+    public function canUseNotificationChannel(int $organizationId, string $channel): bool
+    {
+        $allowedChannels = $this->listLimit($organizationId, 'notification_channels', 'channels');
+
+        return $allowedChannels === null || in_array($channel, $allowedChannels, true);
     }
 
     public function minimumCheckIntervalSeconds(int $organizationId): ?int

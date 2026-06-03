@@ -20,6 +20,8 @@ final readonly class ResumeMonitorHandler
     public function handle(ResumeMonitorCommand $command): Monitor
     {
         $monitor = $this->monitors->getById($command->monitorId);
+        $this->limits->assertCanEnableMonitor($monitor->organization_id);
+        $this->limits->assertCanUseMonitorType($monitor->organization_id, $monitor->type);
         $this->limits->assertCanUseInterval($monitor->organization_id, (int) $monitor->interval_seconds);
         $monitor->enabled = true;
 

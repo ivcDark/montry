@@ -21,6 +21,7 @@ type Settings = {
         connection_token: string | null
         bot_username: string | null
         setup_url: string | null
+        is_available: boolean
     }
 }
 
@@ -47,6 +48,8 @@ const telegramForm = useForm({
     telegram_notifications_enabled: props.settings.telegram.notifications_enabled,
 })
 
+const isTelegramAvailable = computed(() => props.settings.telegram.is_available)
+
 const connectionCommand = computed(() => {
     if (!props.settings.telegram.connection_token) {
         return ''
@@ -61,6 +64,10 @@ const shouldShowTelegramConnect = computed(() => (
 ))
 
 const telegramStatusLabel = computed(() => {
+    if (!isTelegramAvailable.value) {
+        return 'Недоступно'
+    }
+
     if (props.settings.telegram.is_connected && telegramForm.telegram_notifications_enabled) {
         return 'Подключен'
     }
@@ -81,6 +88,10 @@ const telegramStatusLabel = computed(() => {
 })
 
 const telegramStatusClass = computed(() => {
+    if (!isTelegramAvailable.value) {
+        return 'bg-[#E5E7EB] text-[#6B7280]'
+    }
+
     if (props.settings.telegram.is_connected && telegramForm.telegram_notifications_enabled) {
         return 'bg-[#ECFDF3] text-[#16A34A]'
     }
@@ -143,6 +154,10 @@ function submitProfile(): void {
 }
 
 function submitTelegramSettings(): void {
+    if (!isTelegramAvailable.value) {
+        return
+    }
+
     const options = {
         preserveScroll: true,
         onError: () => {
@@ -231,90 +246,105 @@ async function copyConnectionCommand(): Promise<void> {
                 </form>
             </section>
 
-            <section class="rounded-2xl border border-[#E5E7EB] bg-white p-6">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                        <div class="flex flex-wrap items-center gap-3">
-                            <p class="text-sm font-extrabold text-[#12B3A8]">Telegram</p>
-                            <span class="rounded-full px-3 py-1 text-xs font-extrabold" :class="telegramStatusClass">
-                                {{ telegramStatusLabel }}
-                            </span>
+            <section
+                class="relative overflow-hidden rounded-2xl border p-6"
+                :class="isTelegramAvailable ? 'border-[#E5E7EB] bg-white' : 'border-[#E5E7EB] bg-[#F3F4F6]'"
+            >
+                <div :class="!isTelegramAvailable ? 'pointer-events-none select-none opacity-35 grayscale' : ''">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <p class="text-sm font-extrabold text-[#12B3A8]">Telegram</p>
+                                <span class="rounded-full px-3 py-1 text-xs font-extrabold" :class="telegramStatusClass">
+                                    {{ telegramStatusLabel }}
+                                </span>
+                            </div>
+                            <h2 class="mt-2 text-2xl font-extrabold text-[#111827]">Уведомления в Telegram</h2>
+                            <p class="mt-2 max-w-2xl text-sm leading-6 text-[#667085]">
+                                Подключите Telegram к Montri, чтобы получать уведомления об открытии и восстановлении инцидентов в личный чат.
+                            </p>
                         </div>
-                        <h2 class="mt-2 text-2xl font-extrabold text-[#111827]">Уведомления в Telegram</h2>
-                        <p class="mt-2 max-w-2xl text-sm leading-6 text-[#667085]">
-                            Подключите Telegram к Montri, чтобы получать уведомления об открытии и восстановлении инцидентов в личный чат.
-                        </p>
                     </div>
+
+                    <form class="mt-6 grid gap-5" @submit.prevent="submitTelegramSettings">
+                        <label class="flex cursor-pointer items-center justify-between gap-4 rounded-2xl bg-[#F8FAFC] p-4">
+                            <span>
+                                <span class="block text-sm font-extrabold text-[#111827]">Получать уведомления в Telegram</span>
+                                <span class="mt-1 block text-sm leading-6 text-[#667085]">Включите переключатель и нажмите «Подтвердить», чтобы привязать Telegram-чат через нашего бота.</span>
+                            </span>
+                            <input
+                                v-model="telegramForm.telegram_notifications_enabled"
+                                type="checkbox"
+                                class="sr-only"
+                                :disabled="telegramForm.processing || !isTelegramAvailable"
+                            >
+                            <span
+                                class="relative h-7 w-12 shrink-0 rounded-full transition"
+                                :class="telegramForm.telegram_notifications_enabled ? 'bg-[#0F6BFF]' : 'bg-[#CBD5E1]'"
+                            >
+                                <span
+                                    class="absolute top-1 h-5 w-5 rounded-full bg-white shadow transition"
+                                    :class="telegramForm.telegram_notifications_enabled ? 'left-6' : 'left-1'"
+                                />
+                            </span>
+                        </label>
+
+                        <span v-if="telegramForm.errors.telegram_notifications_enabled" class="text-sm font-semibold text-[#EF4444]">
+                            {{ telegramForm.errors.telegram_notifications_enabled }}
+                        </span>
+
+                        <div
+                            v-if="telegramForm.processing || shouldShowTelegramConnect || settings.telegram.is_connected"
+                            class="grid gap-4 rounded-2xl border border-[#E5E7EB] p-4"
+                        >
+                            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <p class="text-sm font-extrabold text-[#111827]">Подключение бота</p>
+                                    <p class="mt-1 max-w-xl text-sm leading-6 text-[#667085]">{{ telegramHelperText }}</p>
+                                    <p v-if="settings.telegram.username" class="mt-2 text-xs font-bold text-[#64748B]">
+                                        Подключенный Telegram: {{ settings.telegram.username }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div v-if="shouldShowTelegramConnect && connectionCommand && !settings.telegram.bot_username" class="grid gap-2">
+                                <span class="text-sm font-bold text-[#344054]">Команда для бота</span>
+                                <div class="flex flex-col gap-3 sm:flex-row">
+                                    <code class="min-h-11 flex-1 rounded-xl bg-[#F1F5F9] px-4 py-3 text-sm font-bold text-[#111827] break-all">
+                                        {{ connectionCommand }}
+                                    </code>
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-11 items-center justify-center rounded-xl border border-[#D0D5DD] px-4 text-sm font-extrabold text-[#344054] transition hover:border-[#98A2B3]"
+                                        @click="copyConnectionCommand"
+                                    >
+                                        {{ copied ? 'Скопировано' : 'Скопировать' }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end">
+                            <button
+                                type="submit"
+                                class="inline-flex h-11 items-center justify-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-extrabold text-white transition hover:bg-[#0757D8] disabled:cursor-not-allowed disabled:opacity-60"
+                                :disabled="telegramForm.processing || !isTelegramAvailable"
+                            >
+                                {{ telegramSubmitLabel }}
+                            </button>
+                        </div>
+                    </form>
                 </div>
 
-                <form class="mt-6 grid gap-5" @submit.prevent="submitTelegramSettings">
-                    <label class="flex cursor-pointer items-center justify-between gap-4 rounded-2xl bg-[#F8FAFC] p-4">
-                        <span>
-                            <span class="block text-sm font-extrabold text-[#111827]">Получать уведомления в Telegram</span>
-                            <span class="mt-1 block text-sm leading-6 text-[#667085]">Включите переключатель и нажмите «Подтвердить», чтобы привязать Telegram-чат через нашего бота.</span>
-                        </span>
-                        <input
-                            v-model="telegramForm.telegram_notifications_enabled"
-                            type="checkbox"
-                            class="sr-only"
-                            :disabled="telegramForm.processing"
-                        >
-                        <span
-                            class="relative h-7 w-12 shrink-0 rounded-full transition"
-                            :class="telegramForm.telegram_notifications_enabled ? 'bg-[#0F6BFF]' : 'bg-[#CBD5E1]'"
-                        >
-                            <span
-                                class="absolute top-1 h-5 w-5 rounded-full bg-white shadow transition"
-                                :class="telegramForm.telegram_notifications_enabled ? 'left-6' : 'left-1'"
-                            />
-                        </span>
-                    </label>
-
-                    <span v-if="telegramForm.errors.telegram_notifications_enabled" class="text-sm font-semibold text-[#EF4444]">
-                        {{ telegramForm.errors.telegram_notifications_enabled }}
-                    </span>
-
-                    <div
-                        v-if="telegramForm.processing || shouldShowTelegramConnect || settings.telegram.is_connected"
-                        class="grid gap-4 rounded-2xl border border-[#E5E7EB] p-4"
-                    >
-                        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div>
-                                <p class="text-sm font-extrabold text-[#111827]">Подключение бота</p>
-                                <p class="mt-1 max-w-xl text-sm leading-6 text-[#667085]">{{ telegramHelperText }}</p>
-                                <p v-if="settings.telegram.username" class="mt-2 text-xs font-bold text-[#64748B]">
-                                    Подключенный Telegram: {{ settings.telegram.username }}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div v-if="shouldShowTelegramConnect && connectionCommand && !settings.telegram.bot_username" class="grid gap-2">
-                            <span class="text-sm font-bold text-[#344054]">Команда для бота</span>
-                            <div class="flex flex-col gap-3 sm:flex-row">
-                                <code class="min-h-11 flex-1 rounded-xl bg-[#F1F5F9] px-4 py-3 text-sm font-bold text-[#111827] break-all">
-                                    {{ connectionCommand }}
-                                </code>
-                                <button
-                                    type="button"
-                                    class="inline-flex h-11 items-center justify-center rounded-xl border border-[#D0D5DD] px-4 text-sm font-extrabold text-[#344054] transition hover:border-[#98A2B3]"
-                                    @click="copyConnectionCommand"
-                                >
-                                    {{ copied ? 'Скопировано' : 'Скопировать' }}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex justify-end">
-                        <button
-                            type="submit"
-                            class="inline-flex h-11 items-center justify-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-extrabold text-white transition hover:bg-[#0757D8] disabled:cursor-not-allowed disabled:opacity-60"
-                            :disabled="telegramForm.processing"
-                        >
-                            {{ telegramSubmitLabel }}
-                        </button>
-                    </div>
-                </form>
+                <div
+                    v-if="!isTelegramAvailable"
+                    class="absolute inset-0 flex items-center justify-center px-6 text-center"
+                    aria-hidden="true"
+                >
+                    <p class="rounded-xl bg-white/85 px-5 py-3 text-sm font-extrabold text-[#4B5563] shadow-sm ring-1 ring-[#E5E7EB]">
+                        Доступно на подписке Pro и Plus
+                    </p>
+                </div>
             </section>
         </section>
     </DashboardLayout>

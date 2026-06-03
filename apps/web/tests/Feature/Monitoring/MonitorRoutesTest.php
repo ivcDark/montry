@@ -480,7 +480,8 @@ final class MonitorRoutesTest extends TestCase
                     'max_response_time_ms' => 5000,
                 ],
             ])
-            ->assertForbidden();
+            ->assertRedirect("/sites/{$resource->id}")
+            ->assertSessionHas('error', 'Лимит по мониторингам исчерпан. Повысьте тариф для добавления мониторинга.');
 
         $this->assertDatabaseMissing('monitors', [
             'organization_id' => $organization->id,
@@ -546,6 +547,83 @@ final class MonitorRoutesTest extends TestCase
             'organization_id' => $organization->id,
             'monitored_resource_id' => $resource->id,
             'type' => 'domain',
+        ]);
+    }
+
+    public function test_monitor_resume_redirects_with_flash_when_monitor_limit_is_reached(): void
+    {
+        [$user, $organization, $project] = $this->createOrganizationContext();
+        $plan = Plan::query()->create([
+            'code' => 'free',
+            'name' => 'Free',
+            'price_cents' => 0,
+            'currency' => 'RUB',
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+
+        $plan->limits()->create([
+            'key' => 'max_monitors',
+            'value' => ['limit' => 1],
+        ]);
+
+        $plan->subscriptions()->create([
+            'organization_id' => $organization->id,
+            'status' => 'active',
+            'starts_at' => now()->subDay(),
+        ]);
+
+        $resource = MonitoredResource::query()->create([
+            'organization_id' => $organization->id,
+            'project_id' => $project->id,
+            'created_user_id' => $user->id,
+            'type' => 'website',
+            'name' => 'Example',
+            'target' => 'https://example.com',
+            'scheme' => 'https',
+            'host' => 'example.com',
+            'path' => '/',
+            'status' => 'unknown',
+        ]);
+
+        Monitor::query()->create([
+            'organization_id' => $organization->id,
+            'project_id' => $project->id,
+            'monitored_resource_id' => $resource->id,
+            'type' => 'http',
+            'name' => 'HTTP check',
+            'enabled' => true,
+            'status' => 'ok',
+            'interval_seconds' => 300,
+            'timeout_ms' => 10000,
+            'settings' => ['url' => 'https://example.com'],
+            'expected' => ['status_codes' => [200]],
+        ]);
+
+        $pausedMonitor = Monitor::query()->create([
+            'organization_id' => $organization->id,
+            'project_id' => $project->id,
+            'monitored_resource_id' => $resource->id,
+            'type' => 'ssl',
+            'name' => 'SSL check',
+            'enabled' => false,
+            'status' => 'paused',
+            'interval_seconds' => 300,
+            'timeout_ms' => 10000,
+            'settings' => ['domain' => 'example.com'],
+            'expected' => [],
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->patch("/sites/{$resource->id}/monitors/{$pausedMonitor->id}/toggle")
+            ->assertRedirect("/sites/{$resource->id}")
+            ->assertSessionHas('error', 'Лимит по мониторингам исчерпан. Повысьте тариф для добавления мониторинга.');
+
+        $this->assertDatabaseHas('monitors', [
+            'id' => $pausedMonitor->id,
+            'enabled' => false,
+            'status' => 'paused',
         ]);
     }
 

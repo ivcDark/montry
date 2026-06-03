@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Notifications;
 
+use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
+use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Incidents\Domain\Events\IncidentOpened;
@@ -78,6 +80,7 @@ final class NotificationsModuleTest extends TestCase
         ]);
 
         [$organization, $monitor] = $this->createMonitorContext();
+        $this->activatePlan($organization, 'pro', ['email', 'telegram']);
 
         NotificationChannel::query()->create([
             'organization_id' => $organization->id,
@@ -101,7 +104,36 @@ final class NotificationsModuleTest extends TestCase
             'status' => 'sent',
         ]);
 
-        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.telegram.org/bottest-token/sendMessage');
+    }
+
+    public function test_it_does_not_send_telegram_notifications_for_free_plan(): void
+    {
+        config()->set('services.telegram.bot_token', 'test-token');
+        Http::fake([
+            'api.telegram.org/*' => Http::response(['ok' => true]),
+        ]);
+
+        [$organization, $monitor] = $this->createMonitorContext();
+        $this->activatePlan($organization, 'free', ['email']);
+        $incident = $this->createIncident($organization, $monitor);
+
+        NotificationChannel::query()->create([
+            'organization_id' => $organization->id,
+            'type' => 'telegram',
+            'name' => 'Telegram',
+            'enabled' => true,
+            'settings' => ['chat_id' => '123456'],
+        ]);
+
+        Event::dispatch(new IncidentOpened($incident->id));
+
+        $this->assertDatabaseMissing('notification_logs', [
+            'organization_id' => $organization->id,
+            'incident_id' => $incident->id,
+            'event_type' => 'incident.opened',
+        ]);
+        Http::assertNotSent(fn ($request): bool => $request->url() === 'https://api.telegram.org/bottest-token/sendMessage');
     }
 
     public function test_it_sends_domain_expiring_notification(): void
@@ -246,6 +278,35 @@ final class NotificationsModuleTest extends TestCase
             'title' => 'HTTP check failed',
             'summary' => 'Monitor returned failure.',
             'started_at' => now(),
+        ]);
+    }
+
+    /**
+     * @param  list<string>  $notificationChannels
+     */
+    private function activatePlan(Organization $organization, string $code, array $notificationChannels): void
+    {
+        $plan = Plan::query()->create([
+            'code' => $code,
+            'name' => ucfirst($code),
+            'description' => $code,
+            'price_cents' => $code === 'free' ? 0 : 99000,
+            'currency' => 'RUB',
+            'is_active' => true,
+            'sort_order' => 10,
+        ]);
+
+        $plan->limits()->create([
+            'key' => 'notification_channels',
+            'value' => ['channels' => $notificationChannels],
+        ]);
+
+        Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addMonth(),
         ]);
     }
 }

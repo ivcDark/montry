@@ -24,6 +24,12 @@ final readonly class UpdateMonitorHandler
         $monitor = $this->monitors->getById($command->monitorId);
         $wasEnabled = (bool) $monitor->enabled;
         $definition = $this->checkTypeRegistry->get($monitor->type);
+
+        if (! $wasEnabled && $command->enabled) {
+            $this->limits->assertCanEnableMonitor($monitor->organization_id);
+            $this->limits->assertCanUseMonitorType($monitor->organization_id, $monitor->type);
+        }
+
         $this->limits->assertCanUseInterval($monitor->organization_id, $command->intervalSeconds);
 
         $monitor->name = $command->name;

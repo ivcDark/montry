@@ -1,12 +1,27 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { Head, Link, router } from '@inertiajs/vue3'
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
+import FlashToast from '@/Components/FlashToast.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useAutoRefresh } from '../../Composables/useAutoRefresh'
 
 type Organization = {
     id: string
     name: string
+}
+
+type BillingUsage = {
+    current: number
+    limit: number | null
+}
+
+type PageProps = {
+    flash?: {
+        error?: string | null
+    }
+    billing?: {
+        sites: BillingUsage
+    } | null
 }
 
 type Project = {
@@ -56,6 +71,8 @@ const props = defineProps<{
     sites: Site[]
 }>()
 
+const page = usePage<PageProps>()
+
 useAutoRefresh({
     only: ['sites'],
     intervalMs: 20000,
@@ -66,6 +83,8 @@ const statusFilter = ref('all')
 const checkingSiteIds = ref<string[]>([])
 const checkingStartedFrom = ref<Record<string, string | null>>({})
 const checkingTimeouts = ref<Record<string, ReturnType<typeof setTimeout>>>({})
+const siteLimitToastToken = ref(0)
+const siteLimitToastMessage = ref<string | null>(page.props.flash?.error ?? null)
 
 const filters = [
     { value: 'all', label: 'Все' },
@@ -111,6 +130,14 @@ const stats = computed(() => {
         paused: sites.filter((site) => site.status === 'paused').length,
         empty: sites.filter((site) => site.status === 'empty').length,
     }
+})
+
+const isSiteLimitExhausted = computed(() => {
+    const usage = page.props.billing?.sites
+
+    return usage?.limit !== null
+        && usage?.limit !== undefined
+        && usage.current >= usage.limit
 })
 
 watch(
@@ -205,6 +232,10 @@ function isChecking(site: Site): boolean {
     return checkingSiteIds.value.includes(site.id)
 }
 
+function isSiteDisabled(site: Site): boolean {
+    return site.monitors_count > 0 && site.enabled_monitors_count === 0
+}
+
 function stopChecking(siteId: string): void {
     checkingSiteIds.value = checkingSiteIds.value.filter((id) => id !== siteId)
 
@@ -247,10 +278,25 @@ function checkNow(site: Site): void {
         },
     })
 }
+
+function showSiteLimitToast(): void {
+    siteLimitToastMessage.value = 'Лимит по сайтам исчерпан. Повысьте тариф для добавления сайта.'
+    siteLimitToastToken.value += 1
+}
+
+function handleCreateSiteClick(event: MouseEvent): void {
+    if (!isSiteLimitExhausted.value) {
+        return
+    }
+
+    event.preventDefault()
+    showSiteLimitToast()
+}
 </script>
 
 <template>
     <Head title="Сайты" />
+    <FlashToast :message="siteLimitToastMessage" :token="siteLimitToastToken" />
 
     <DashboardLayout
         :organization="organization"
@@ -274,6 +320,7 @@ function checkNow(site: Site): void {
                 <Link
                     href="/sites/create"
                     class="inline-flex h-11 items-center justify-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-extrabold text-white shadow-[0_10px_28px_rgba(15,107,255,0.18)] transition hover:bg-[#0757D8]"
+                    @click="handleCreateSiteClick"
                 >
                     + Добавить сайт
                 </Link>
@@ -407,7 +454,7 @@ function checkNow(site: Site): void {
                                             class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#0F6BFF]/25 border-t-[#0F6BFF]"
                                             aria-hidden="true"
                                         />
-                                        <span>{{ isChecking(site) ? 'Проверяем...' : 'Проверить' }}</span>
+                                        <span>{{ isSiteDisabled(site) ? 'Отключен' : isChecking(site) ? 'Проверяем...' : 'Проверить' }}</span>
                                     </button>
                                     <Link
                                         :href="`/sites/${site.id}`"
@@ -466,7 +513,7 @@ function checkNow(site: Site): void {
                                         class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#0F6BFF]/25 border-t-[#0F6BFF]"
                                         aria-hidden="true"
                                     />
-                                    <span>{{ isChecking(site) ? 'Проверяем...' : 'Проверить' }}</span>
+                                    <span>{{ isSiteDisabled(site) ? 'Отключен' : isChecking(site) ? 'Проверяем...' : 'Проверить' }}</span>
                                 </button>
                                 <Link :href="`/sites/${site.id}`" class="text-sm font-extrabold text-[#0F6BFF] hover:text-[#0757D8]">
                                     Открыть
@@ -485,6 +532,7 @@ function checkNow(site: Site): void {
                     <Link
                         href="/sites/create"
                         class="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-extrabold text-white shadow-[0_10px_28px_rgba(15,107,255,0.18)] transition hover:bg-[#0757D8]"
+                        @click="handleCreateSiteClick"
                     >
                         Добавить сайт
                     </Link>

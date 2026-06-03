@@ -17,6 +17,7 @@ use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Monitoring\Presentation\Http\Requests\SaveMonitorRequest;
 use App\Modules\Sites\Actions\DeleteMonitorAction;
 use App\Modules\Sites\Actions\GetCurrentOrganization;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -50,18 +51,28 @@ final class MonitorController extends Controller
 
         $validated = $request->validated();
 
-        $createMonitor->handle(new CreateMonitorCommand(
-            organizationId: $organization->id,
-            projectId: $site->project_id,
-            monitoredResourceId: $site->id,
-            type: $validated['type'],
-            name: $validated['name'],
-            enabled: $validated['is_enabled'],
-            intervalSeconds: $validated['interval_seconds'],
-            timeoutMs: $validated['timeout_ms'],
-            settings: $validated['settings'],
-            expected: $validated['expected'] ?? [],
-        ));
+        try {
+            $createMonitor->handle(new CreateMonitorCommand(
+                organizationId: $organization->id,
+                projectId: $site->project_id,
+                monitoredResourceId: $site->id,
+                type: $validated['type'],
+                name: $validated['name'],
+                enabled: $validated['is_enabled'],
+                intervalSeconds: $validated['interval_seconds'],
+                timeoutMs: $validated['timeout_ms'],
+                settings: $validated['settings'],
+                expected: $validated['expected'] ?? [],
+            ));
+        } catch (AuthorizationException $exception) {
+            if ($exception->getMessage() !== 'Monitor limit reached for the current plan.') {
+                throw $exception;
+            }
+
+            return redirect()
+                ->route('sites.show', $site)
+                ->with('error', $this->limitErrorMessage($exception));
+        }
 
         return redirect()->route('sites.show', $site);
     }
@@ -106,15 +117,25 @@ final class MonitorController extends Controller
 
         $validated = $request->validated();
 
-        $updateMonitor->handle(new UpdateMonitorCommand(
-            monitorId: $siteMonitor->id,
-            name: $validated['name'],
-            enabled: $validated['is_enabled'],
-            intervalSeconds: $validated['interval_seconds'],
-            timeoutMs: $validated['timeout_ms'],
-            settings: $validated['settings'],
-            expected: $validated['expected'] ?? [],
-        ));
+        try {
+            $updateMonitor->handle(new UpdateMonitorCommand(
+                monitorId: $siteMonitor->id,
+                name: $validated['name'],
+                enabled: $validated['is_enabled'],
+                intervalSeconds: $validated['interval_seconds'],
+                timeoutMs: $validated['timeout_ms'],
+                settings: $validated['settings'],
+                expected: $validated['expected'] ?? [],
+            ));
+        } catch (AuthorizationException $exception) {
+            if ($exception->getMessage() !== 'Monitor limit reached for the current plan.') {
+                throw $exception;
+            }
+
+            return redirect()
+                ->route('sites.show', $site)
+                ->with('error', $this->limitErrorMessage($exception));
+        }
 
         return to_route('sites.show', $site);
     }
@@ -130,10 +151,20 @@ final class MonitorController extends Controller
         abort_unless($site->organization_id === $organization->id, 404);
         abort_unless($siteMonitor->monitored_resource_id === $site->id, 404);
 
-        if ($siteMonitor->enabled) {
-            $pauseMonitor->handle(new PauseMonitorCommand($siteMonitor->id));
-        } else {
-            $resumeMonitor->handle(new ResumeMonitorCommand($siteMonitor->id));
+        try {
+            if ($siteMonitor->enabled) {
+                $pauseMonitor->handle(new PauseMonitorCommand($siteMonitor->id));
+            } else {
+                $resumeMonitor->handle(new ResumeMonitorCommand($siteMonitor->id));
+            }
+        } catch (AuthorizationException $exception) {
+            if ($exception->getMessage() !== 'Monitor limit reached for the current plan.') {
+                throw $exception;
+            }
+
+            return redirect()
+                ->route('sites.show', $site)
+                ->with('error', $this->limitErrorMessage($exception));
         }
 
         return to_route('sites.show', $site);
@@ -165,6 +196,14 @@ final class MonitorController extends Controller
             'port' => $site->port,
             'path' => $site->path,
         ];
+    }
+
+    private function limitErrorMessage(AuthorizationException $exception): string
+    {
+        return match ($exception->getMessage()) {
+            'Monitor limit reached for the current plan.' => 'Лимит по мониторингам исчерпан. Повысьте тариф для добавления мониторинга.',
+            default => $exception->getMessage(),
+        };
     }
 
     private function monitorTypes(CheckTypeRegistry $checkTypes): array

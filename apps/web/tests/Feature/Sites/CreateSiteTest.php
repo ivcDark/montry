@@ -47,11 +47,65 @@ class CreateSiteTest extends TestCase
                 'name' => 'Fourth site',
                 'url' => 'https://four.example.com',
             ])
-            ->assertForbidden();
+            ->assertRedirect('/sites/create')
+            ->assertSessionHas('error', 'Лимит по сайтам исчерпан. Повысьте тариф для добавления сайта.');
 
         $this->assertDatabaseMissing('monitored_resources', [
             'organization_id' => $organization->id,
             'host' => 'four.example.com',
+        ]);
+    }
+
+    public function test_create_site_page_redirects_with_message_when_site_limit_is_exhausted(): void
+    {
+        [$user, $organization, $project] = $this->createOrganizationContext();
+        $this->subscribe($organization, 'free', [
+            'max_sites' => ['limit' => 1],
+            'max_monitors' => ['limit' => 6],
+        ]);
+
+        MonitoredResource::query()->create([
+            'organization_id' => $organization->id,
+            'project_id' => $project->id,
+            'created_user_id' => $user->id,
+            'type' => 'website',
+            'name' => 'one.example.com',
+            'target' => 'https://one.example.com',
+            'scheme' => 'https',
+            'host' => 'one.example.com',
+            'path' => '/',
+            'status' => 'unknown',
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->get('/sites/create')
+            ->assertRedirect('/sites')
+            ->assertSessionHas('error', 'Лимит по сайтам исчерпан. Повысьте тариф для добавления сайта.');
+    }
+
+    public function test_site_creation_shows_message_when_monitor_limit_is_exhausted(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $this->subscribe($organization, 'free', [
+            'max_sites' => ['limit' => 3],
+            'max_monitors' => ['limit' => 0],
+            'minimum_check_interval_seconds' => ['seconds' => 900],
+            'allowed_monitor_types' => ['types' => ['http', 'ssl']],
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/sites', [
+                'name' => 'Healthcheck',
+                'url' => 'https://example.com',
+            ])
+            ->assertRedirect('/sites/create')
+            ->assertSessionHas('error', 'Лимит по мониторингам исчерпан. Повысьте тариф для добавления мониторинга.');
+
+        $this->assertDatabaseMissing('monitored_resources', [
+            'organization_id' => $organization->id,
+            'host' => 'example.com',
         ]);
     }
 

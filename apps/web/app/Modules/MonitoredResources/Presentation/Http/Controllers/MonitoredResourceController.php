@@ -17,6 +17,7 @@ use App\Modules\Observability\Application\Services\BusinessEventRecorder;
 use App\Modules\Sites\Actions\CreateDefaultFolderForOrganization;
 use App\Modules\Sites\Actions\CreateSiteAction;
 use App\Modules\Sites\Actions\GetCurrentOrganization;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -43,8 +44,21 @@ final class MonitoredResourceController extends Controller
         Request $request,
         GetCurrentOrganization $getCurrentOrganization,
         CheckTypeRegistry $checkTypes,
-    ): Response {
+        LimitChecker $limits,
+    ): Response|RedirectResponse {
         $organization = $getCurrentOrganization->handle($request->user());
+
+        try {
+            $limits->assertCanCreateSite((int) $organization->id);
+        } catch (AuthorizationException $exception) {
+            if (! $this->isCreateLimitException($exception)) {
+                throw $exception;
+            }
+
+            return redirect()
+                ->route('sites.index')
+                ->with('error', $this->limitErrorMessage($exception));
+        }
 
         return Inertia::render('Sites/Create', [
             'organization' => [
@@ -76,14 +90,24 @@ final class MonitoredResourceController extends Controller
             project: $project,
         );
 
-        $createMonitoredResource->handle(
-            $siteData,
-            $request->monitorPayloads([
-                'url' => $siteData->url,
-                'host' => $siteData->host,
-                'port' => $siteData->port,
-            ], $limits->allowedMonitorTypes($organization->id), $limits->minimumCheckIntervalSeconds($organization->id)),
-        );
+        try {
+            $createMonitoredResource->handle(
+                $siteData,
+                $request->monitorPayloads([
+                    'url' => $siteData->url,
+                    'host' => $siteData->host,
+                    'port' => $siteData->port,
+                ], $limits->allowedMonitorTypes($organization->id), $limits->minimumCheckIntervalSeconds($organization->id)),
+            );
+        } catch (AuthorizationException $exception) {
+            if (! $this->isCreateLimitException($exception)) {
+                throw $exception;
+            }
+
+            return redirect()
+                ->route('sites.create')
+                ->with('error', $this->limitErrorMessage($exception));
+        }
 
         return redirect()
             ->route('sites.index')
@@ -94,8 +118,10 @@ final class MonitoredResourceController extends Controller
         Request $request,
         MonitoredResource $site,
         GetCurrentOrganization $getCurrentOrganization,
+        LimitChecker $limits,
     ): Response {
         $organization = $getCurrentOrganization->handle($request->user());
+        $allowedMonitorTypes = $limits->allowedMonitorTypes((int) $organization->id);
         $site->load([
             'project:id,name',
             'monitors.latestCheckResult' => fn ($query) => $query->select([
@@ -153,6 +179,7 @@ final class MonitoredResourceController extends Controller
                         'type' => $monitor->type,
                         'status' => $monitor->status,
                         'is_enabled' => $monitor->is_enabled,
+                        'is_available' => $allowedMonitorTypes === null || in_array($monitor->type, $allowedMonitorTypes, true),
                         'interval_seconds' => $monitor->interval_seconds,
                         'timeout_ms' => $monitor->timeout_ms,
                         'settings' => $monitor->settings,
@@ -240,6 +267,23 @@ final class MonitoredResourceController extends Controller
         }
 
         return 'empty';
+    }
+
+    private function limitErrorMessage(AuthorizationException $exception): string
+    {
+        return match ($exception->getMessage()) {
+            'Site limit reached for the current plan.' => 'Лимит по сайтам исчерпан. Повысьте тариф для добавления сайта.',
+            'Monitor limit reached for the current plan.' => 'Лимит по мониторингам исчерпан. Повысьте тариф для добавления мониторинга.',
+            default => $exception->getMessage(),
+        };
+    }
+
+    private function isCreateLimitException(AuthorizationException $exception): bool
+    {
+        return in_array($exception->getMessage(), [
+            'Site limit reached for the current plan.',
+            'Monitor limit reached for the current plan.',
+        ], true);
     }
 
     private function problemLabel(MonitoredResource $resource): string

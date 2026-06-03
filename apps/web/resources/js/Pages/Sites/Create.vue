@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, Link, useForm } from '@inertiajs/vue3'
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
+import FlashToast from '@/Components/FlashToast.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 
 type Organization = {
@@ -13,11 +14,18 @@ type MonitorTypeOption = {
     label: string
 }
 
+type PageProps = {
+    flash?: {
+        error?: string | null
+    }
+}
+
 const props = defineProps<{
     organization: Organization
     monitorTypes: MonitorTypeOption[]
 }>()
 
+const page = usePage<PageProps>()
 const statusCodesText = ref('200')
 const sslWarningDaysText = ref('30, 14, 7, 3, 1')
 const domainWarningDaysText = ref('30, 14, 7, 3, 1')
@@ -210,6 +218,7 @@ function submit(): void {
 
 <template>
     <Head title="Добавить сайт" />
+    <FlashToast :message="page.props.flash?.error" />
 
     <DashboardLayout
         :organization="organization"

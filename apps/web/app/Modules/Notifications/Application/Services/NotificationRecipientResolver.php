@@ -2,12 +2,17 @@
 
 namespace App\Modules\Notifications\Application\Services;
 
+use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\Notifications\Infrastructure\Persistence\Models\NotificationChannel;
 use App\Modules\Notifications\Infrastructure\Persistence\Models\NotificationRule;
 use Illuminate\Database\Eloquent\Collection;
 
-final class NotificationRecipientResolver
+final readonly class NotificationRecipientResolver
 {
+    public function __construct(
+        private LimitChecker $limits,
+    ) {}
+
     /**
      * @return Collection<int, NotificationChannel>
      */
@@ -44,6 +49,12 @@ final class NotificationRecipientResolver
             });
         }
 
-        return $query->get();
+        return $query
+            ->get()
+            ->reject(fn (NotificationChannel $channel): bool => ! $this->limits->canUseNotificationChannel(
+                (int) $channel->organization_id,
+                (string) $channel->type,
+            ))
+            ->values();
     }
 }

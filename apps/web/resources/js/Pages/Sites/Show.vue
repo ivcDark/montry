@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { Head, Link, router } from '@inertiajs/vue3'
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
+import FlashToast from '@/Components/FlashToast.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useAutoRefresh } from '../../Composables/useAutoRefresh'
 
 type Organization = {
     id: string
     name: string
+}
+
+type PageProps = {
+    flash?: {
+        error?: string | null
+    }
 }
 
 type Project = {
@@ -49,6 +56,7 @@ type Monitor = {
     name: string
     status: string
     is_enabled: boolean
+    is_available: boolean
     interval_seconds: number | null
     timeout_ms: number | null
     settings: MonitorSettings | null
@@ -129,6 +137,8 @@ const props = defineProps<{
     organization: Organization
     site: Site
 }>()
+
+const page = usePage<PageProps>()
 
 useAutoRefresh({
     only: ['site'],
@@ -228,6 +238,7 @@ function statusClass(status: string): string {
 }
 
 function monitorStatus(monitor: Monitor): string {
+    if (!monitor.is_available) return 'paused'
     if (!monitor.is_enabled || monitor.status === 'paused') return 'paused'
     if (isChecking(monitor)) return 'checking'
     if (monitor.status === 'success' || monitor.status === 'up') return 'ok'
@@ -254,6 +265,8 @@ function typeClass(type: string): string {
 }
 
 function monitorCardClass(monitor: Monitor): string {
+    if (!monitor.is_available) return 'border-[#E5E7EB] bg-[#F3F4F6]'
+
     const status = monitorStatus(monitor)
 
     if (status === 'down') return 'border-[#FECACA] bg-[#FFF8F8]'
@@ -424,16 +437,22 @@ function payloadForMonitor(monitor: Monitor) {
 }
 
 function toggleSettings(monitor: Monitor): void {
+    if (!monitor.is_available) return
+
     expandedMonitorId.value = expandedMonitorId.value === monitor.id ? null : monitor.id
 }
 
 function saveMonitor(monitor: Monitor): void {
+    if (!monitor.is_available) return
+
     router.put(`/sites/${props.site.id}/monitors/${monitor.id}`, payloadForMonitor(monitor), {
         preserveScroll: true,
     })
 }
 
 function toggleMonitor(monitor: Monitor): void {
+    if (!monitor.is_available) return
+
     router.patch(`/sites/${props.site.id}/monitors/${monitor.id}/toggle`, {}, {
         preserveScroll: true,
     })
@@ -500,6 +519,7 @@ function deleteSite(): void {
 
 <template>
     <Head :title="site.name" />
+    <FlashToast :message="page.props.flash?.error" />
 
     <DashboardLayout
         :organization="organization"
@@ -555,9 +575,10 @@ function deleteSite(): void {
                 <article
                     v-for="monitor in site.monitors"
                     :key="monitor.id"
-                    class="rounded-3xl border p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)] transition"
+                    class="relative overflow-hidden rounded-3xl border p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)] transition"
                     :class="monitorCardClass(monitor)"
                 >
+                    <div :class="!monitor.is_available ? 'pointer-events-none select-none opacity-35 grayscale' : ''">
                     <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
@@ -568,7 +589,7 @@ function deleteSite(): void {
                                     {{ statusLabel(monitorStatus(monitor)) }}
                                 </span>
                                 <span class="rounded-full px-3 py-1 text-xs font-extrabold" :class="monitor.is_enabled ? 'bg-[#ECFDF3] text-[#16A34A]' : 'bg-[#F1F5F9] text-[#64748B]'">
-                                    {{ monitor.is_enabled ? 'Включен' : 'На паузе' }}
+                                    {{ monitor.is_available && monitor.is_enabled ? 'Включен' : 'На паузе' }}
                                 </span>
                             </div>
 
@@ -582,7 +603,7 @@ function deleteSite(): void {
                             <button
                                 type="button"
                                 class="inline-flex h-9 min-w-[104px] items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition enabled:hover:border-[#0F6BFF] enabled:hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-60"
-                                :disabled="!monitor.is_enabled || isChecking(monitor)"
+                                :disabled="!monitor.is_available || !monitor.is_enabled || isChecking(monitor)"
                                 @click="checkNow(monitor)"
                             >
                                 <span
@@ -595,6 +616,7 @@ function deleteSite(): void {
                             <button
                                 type="button"
                                 class="h-9 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF] cursor-pointer"
+                                :disabled="!monitor.is_available"
                                 @click="toggleMonitor(monitor)"
                             >
                                 {{ monitor.is_enabled ? 'Пауза' : 'Включить' }}
@@ -602,6 +624,7 @@ function deleteSite(): void {
                             <button
                                 type="button"
                                 class="h-9 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF] cursor-pointer"
+                                :disabled="!monitor.is_available"
                                 @click="toggleSettings(monitor)"
                             >
                                 {{ expandedMonitorId === monitor.id ? 'Скрыть настройки' : 'Настроить' }}
@@ -629,7 +652,7 @@ function deleteSite(): void {
                     </div>
 
                     <form
-                        v-if="expandedMonitorId === monitor.id"
+                        v-if="monitor.is_available && expandedMonitorId === monitor.id"
                         class="mt-5 rounded-3xl border border-[#E5E7EB] bg-white p-5"
                         @submit.prevent="saveMonitor(monitor)"
                     >
@@ -740,6 +763,17 @@ function deleteSite(): void {
                             </button>
                         </div>
                     </form>
+                    </div>
+
+                    <div
+                        v-if="!monitor.is_available"
+                        class="absolute inset-0 flex items-center justify-center px-6 text-center"
+                        aria-hidden="true"
+                    >
+                        <p class="rounded-xl bg-white/85 px-5 py-3 text-sm font-extrabold text-[#4B5563] shadow-sm ring-1 ring-[#E5E7EB]">
+                            Доступно на подписке Pro и Plus
+                        </p>
+                    </div>
                 </article>
             </section>
 

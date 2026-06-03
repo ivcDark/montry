@@ -2,27 +2,34 @@
 
 namespace App\Modules\Notifications\Application\Services;
 
+use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Notifications\Infrastructure\Persistence\Models\NotificationChannel;
 use Illuminate\Support\Collection;
 
-final class SyncTelegramNotificationChannels
+final readonly class SyncTelegramNotificationChannels
 {
     private const INCIDENT_EVENT_TYPES = [
         'incident.opened',
         'incident.resolved',
     ];
 
+    public function __construct(
+        private LimitChecker $limits,
+    ) {}
+
     public function handle(User $user): void
     {
         $chatId = $this->chatId($user);
-        $shouldEnable = (bool) $user->telegram_notifications_enabled && $chatId !== null;
         $activeOrganizationIds = $this->activeOrganizationIds($user);
 
         $this->disableChannelsOutsideActiveOrganizations($user, $activeOrganizationIds);
 
         foreach ($activeOrganizationIds as $organizationId) {
             $channel = $this->telegramChannel($user, $organizationId);
+            $shouldEnable = (bool) $user->telegram_notifications_enabled
+                && $chatId !== null
+                && $this->limits->canUseNotificationChannel($organizationId, 'telegram');
 
             $channel->forceFill([
                 'organization_id' => $organizationId,
@@ -53,7 +60,7 @@ final class SyncTelegramNotificationChannels
     }
 
     /**
-     * @param Collection<int, int> $activeOrganizationIds
+     * @param  Collection<int, int>  $activeOrganizationIds
      */
     private function disableChannelsOutsideActiveOrganizations(User $user, Collection $activeOrganizationIds): void
     {
@@ -77,7 +84,7 @@ final class SyncTelegramNotificationChannels
             ->first();
 
         if ($channel === null) {
-            return new NotificationChannel();
+            return new NotificationChannel;
         }
 
         if ($channel->trashed()) {
