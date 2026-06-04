@@ -43,6 +43,7 @@ final readonly class AuditSensitiveRequestMiddleware
             || $request->is('register*')
             || $request->is('admin/*')
             || $request->is('billing/payments/*')
+            || $request->is('billing/robokassa/*')
             || $request->is('internal/*');
     }
 }

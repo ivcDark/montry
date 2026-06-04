@@ -26,6 +26,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(MetricsMiddleware::class);
         $middleware->append(AuditSensitiveRequestMiddleware::class);
 
+        $middleware->validateCsrfTokens(except: [
+            'billing/robokassa/result',
+            'billing/robokassa/success',
+            'billing/robokassa/fail',
+        ]);
+
         $middleware->web(append: [
             HandleInertiaRequests::class,
             EnsureUserIsNotBlocked::class,

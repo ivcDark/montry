@@ -1,7 +1,17 @@
 <?php
 
 use App\Modules\Billing\Presentation\Http\Controllers\BillingController;
+use App\Modules\Billing\Presentation\Http\Controllers\RobokassaController;
 use Illuminate\Support\Facades\Route;
+
+Route::match(['get', 'post'], '/billing/robokassa/result', [RobokassaController::class, 'result'])
+    ->name('billing.robokassa.result');
+
+Route::match(['get', 'post'], '/billing/robokassa/success', [RobokassaController::class, 'success'])
+    ->name('billing.robokassa.success');
+
+Route::match(['get', 'post'], '/billing/robokassa/fail', [RobokassaController::class, 'fail'])
+    ->name('billing.robokassa.fail');
 
 Route::middleware('auth')->group(function (): void {
     Route::get('/billing', [BillingController::class, 'index'])
@@ -15,6 +25,9 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('/billing/payments/{payment}', [BillingController::class, 'payment'])
         ->name('billing.payments.show');
+
+    Route::post('/billing/payments/{payment}/robokassa/test-success', [RobokassaController::class, 'testSuccess'])
+        ->name('billing.payments.robokassa.test-success');
 
     Route::get('/billing/payments/{payment}/fake-bank', [BillingController::class, 'fakeBank'])
         ->name('billing.payments.fake-bank');

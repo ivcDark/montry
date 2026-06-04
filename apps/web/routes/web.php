@@ -4,6 +4,11 @@ use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+
+Route::get('/offer', function () {
+    return Inertia::render('Legal/Offer');
+})->name('offer');
+
 Route::get('/', function () {
     $plans = Plan::query()
         ->with('limits')

@@ -5,6 +5,7 @@ namespace App\Modules\Billing\Presentation\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Billing\Application\Services\CheckoutService;
 use App\Modules\Billing\Application\Services\PlanChangeClassifier;
+use App\Modules\Billing\Application\Services\RobokassaService;
 use App\Modules\Billing\Application\Services\ScheduleDowngrade;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Payment;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
@@ -146,6 +147,7 @@ final class BillingController extends Controller
         Request $request,
         Payment $payment,
         GetCurrentOrganization $getCurrentOrganization,
+        RobokassaService $robokassa,
     ): Response {
         $organization = $getCurrentOrganization->handle($request->user());
 
@@ -165,9 +167,14 @@ final class BillingController extends Controller
                 'status' => $payment->status,
                 'amount_cents' => $payment->amount_cents,
                 'currency' => $payment->currency,
+                'provider' => $payment->provider,
+                'failed_at' => $payment->failed_at?->toISOString(),
+                'failure_code' => $payment->failure_code,
+                'failure_reason' => $payment->failure_reason,
                 'plan' => $payment->subscription?->plan
                     ? $this->planPayload($payment->subscription->plan)
                     : null,
+                'robokassa' => $robokassa->paymentForm($payment, $request->user()?->email),
             ],
         ]);
     }

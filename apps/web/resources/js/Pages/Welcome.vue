@@ -2,6 +2,7 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
 import { onBeforeUnmount, ref } from 'vue'
 import MarketingHeader from '@/Components/MarketingHeader.vue'
+import MarketingFooter from '@/Components/MarketingFooter.vue'
 
 type User = {
     id: number | string
@@ -859,28 +860,6 @@ onBeforeUnmount(() => {
             </div>
         </Transition>
 
-        <footer class="border-t border-[#E5E7EB] bg-white">
-            <div class="mx-auto flex max-w-7xl flex-col gap-6 px-5 py-8 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                    <div class="flex items-center gap-3">
-                        <span class="grid h-10 w-10 place-items-center rounded-xl bg-[#0F6BFF] text-lg font-extrabold text-white">M</span>
-                        <span class="text-2xl font-extrabold text-[#111827]">Montry</span>
-                    </div>
-                    <p class="mt-3 max-w-md text-sm leading-6 text-[#667085]">
-                        Мониторинг сайтов, SSL и доменов для веб-студий и бизнеса.
-                    </p>
-                </div>
-
-                <div class="flex flex-wrap gap-5 text-sm font-semibold text-[#667085]">
-                    <a href="/#features" class="transition hover:text-[#111827]">Возможности</a>
-                    <a href="/#audience" class="transition hover:text-[#111827]">Для кого</a>
-                    <a href="/#pricing" class="transition hover:text-[#111827]">Тарифы</a>
-                    <a href="/#faq" class="transition hover:text-[#111827]">FAQ</a>
-                    <Link v-if="!user" href="/login" class="transition hover:text-[#111827]">Войти</Link>
-                </div>
-
-                <p class="text-sm font-semibold text-[#667085]">© 2026 Montry</p>
-            </div>
-        </footer>
+        <MarketingFooter />
     </main>
 </template>

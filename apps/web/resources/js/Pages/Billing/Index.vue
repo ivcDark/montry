@@ -240,6 +240,11 @@ const comparisonRows = [
                 </article>
             </div>
 
+            <p class="text-sm leading-6 text-[#667085]">
+                Выбирая платный тариф, вы переходите к оформлению платежа и принимаете условия
+                <Link href="/offers" class="font-extrabold text-[#0F6BFF] transition hover:text-[#0757D8]">публичной оферты</Link>.
+            </p>
+
             <div class="overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white">
                 <div class="border-b border-[#E5E7EB] p-6">
                     <p class="text-sm font-extrabold text-[#12B3A8]">Сравнение тарифов</p>

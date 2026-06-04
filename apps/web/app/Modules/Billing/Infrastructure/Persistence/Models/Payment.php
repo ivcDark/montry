@@ -5,6 +5,7 @@ namespace App\Modules\Billing\Infrastructure\Persistence\Models;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class Payment extends Model
 {
@@ -18,6 +19,9 @@ final class Payment extends Model
         'currency',
         'payload',
         'paid_at',
+        'failed_at',
+        'failure_code',
+        'failure_reason',
     ];
 
     protected function casts(): array
@@ -26,6 +30,7 @@ final class Payment extends Model
             'amount_cents' => 'integer',
             'payload' => 'array',
             'paid_at' => 'datetime',
+            'failed_at' => 'datetime',
         ];
     }
 
@@ -37,5 +42,10 @@ final class Payment extends Model
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(Subscription::class);
+    }
+
+    public function logs(): HasMany
+    {
+        return $this->hasMany(PaymentLog::class);
     }
 }

@@ -55,13 +55,15 @@ final readonly class CheckoutService
             $payment = Payment::query()->create([
                 'organization_id' => $organizationId,
                 'subscription_id' => $subscription->id,
-                'provider' => 'manual',
+                'provider' => 'robokassa',
                 'status' => 'pending',
                 'amount_cents' => $plan->price_cents,
                 'currency' => $plan->currency,
                 'payload' => [
                     'plan_code' => $plan->code,
                     'period' => 'month',
+                    'provider' => 'robokassa',
+                    'mode' => config('services.robokassa.mode', 'test'),
                 ],
             ]);
 
@@ -85,9 +87,12 @@ final readonly class CheckoutService
         });
     }
 
-    public function confirm(Payment $payment): Subscription
+    /**
+     * @param array<string, mixed> $providerPayload
+     */
+    public function confirm(Payment $payment, array $providerPayload = [], ?string $providerPaymentId = null): Subscription
     {
-        return DB::transaction(function () use ($payment): Subscription {
+        return DB::transaction(function () use ($payment, $providerPayload, $providerPaymentId): Subscription {
             $payment = Payment::query()
                 ->lockForUpdate()
                 ->with('subscription.plan')
@@ -102,12 +107,19 @@ final readonly class CheckoutService
                 ->findOrFail($payment->organization_id);
 
             if ($payment->status === 'paid') {
+                $this->mergeProviderPayload($payment, $providerPayload, $providerPaymentId);
+
                 return $payment->subscription;
             }
 
             $payment->forceFill([
                 'status' => 'paid',
+                'provider_payment_id' => $providerPaymentId ?: $payment->provider_payment_id,
+                'payload' => $this->mergedPayload($payment, $providerPayload),
                 'paid_at' => now(),
+                'failed_at' => null,
+                'failure_code' => null,
+                'failure_reason' => null,
             ])->save();
 
             $subscription = $payment->subscription;
@@ -183,5 +195,81 @@ final readonly class CheckoutService
 
             return $subscription;
         });
+    }
+
+    /**
+     * @param array<string, mixed> $providerPayload
+     */
+    public function markFailed(Payment $payment, string $failureCode, string $failureReason, array $providerPayload = []): Payment
+    {
+        return DB::transaction(function () use ($payment, $failureCode, $failureReason, $providerPayload): Payment {
+            $payment = Payment::query()
+                ->lockForUpdate()
+                ->with('subscription.plan')
+                ->findOrFail($payment->id);
+
+            if ($payment->status === 'paid') {
+                return $payment;
+            }
+
+            $payment->forceFill([
+                'status' => 'failed',
+                'failed_at' => now(),
+                'failure_code' => mb_substr($failureCode, 0, 64),
+                'failure_reason' => $failureReason,
+                'payload' => $this->mergedPayload($payment, $providerPayload),
+            ])->save();
+
+            if ($payment->subscription !== null && $payment->subscription->status === 'pending') {
+                $payment->subscription->forceFill(['status' => 'canceled'])->save();
+            }
+
+            $plan = $payment->subscription?->plan;
+
+            $this->events->record(new RecordBusinessEventData(
+                eventType: 'payment.failed',
+                organizationId: $payment->organization_id,
+                planCode: $plan?->code,
+                subjectType: 'payment',
+                subjectId: (string) $payment->id,
+                status: 'failed',
+                source: 'billing',
+                payload: [
+                    'subscription_id' => $payment->subscription_id,
+                    'provider' => $payment->provider,
+                    'amount_cents' => $payment->amount_cents,
+                    'currency' => $payment->currency,
+                    'failure_code' => $payment->failure_code,
+                ],
+            ));
+
+            return $payment;
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $providerPayload
+     */
+    private function mergeProviderPayload(Payment $payment, array $providerPayload, ?string $providerPaymentId): void
+    {
+        if ($providerPayload === [] && ($providerPaymentId === null || $providerPaymentId === $payment->provider_payment_id)) {
+            return;
+        }
+
+        $payment->forceFill([
+            'provider_payment_id' => $providerPaymentId ?: $payment->provider_payment_id,
+            'payload' => $this->mergedPayload($payment, $providerPayload),
+        ])->save();
+    }
+
+    /**
+     * @param array<string, mixed> $providerPayload
+     * @return array<string, mixed>
+     */
+    private function mergedPayload(Payment $payment, array $providerPayload): array
+    {
+        $payload = is_array($payment->payload) ? $payment->payload : [];
+
+        return array_replace_recursive($payload, $providerPayload);
     }
 }

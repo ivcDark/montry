@@ -63,4 +63,16 @@ return [
         'webhook_secret' => env('FAKE_BANK_WEBHOOK_SECRET'),
     ],
 
+    'robokassa' => [
+        'mode' => env('ROBOKASSA_MODE', 'test'),
+        'merchant_login' => env('ROBOKASSA_MERCHANT_LOGIN'),
+        'password1' => env('ROBOKASSA_PASSWORD1'),
+        'password2' => env('ROBOKASSA_PASSWORD2'),
+        'test_password1' => env('ROBOKASSA_TEST_PASSWORD1'),
+        'test_password2' => env('ROBOKASSA_TEST_PASSWORD2'),
+        'hash_algorithm' => env('ROBOKASSA_HASH_ALGORITHM', 'md5'),
+        'payment_url' => env('ROBOKASSA_PAYMENT_URL', 'https://auth.robokassa.ru/Merchant/Index.aspx'),
+        'culture' => env('ROBOKASSA_CULTURE', 'ru'),
+    ],
+
 ];
