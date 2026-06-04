@@ -17,6 +17,9 @@
 /docker-compose.override.yml
 
 /.env
+/.env.production
+/apps/web/.env.production
+/apps/poller/.env.production
 
 /backups/
 /.superpowers/

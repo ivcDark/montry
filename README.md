@@ -47,6 +47,13 @@ Montry помогает отслеживать:
 - Docker Compose
 - Make
 
+## Production
+
+Production использует отдельный `docker-compose.prod.yml`. Инструкция по
+подготовке сервера, назначению контейнеров, первому деплою и обновлениям:
+
+- [docs/deployment/production.md](docs/deployment/production.md)
+
 ## Быстрый старт
 **Первый запуск проекта**
 ```
@@ -150,6 +157,5 @@ make key
 ```
 make migrate
 ```
-
 
 

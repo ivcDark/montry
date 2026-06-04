@@ -35,8 +35,15 @@ FROM base AS dev
 CMD ["php-fpm"]
 
 FROM base AS prod
+ENV PHP_OPCACHE_VALIDATE_TIMESTAMPS=0
 USER root
 COPY --chown=app:app apps/web /var/www/html
 USER app
-RUN if [ -f composer.json ]; then composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader; fi
+RUN composer install \
+    --no-dev \
+    --prefer-dist \
+    --no-interaction \
+    --no-progress \
+    --optimize-autoloader \
+    && mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
 CMD ["php-fpm"]

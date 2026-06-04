@@ -1,0 +1,15 @@
+.git
+.gitignore
+.idea
+.vscode
+.env
+.env.production
+apps/web/.env
+apps/web/.env.production
+apps/web/vendor
+apps/web/node_modules
+apps/poller/.env
+apps/poller/.env.production
+backups
+docs
+montri.zip

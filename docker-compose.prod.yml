@@ -1,0 +1,122 @@
+name: montry-prod
+
+x-web-service: &web-service
+  image: montry-web:prod
+  build:
+    context: .
+    dockerfile: docker/php/Dockerfile
+    target: prod
+    args:
+      UID: ${APP_UID:-1000}
+      GID: ${APP_GID:-1000}
+  env_file:
+    - ${WEB_ENV_FILE:-./apps/web/.env.production}
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks:
+    - montry-prod-net
+
+services:
+  nginx:
+    image: montry-nginx:prod
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "${APP_PORT:-80}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/up"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - montry-prod-net
+
+  web:
+    <<: *web-service
+
+  web-scheduler:
+    <<: *web-service
+    command: ["php", "artisan", "schedule:work"]
+
+  poller:
+    image: montry-poller:prod
+    build:
+      context: ./apps/poller
+      dockerfile: Dockerfile
+      target: prod
+    env_file:
+      - ${POLLER_ENV_FILE:-./apps/poller/.env.production}
+    restart: unless-stopped
+    depends_on:
+      nginx:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - montry-prod-net
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    restart: unless-stopped
+    volumes:
+      - postgres-prod-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - montry-prod-net
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    restart: unless-stopped
+    volumes:
+      - redis-prod-data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - montry-prod-net
+
+  node:
+    image: node:22-alpine
+    working_dir: /app
+    command: ["sh", "-c", "npm ci && npm run build"]
+    volumes:
+      - ./apps/web:/app
+      - node-prod-modules:/app/node_modules
+    profiles:
+      - build
+
+volumes:
+  postgres-prod-data:
+  redis-prod-data:
+  node-prod-modules:
+
+networks:
+  montry-prod-net:
+    driver: bridge
