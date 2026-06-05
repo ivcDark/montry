@@ -5,9 +5,11 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 
-Route::get('/offer', function () {
+Route::get('/offers', function () {
     return Inertia::render('Legal/Offer');
 })->name('offer');
+
+Route::redirect('/offer', '/offers');
 
 Route::get('/', function () {
     $plans = Plan::query()
