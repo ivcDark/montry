@@ -78,6 +78,24 @@ chmod 600 .env.production apps/web/.env.production apps/poller/.env.production
 Замените все значения `change-me` и `replace-with-*`, настройте домен, почту,
 Robokassa и Sentry.
 
+Для проверки Robokassa в тестовом режиме на production-инфраструктуре
+настройте именно Laravel env-файл `apps/web/.env.production`:
+
+```dotenv
+ROBOKASSA_MODE=test
+ROBOKASSA_MERCHANT_LOGIN=<merchant-login>
+ROBOKASSA_TEST_PASSWORD1=<test-password-1>
+ROBOKASSA_TEST_PASSWORD2=<test-password-2>
+ROBOKASSA_HASH_ALGORITHM=md5
+ROBOKASSA_PAYMENT_URL=https://auth.robokassa.ru/Merchant/Index.aspx
+ROBOKASSA_CULTURE=ru
+```
+
+`ROBOKASSA_PASSWORD1` и `ROBOKASSA_PASSWORD2` относятся к боевому режиму и могут
+оставаться пустыми, пока тестируется `ROBOKASSA_MODE=test`. После изменения env
+выполните `make prod-optimize-clear` и пересоздайте Laravel-контейнеры через
+`make prod-up` или `make prod-restart`.
+
 Следующие значения должны совпадать:
 
 | Laravel | Poller |

@@ -751,6 +751,61 @@ final class BillingFlowTest extends TestCase
         $this->assertSame('solo', session('billing.intended_plan_code'));
     }
 
+    public function test_production_payment_page_does_not_allow_fake_robokassa_confirmation_when_not_configured(): void
+    {
+        config([
+            'app.env' => 'production',
+            'services.robokassa.mode' => 'test',
+            'services.robokassa.merchant_login' => '',
+            'services.robokassa.test_password1' => '',
+            'services.robokassa.test_password2' => '',
+        ]);
+
+        [$user, $organization] = $this->createOrganizationContext();
+        $payment = $this->createPendingPayment($organization);
+
+        $this
+            ->actingAs($user)
+            ->get("/billing/payments/{$payment->id}")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('payment.robokassa.is_configured', false)
+                ->where('payment.robokassa.is_test', true)
+                ->where('payment.robokassa.allow_test_confirmation', false)
+                ->where('payment.robokassa.action', null)
+            );
+    }
+
+    public function test_configured_test_robokassa_payment_page_contains_real_payment_form(): void
+    {
+        config([
+            'app.env' => 'production',
+            'services.robokassa.mode' => 'test',
+            'services.robokassa.merchant_login' => 'montry',
+            'services.robokassa.test_password1' => 'test-password-1',
+            'services.robokassa.test_password2' => 'test-password-2',
+        ]);
+
+        [$user, $organization] = $this->createOrganizationContext();
+        $payment = $this->createPendingPayment($organization);
+
+        $this
+            ->actingAs($user)
+            ->get("/billing/payments/{$payment->id}")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('payment.robokassa.is_configured', true)
+                ->where('payment.robokassa.is_test', true)
+                ->where('payment.robokassa.allow_test_confirmation', false)
+                ->where('payment.robokassa.action', 'https://auth.robokassa.ru/Merchant/Index.aspx')
+                ->where('payment.robokassa.fields.MerchantLogin', 'montry')
+                ->where('payment.robokassa.fields.OutSum', '990.00')
+                ->where('payment.robokassa.fields.InvId', (string) $payment->id)
+                ->where('payment.robokassa.fields.IsTest', '1')
+                ->has('payment.robokassa.fields.SignatureValue')
+            );
+    }
+
     private function createPlan(string $code, int $priceCents, int $sortOrder = 0, array $limits = []): Plan
     {
         $plan = Plan::query()->create([
@@ -794,6 +849,27 @@ final class BillingFlowTest extends TestCase
         ]);
 
         return [$user, $organization];
+    }
+
+    private function createPendingPayment(Organization $organization): Payment
+    {
+        $plan = $this->createPlan('pro', 99000);
+        $subscription = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plan->id,
+            'status' => 'pending',
+            'starts_at' => now(),
+        ]);
+
+        return Payment::query()->create([
+            'organization_id' => $organization->id,
+            'subscription_id' => $subscription->id,
+            'provider' => 'robokassa',
+            'status' => 'pending',
+            'amount_cents' => 99000,
+            'currency' => 'RUB',
+            'payload' => ['plan_code' => 'pro'],
+        ]);
     }
 
     private function createProject(Organization $organization): Project

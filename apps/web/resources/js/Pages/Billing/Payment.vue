@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Head, Link, router } from '@inertiajs/vue3'
+import { Head, Link } from '@inertiajs/vue3'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 
 type Plan = {
@@ -41,11 +41,6 @@ const robokassaFields = computed(() => Object.entries(props.payment.robokassa.fi
 const isPaid = computed(() => props.payment.status === 'paid')
 const isFailed = computed(() => props.payment.status === 'failed')
 const canOpenRobokassa = computed(() => props.payment.robokassa.is_configured && props.payment.robokassa.action !== null && !isPaid.value)
-const canSimulateTestPayment = computed(() => props.payment.robokassa.allow_test_confirmation && !isPaid.value)
-
-function simulateTestPayment(): void {
-    router.post(`/billing/payments/${props.payment.id}/robokassa/test-success`, {}, { replace: true })
-}
 </script>
 
 <template>
@@ -65,7 +60,7 @@ function simulateTestPayment(): void {
                 <p class="mt-6 text-4xl font-extrabold text-[#111827]">{{ amount }} ₽</p>
 
                 <div v-if="payment.robokassa.is_test" class="mt-6 rounded-xl border border-[#FED7AA] bg-[#FFFBF1] p-4 text-sm font-semibold text-[#B45309]">
-                    Включен тестовый режим Robokassa. Реальные деньги не списываются, можно пройти тестовую оплату или подтвердить фиктивный платеж кнопкой ниже.
+                    Включен тестовый режим Robokassa. Реальные деньги не списываются, оплата пройдет на тестовой странице Robokassa.
                 </div>
 
                 <div v-if="isPaid" class="mt-6 rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] p-4 text-sm font-semibold text-[#15803D]">
@@ -78,11 +73,11 @@ function simulateTestPayment(): void {
                 </div>
 
                 <div v-if="!payment.robokassa.is_configured" class="mt-6 rounded-xl border border-[#FECACA] bg-[#FEF2F2] p-4 text-sm font-semibold text-[#B91C1C]">
-                    Robokassa не настроена. Укажите ROBOKASSA_MERCHANT_LOGIN и пароли в .env. В тестовом режиме можно использовать фиктивное подтверждение.
+                    Robokassa не настроена. Укажите ROBOKASSA_MERCHANT_LOGIN и пароли Robokassa в Laravel env-файле. Для тестовой оплаты нужны ROBOKASSA_MODE=test, ROBOKASSA_TEST_PASSWORD1 и ROBOKASSA_TEST_PASSWORD2.
                 </div>
 
                 <p v-if="!isPaid" class="mt-6 text-sm leading-6 text-[#667085]">
-                    Нажимая кнопку оплаты или подтверждения тестового платежа, вы принимаете условия
+                    Нажимая кнопку оплаты, вы принимаете условия
                     <Link href="/offers" class="font-extrabold text-[#0F6BFF] transition hover:text-[#0757D8]">публичной оферты</Link>.
                 </p>
 
@@ -103,18 +98,9 @@ function simulateTestPayment(): void {
                             type="submit"
                             class="flex h-12 items-center justify-center rounded-xl bg-[#0F6BFF] px-6 text-sm font-extrabold text-white transition hover:bg-[#0757D8]"
                         >
-                            Оплатить через Robokassa
+                            Перейти к оплате
                         </button>
                     </form>
-
-                    <button
-                        v-if="canSimulateTestPayment"
-                        type="button"
-                        class="flex h-12 items-center justify-center rounded-xl border border-[#FED7AA] bg-[#FFFBF1] px-6 text-sm font-extrabold text-[#B45309] transition hover:border-[#FDBA74]"
-                        @click="simulateTestPayment"
-                    >
-                        Подтвердить тестовый платеж
-                    </button>
 
                     <Link
                         href="/billing"
@@ -122,14 +108,6 @@ function simulateTestPayment(): void {
                     >
                         Вернуться к тарифам
                     </Link>
-                </div>
-
-                <div class="mt-8 rounded-xl bg-[#F8FAFC] p-4 text-sm leading-6 text-[#667085]">
-                    <p class="font-extrabold text-[#111827]">URL для кабинета Robokassa:</p>
-                    <p class="mt-2 break-all">ResultURL: <span class="font-semibold text-[#111827]">{{ payment.robokassa.result_url }}</span></p>
-                    <p class="break-all">SuccessURL: <span class="font-semibold text-[#111827]">{{ payment.robokassa.success_url }}</span></p>
-                    <p class="break-all">FailURL: <span class="font-semibold text-[#111827]">{{ payment.robokassa.fail_url }}</span></p>
-                    <p class="mt-2">Эти адреса должны быть доступны Robokassa из интернета.</p>
                 </div>
             </div>
         </section>

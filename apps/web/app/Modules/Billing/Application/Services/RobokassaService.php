@@ -18,7 +18,7 @@ final class RobokassaService
             return [
                 'is_configured' => false,
                 'is_test' => $this->isTest(),
-                'allow_test_confirmation' => $this->isTest(),
+                'allow_test_confirmation' => $this->allowsLocalTestConfirmation(),
                 'action' => null,
                 'method' => 'POST',
                 'fields' => [],
@@ -53,7 +53,7 @@ final class RobokassaService
         return [
             'is_configured' => true,
             'is_test' => $this->isTest(),
-            'allow_test_confirmation' => $this->isTest(),
+            'allow_test_confirmation' => $this->allowsLocalTestConfirmation(),
             'action' => $this->paymentUrl(),
             'method' => 'POST',
             'fields' => $fields,
@@ -75,6 +75,13 @@ final class RobokassaService
         $mode = strtolower(trim((string) config('services.robokassa.mode', 'test')));
 
         return in_array($mode, ['test', 'testing', 'sandbox', 'local'], true);
+    }
+
+    public function allowsLocalTestConfirmation(): bool
+    {
+        $environment = strtolower(trim((string) config('app.env', 'production')));
+
+        return $this->isTest() && in_array($environment, ['local', 'testing'], true);
     }
 
     public function paymentIdFromRequest(Request $request): ?int
