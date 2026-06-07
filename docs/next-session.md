@@ -1,5 +1,15 @@
 # Montry: Next Session Handoff
 
+## Current product direction
+
+- Redesign direction and compact UI rules are documented in `docs/product/redesign.md`.
+- New canonical tariffs and paid monitoring add-ons are documented in `docs/product/tariffs.md`.
+- Visual direction: light, clean, green-accented interface inspired by `prufen.ru`, without wide decorative dashboard layouts.
+- Competitor UX references: `prufen.ru`, `enterno.io`, `statuser.cloud`, `monisite.ru`.
+- Basic monitoring types: website availability, SSL, domain check, DNS monitoring, `robots.txt`.
+- Paid monitoring/add-ons: `sitemap_xml` (+20 руб/site/month), `tcp_port` (+20 руб/port/month), `extra_5_sites` (+150 руб/month), `api_endpoint` (+30 руб/endpoint/month).
+- New monitor types may be added to Laravel/UI first; Go poller can return safe stub results until check implementations are added.
+
 ## Current state
 
 - Base local stack is running through Docker Compose.

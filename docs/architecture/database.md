@@ -1,6 +1,6 @@
 # Database Schema
 
-Дата обновления: 2026-05-12.
+Дата обновления: 2026-06-07.
 
 Проект еще не в production, поэтому доменная схема Laravel приведена к чистому MVP-набору миграций без сохранения исторических данных.
 
@@ -92,7 +92,7 @@ Membership пользователя в организации.
 - timestamps
 - soft deletes
 
-Для MVP основные типы ресурсов: `website`, `domain`.
+Для MVP основные типы ресурсов: `website`, `domain`. Для платных проверок `api_endpoint` и `tcp_port` можно использовать тот же `monitored_resources` + `monitors` подход: ресурс остается сайтом/API/сервером, а конкретная проверка хранится как monitor с `type`, `settings` и `expected`.
 
 ## Monitoring
 
@@ -122,7 +122,22 @@ Membership пользователя в организации.
 - timestamps
 - soft deletes
 
-Нельзя создавать отдельные таблицы `http_monitors`, `ssl_monitors`, `domain_monitors`. Новые типы проверок добавляются через `CheckTypes` registry и используют `settings`/`expected`.
+Нельзя создавать отдельные таблицы `http_monitors`, `ssl_monitors`, `domain_monitors`, `dns_monitors`, `tcp_port_monitors` или `api_endpoint_monitors`. Новые типы проверок добавляются через `CheckTypes` registry и используют `settings`/`expected`.
+
+Базовые типы мониторинга после редизайна:
+
+- `http`;
+- `ssl`;
+- `domain`;
+- `dns`;
+- `robots_txt`.
+
+Платные типы мониторинга/add-ons:
+
+- `sitemap_xml`;
+- `tcp_port`;
+- `api_endpoint`;
+- `extra_5_sites` - billing add-on, не monitor type.
 
 ### `check_results`
 
@@ -264,6 +279,17 @@ MVP-типы: `email`, `telegram`.
 
 Ограничение: один `key` на план.
 
+Рекомендуемые ключи лимитов после редизайна:
+
+- `included_sites`;
+- `base_monitor_types`;
+- `notification_channels`;
+- `report_periods`;
+- `history_retention_days`;
+- `minimum_check_interval_seconds`;
+- `paid_addons_enabled`;
+- `available_paid_addons`.
+
 ### `subscriptions`
 
 Подписка организации на тариф.
@@ -292,6 +318,40 @@ MVP-типы: `email`, `telegram`.
 - `currency`
 - `payload` JSON
 - `paid_at`
+
+### `billing_addons`
+
+Справочник платных опций поверх тарифа.
+
+Основные поля:
+
+- `code`
+- `name`
+- `description`
+- `price_cents`
+- `currency`
+- `billing_unit`
+- `is_active`
+- `sort_order`
+
+MVP-коды: `sitemap_xml`, `tcp_port`, `extra_5_sites`, `api_endpoint`.
+
+### `subscription_addons`
+
+Подключенные платные опции организации.
+
+Основные поля:
+
+- `organization_id`
+- `subscription_id`
+- `billing_addon_id`
+- `quantity`
+- `scope` JSON
+- `status`
+- `starts_at`
+- `ends_at`
+
+`scope` может ссылаться на сайт, порт или endpoint. Если на первом этапе отдельные таблицы add-ons еще не созданы, допустимо временно хранить подключенные опции в JSON подписки, но application layer должен быть готов к выделению этих данных в таблицы.
 
 ## WorkerGateway
 

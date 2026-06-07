@@ -1,6 +1,6 @@
 # Internal API
 
-Дата обновления: 2026-05-12.
+Дата обновления: 2026-06-07.
 
 Internal API используется только для связи Laravel с Go poller. Go выполняет технические проверки и возвращает raw result. Laravel сохраняет результат, обновляет состояние monitor и управляет incidents/notifications/billing.
 
@@ -10,6 +10,8 @@ Go poller не должен:
 - отправлять уведомления пользователям;
 - проверять тарифы и лимиты;
 - обращаться напрямую к базе Laravel.
+
+Новые check types могут появляться в Laravel и UI раньше, чем Go poller получит полноценную реализацию. В этом случае poller должен возвращать безопасную техническую заглушку, а Laravel не должен открывать incidents или отправлять аварийные уведомления по таким результатам.
 
 ## Authentication
 
@@ -123,6 +125,7 @@ Statuses:
 - `422` - unknown `check_type`;
 - `503` - manual jobs queue is full or unavailable;
 - `408` - request context timed out before enqueue.
+- `501` - checker exists in Laravel/UI contract, but is not implemented in Go poller yet.
 
 Poller flow:
 
@@ -134,6 +137,28 @@ Poller flow:
 6. Worker pool executes the check and posts result to Laravel `/internal/check-results`.
 
 Go poller does not check tariffs, user permissions, incidents or notifications.
+
+Stub result example for not-yet-implemented checkers:
+
+```json
+{
+  "event_id": "uuid",
+  "monitor_id": 1,
+  "check_type": "sitemap_xml",
+  "status": "skipped",
+  "checked_at": "2026-06-07T12:00:05+04:00",
+  "duration_ms": 0,
+  "result": {
+    "implemented": false
+  },
+  "error": {
+    "code": "checker_not_implemented",
+    "message": "Checker is configured in Laravel but is not implemented in poller yet."
+  }
+}
+```
+
+Laravel must save the result for traceability, keep monitor state as `unknown`, `pending_implementation` or an equivalent neutral status, and skip incident/notification side effects.
 
 ## POST `/internal/check-results`
 
