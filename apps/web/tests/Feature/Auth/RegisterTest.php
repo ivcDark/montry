@@ -39,6 +39,7 @@ class RegisterTest extends TestCase
             'email' => 'ivan@gmail.com',
             'password' => 'password',
             'password_confirmation' => 'password',
+            'personal_data_agreement' => '1',
         ]);
 
         $response->assertRedirect('/register/verify-code');
@@ -347,6 +348,7 @@ class RegisterTest extends TestCase
                 'email' => 'ivan-pro@gmail.com',
                 'password' => 'password',
                 'password_confirmation' => 'password',
+                'personal_data_agreement' => '1',
             ])
             ->assertRedirect('/register/verify-code');
 
@@ -409,5 +411,26 @@ class RegisterTest extends TestCase
 
         $this->assertDatabaseCount('payments', 0);
         $this->assertNull(session('billing.intended_plan_code'));
+    }
+
+    public function test_registration_requires_personal_data_agreement(): void
+    {
+        Mail::fake();
+
+        $this
+            ->from('/register')
+            ->post('/register', [
+                'name' => 'Ivan Petrov',
+                'email' => 'ivan-agreement@gmail.com',
+                'password' => 'password',
+                'password_confirmation' => 'password',
+                'personal_data_agreement' => '0',
+            ])
+            ->assertRedirect('/register')
+            ->assertSessionHasErrors('personal_data_agreement');
+
+        $this->assertDatabaseMissing('users', [
+            'email' => 'ivan-agreement@gmail.com',
+        ]);
     }
 }

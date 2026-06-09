@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
+import BrandMark from '@/Components/BrandMark.vue'
+import {
+    Activity,
+    BarChart3,
+    FolderKanban,
+    Globe2,
+    LogOut,
+    Settings,
+} from '@lucide/vue'
 
 type Organization = {
     id: string
@@ -36,11 +45,11 @@ type PageProps = {
 type NavigationItem = {
     key: string
     label: string
-    icon: string
-    href?: string
+    href: string
+    icon: typeof Globe2
 }
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
     organization: Organization
     activeItem: string
     title: string
@@ -53,14 +62,10 @@ const props = withDefaults(defineProps<{
 })
 
 const navigation: NavigationItem[] = [
-    { key: 'dashboard', label: 'Обзор', href: '/dashboard', icon: '●' },
-    { key: 'projects', label: 'Проекты', href: '/projects', icon: '□' },
-    { key: 'sites', label: 'Сайты', href: '/sites', icon: '◇' },
-    { key: 'monitors', label: 'Мониторинги', href: '/monitors', icon: '◌' },
-    { key: 'incidents', label: 'Инциденты', href: '/incidents', icon: '!' },
-    { key: 'notifications', label: 'Уведомления', icon: '✉' },
-    { key: 'billing', label: 'Тариф', href: '/billing', icon: '₽' },
-    { key: 'settings', label: 'Настройки', href: '/settings', icon: '⚙' },
+    { key: 'sites', label: 'Сайты', href: '/sites', icon: Globe2 },
+    { key: 'projects', label: 'Проекты', href: '/projects', icon: FolderKanban },
+    { key: 'reports', label: 'Отчеты', href: '#', icon: BarChart3 },
+    { key: 'settings', label: 'Настройки', href: '/settings', icon: Settings },
 ]
 
 const page = usePage<PageProps>()
@@ -68,10 +73,11 @@ const user = page.props.auth.user
 const billingSummary = computed(() => page.props.billing ?? null)
 
 const planName = computed(() => billingSummary.value?.plan?.name ?? 'Free')
-const monitorsCurrent = computed(() => billingSummary.value?.monitors.current ?? props.usageCurrent)
-const monitorsLimit = computed(() => billingSummary.value ? billingSummary.value.monitors.limit : props.usageLimit)
+const monitorsCurrent = computed(() => billingSummary.value?.monitors.current ?? 0)
+const monitorsLimit = computed(() => billingSummary.value?.monitors.limit ?? null)
 const sitesCurrent = computed(() => billingSummary.value?.sites.current ?? 0)
-const sitesLimit = computed(() => billingSummary.value ? billingSummary.value.sites.limit : null)
+const sitesLimit = computed(() => billingSummary.value?.sites.limit ?? null)
+const userInitial = computed(() => (user?.name || user?.email || 'M').trim().slice(0, 1).toUpperCase())
 
 function usagePercent(current: number, limit: number | null): number {
     if (limit === null) {
@@ -91,88 +97,129 @@ function limitLabel(limit: number | null): string {
 </script>
 
 <template>
-    <main class="min-h-screen bg-[#F6F8FB] font-sans text-[#111827] lg:grid lg:grid-cols-[260px_minmax(0,1fr)]">
-        <aside class="sticky top-0 hidden h-screen self-start overflow-y-auto bg-[#0B1220] px-5 py-7 text-white lg:flex lg:flex-col">
+    <main class="min-h-screen bg-[#F3F8F5] font-sans text-[#26332D] lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
+        <aside class="sticky top-0 hidden h-screen self-start overflow-y-auto border-r border-[#DDEBE3] bg-white px-5 py-7 lg:flex lg:flex-col">
             <div>
                 <Link href="/" class="flex items-center gap-3">
-                    <span class="grid h-10 w-10 place-items-center rounded-xl bg-[#0F6BFF] text-lg font-extrabold text-white">M</span>
-                    <span class="text-2xl font-extrabold tracking-normal">Montry</span>
+                    <BrandMark class="h-9 w-9" />
+                    <span class="text-2xl font-bold tracking-normal text-[#173B2A]">Montry</span>
                 </Link>
 
-                <p class="mt-1 text-sm font-semibold text-[#94A3B8]">Мониторинг сайтов</p>
-
-                <nav class="mt-8 grid gap-1" aria-label="Основная навигация">
-                    <a
+                <nav class="mt-12 grid gap-2" aria-label="Основная навигация">
+                    <Link
                         v-for="item in navigation"
                         :key="item.key"
-                        :href="item.href ?? undefined"
-                        class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition"
-                        :class="[
-                            activeItem === item.key ? 'bg-[#17233A] text-white' : 'text-[#94A3B8]',
-                            item.href ? 'hover:bg-white/5 hover:text-white' : 'cursor-not-allowed opacity-55',
-                        ]"
-                        :aria-disabled="!item.href"
+                        :href="item.href"
+                        class="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition"
+                        :class="activeItem === item.key ? 'bg-[#E9F8EF] text-[#173B2A]' : 'text-[#6A7A70] hover:bg-[#F3F8F5] hover:text-[#173B2A]'"
                     >
-                        <span class="w-5 text-center">{{ item.icon }}</span>
+                        <span
+                            class="grid h-8 w-8 place-items-center rounded-xl border"
+                            :class="activeItem === item.key ? 'border-[#BEE7CE] bg-[#DDF6E8] text-[#1E9B5D]' : 'border-[#CFE1D7] bg-[#F3F8F5] text-[#8A9A91]'"
+                        >
+                            <component :is="item.icon" class="h-4 w-4" :stroke-width="2" />
+                        </span>
                         {{ item.label }}
-                    </a>
+                    </Link>
                 </nav>
+            </div>
 
-                <div class="mt-10 rounded-3xl bg-[#17233A] p-4">
-                    <p class="font-extrabold text-white">Тариф {{ planName }}</p>
+            <div class="mt-auto rounded-3xl border border-[#DDEBE3] bg-[#F6FBF8] p-4">
+                <p class="text-lg font-semibold text-[#26332D]">Тариф {{ planName }}</p>
 
-                    <div class="mt-4 space-y-4">
-                        <div>
-                            <div class="flex items-center justify-between gap-3 text-sm">
-                                <span class="font-bold text-[#94A3B8]">Мониторинги</span>
-                                <span class="font-extrabold text-white">{{ monitorsCurrent }} / {{ limitLabel(monitorsLimit) }}</span>
-                            </div>
-                            <div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                                <div class="h-full rounded-full bg-[#0F6BFF]" :style="{ width: `${usagePercent(monitorsCurrent, monitorsLimit)}%` }" />
-                            </div>
+                <div class="mt-4 space-y-4">
+                    <div>
+                        <div class="flex items-center justify-between gap-3 text-sm">
+                            <span class="font-medium text-[#6A7A70]">Сайты</span>
+                            <span class="font-medium text-[#26332D]">{{ sitesCurrent }} / {{ limitLabel(sitesLimit) }}</span>
                         </div>
+                        <div class="mt-2 h-2 overflow-hidden rounded-full bg-[#E2ECE6]">
+                            <div class="h-full rounded-full bg-[#2FA568]" :style="{ width: `${usagePercent(sitesCurrent, sitesLimit)}%` }" />
+                        </div>
+                    </div>
 
-                        <div>
-                            <div class="flex items-center justify-between gap-3 text-sm">
-                                <span class="font-bold text-[#94A3B8]">Сайты</span>
-                                <span class="font-extrabold text-white">{{ sitesCurrent }} / {{ limitLabel(sitesLimit) }}</span>
-                            </div>
-                            <div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                                <div class="h-full rounded-full bg-[#12B3A8]" :style="{ width: `${usagePercent(sitesCurrent, sitesLimit)}%` }" />
-                            </div>
+                    <div>
+                        <div class="flex items-center justify-between gap-3 text-sm">
+                            <span class="font-medium text-[#6A7A70]">Мониторы</span>
+                            <span class="font-medium text-[#26332D]">{{ monitorsCurrent }} / {{ limitLabel(monitorsLimit) }}</span>
+                        </div>
+                        <div class="mt-2 h-2 overflow-hidden rounded-full bg-[#E2ECE6]">
+                            <div class="h-full rounded-full bg-[#62C98F]" :style="{ width: `${usagePercent(monitorsCurrent, monitorsLimit)}%` }" />
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div class="mt-auto border-t border-white/10 pt-5">
-                <div v-if="user" class="min-w-0">
-                    <p class="truncate text-sm font-extrabold text-white">{{ user.name }}</p>
-                    <p class="mt-1 truncate text-xs font-semibold text-[#94A3B8]">{{ user.email }}</p>
-                </div>
 
                 <Link
-                    href="/logout"
-                    method="post"
-                    as="button"
-                    class="mt-4 flex h-10 w-full items-center justify-center rounded-xl border border-white/10 text-sm font-extrabold text-[#CBD5E1] transition hover:border-white/20 hover:bg-white/5 hover:text-white cursor-pointer"
+                    href="/billing"
+                    class="mt-5 inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[#E7F5ED] px-4 text-sm font-medium text-[#173B2A] transition hover:bg-[#D8F0E3]"
                 >
-                    Выйти
+                    Управлять
                 </Link>
             </div>
         </aside>
 
         <section class="min-w-0">
-            <header class="border-b border-[#E5E7EB] bg-white px-5 py-5 sm:px-8">
-                <div class="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <p class="text-sm font-bold text-[#12B3A8]">{{ organization.name }}</p>
-                        <h1 class="mt-1 text-3xl font-extrabold tracking-normal text-[#111827]">{{ title }}</h1>
-                        <p class="mt-2 text-[#667085]">{{ subtitle }}</p>
+            <header class="sticky top-0 z-20 border-b border-[#DDEBE3] bg-white/95 px-5 py-4 backdrop-blur sm:px-8">
+                <div class="mx-auto flex max-w-7xl items-center justify-between gap-4">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-3 lg:hidden">
+                            <BrandMark class="h-8 w-8" />
+                            <span class="text-xl font-bold text-[#173B2A]">Montry</span>
+                        </div>
+                        <p class="mt-2 truncate text-sm font-medium text-[#6A7A70] lg:mt-0">{{ organization.name }}</p>
+                        <div class="mt-1 flex flex-wrap items-center gap-2">
+                            <span class="rounded-full bg-[#E9F8EF] px-3 py-1 text-xs font-medium text-[#1E9B5D]">Тариф {{ planName }}</span>
+                            <span class="rounded-full bg-[#F3F8F5] px-3 py-1 text-xs font-medium text-[#52645A]">Сайты: {{ sitesCurrent }} / {{ limitLabel(sitesLimit) }}</span>
+                        </div>
                     </div>
 
-                    <slot name="actions" />
+                    <div class="flex shrink-0 items-center gap-2 sm:gap-3">
+                        <slot name="header-actions" />
+                        <slot name="actions" />
+
+                        <div class="hidden h-11 items-center gap-2 rounded-full border border-[#DDEBE3] bg-white px-4 text-sm font-medium text-[#52645A] sm:flex">
+                            <Activity class="h-4 w-4 text-[#E08600]" :stroke-width="2" />
+                            Проверки активны
+                        </div>
+
+                        <div class="grid h-11 w-11 place-items-center rounded-full border border-[#DDEBE3] bg-[#E9F8EF] text-sm font-semibold text-[#173B2A]">
+                            {{ userInitial }}
+                        </div>
+
+                        <Link
+                            href="/logout"
+                            method="post"
+                            as="button"
+                            class="hidden h-10 items-center justify-center gap-2 rounded-xl border border-[#DDEBE3] bg-white px-4 text-sm font-medium text-[#52645A] transition hover:border-[#B8D0C2] hover:text-[#173B2A] sm:inline-flex"
+                        >
+                            <LogOut class="h-4 w-4" :stroke-width="2" />
+                            Выйти
+                        </Link>
+                    </div>
                 </div>
+
+                <nav class="mx-auto mt-4 flex max-w-7xl gap-2 overflow-x-auto pb-1 lg:hidden" aria-label="Основная навигация">
+                    <Link
+                        v-for="item in navigation"
+                        :key="item.key"
+                        :href="item.href"
+                        class="shrink-0 rounded-full px-4 py-2 text-sm font-medium transition"
+                        :class="activeItem === item.key ? 'bg-[#E9F8EF] text-[#173B2A]' : 'bg-white text-[#6A7A70] hover:bg-[#F3F8F5]'"
+                    >
+                        <component :is="item.icon" class="mr-1.5 inline h-4 w-4 align-[-3px]" :stroke-width="2" />
+                        {{ item.label }}
+                    </Link>
+
+                    <Link
+                        href="/logout"
+                        method="post"
+                        as="button"
+                        class="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-medium text-[#6A7A70] transition hover:bg-[#F3F8F5]"
+                    >
+                        <LogOut class="mr-1.5 inline h-4 w-4 align-[-3px]" :stroke-width="2" />
+                        Выйти
+                    </Link>
+                </nav>
             </header>
 
             <slot />

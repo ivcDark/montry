@@ -30,6 +30,7 @@ final class RegisterRequest extends FormRequest
                 'confirmed',
                 Password::min(6),
             ],
+            'personal_data_agreement' => ['accepted'],
         ];
     }
 
@@ -44,7 +45,8 @@ final class RegisterRequest extends FormRequest
             'email.unique' => 'Данный Email уже занят',
             'password.required' => 'Пароль обязателен для заполнения',
             'password.min' => 'Длина пароля должна быть более 6 символов',
-            'password.confirmed' => 'Пароли не совпадают'
+            'password.confirmed' => 'Пароли не совпадают',
+            'personal_data_agreement.accepted' => 'Необходимо согласиться с обработкой персональных данных',
         ];
     }
 

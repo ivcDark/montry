@@ -36,6 +36,7 @@ final class RegisterController extends Controller
 
         return Inertia::render('Auth/Register', [
             'intendedPlanCode' => $intendedPlanCode,
+            'googleAuthEnabled' => (bool) config('services.google.enabled', false),
         ]);
     }
 

@@ -1,6 +1,25 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
+import {
+    Activity,
+    AlertTriangle,
+    CalendarClock,
+    Check,
+    ChevronDown,
+    Clock3,
+    FileText,
+    Globe2,
+    History,
+    LoaderCircle,
+    Pause,
+    Plus,
+    RotateCw,
+    Settings,
+    ShieldCheck,
+    Trash2,
+    X,
+} from '@lucide/vue'
 import FlashToast from '@/Components/FlashToast.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useAutoRefresh } from '../../Composables/useAutoRefresh'
@@ -150,10 +169,48 @@ const isDeleteModalOpen = ref(false)
 const checkingMonitorIds = ref<string[]>([])
 const checkingStartedFrom = ref<Record<string, string | null>>({})
 const checkingTimeouts = ref<Record<string, ReturnType<typeof setTimeout>>>({})
-const intervalPresets = [5, 10, 15, 30, 60, 360, 720, 1440]
+const checkingSite = ref(false)
+const checkingSiteStartedFrom = ref<string | null>(null)
+const checkingSiteTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 const monitorDrafts = ref<Record<string, MonitorDraft>>(
     Object.fromEntries(props.site.monitors.map((monitor) => [monitor.id, draftFromMonitor(monitor)])),
 )
+
+const enabledCount = computed(() => props.site.monitors.filter((monitor) => monitor.is_enabled).length)
+const availableCount = computed(() => props.site.monitors.filter((monitor) => monitor.is_available).length)
+const activeIncidentCount = computed(() => props.site.incidents.filter((incident) => incident.status === 'open').length)
+const latestCheckAt = computed(() => {
+    const dates = props.site.monitors
+        .map((monitor) => monitor.last_check_at)
+        .filter((value): value is string => Boolean(value))
+        .sort()
+
+    return dates.at(-1) ?? null
+})
+const successfulMonitorsCount = computed(() => props.site.monitors.filter((monitor) => monitorStatus(monitor) === 'ok').length)
+const successRate = computed(() => {
+    if (!props.site.monitors.length) return 0
+
+    return Math.round((successfulMonitorsCount.value / props.site.monitors.length) * 100)
+})
+const averageResponse = computed(() => {
+    const values = props.site.monitors
+        .map((monitor) => monitor.latest_result?.response_time_ms)
+        .filter((value): value is number => typeof value === 'number')
+
+    if (!values.length) return null
+
+    return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
+})
+const sslDaysLeft = computed(() => {
+    const values = props.site.monitors
+        .map((monitor) => monitor.latest_result?.normalized_result.days_until_expiration)
+        .filter((value): value is number => typeof value === 'number')
+
+    return values.length ? Math.min(...values) : null
+})
+const isSiteChecking = computed(() => checkingSite.value || props.site.monitors.some((monitor) => monitor.is_checking))
+const openIncident = computed(() => props.site.incidents.find((incident) => incident.status === 'open') ?? null)
 
 watch(
     () => props.site.monitors,
@@ -174,22 +231,19 @@ watch(
                 stopChecking(id)
             }
         })
+
+        if (checkingSite.value && latestCheckAt.value !== checkingSiteStartedFrom.value) {
+            stopSiteChecking()
+        }
     },
 )
 
 onUnmounted(() => {
     Object.values(checkingTimeouts.value).forEach(clearTimeout)
-})
 
-const enabledCount = computed(() => props.site.monitors.filter((monitor) => monitor.is_enabled).length)
-const activeIncidentCount = computed(() => props.site.incidents.filter((incident) => incident.status === 'open').length)
-const latestCheckAt = computed(() => {
-    const dates = props.site.monitors
-        .map((monitor) => monitor.last_check_at)
-        .filter((value): value is string => Boolean(value))
-        .sort()
-
-    return dates.at(-1) ?? null
+    if (checkingSiteTimeout.value) {
+        clearTimeout(checkingSiteTimeout.value)
+    }
 })
 
 function draftFromMonitor(monitor: Monitor): MonitorDraft {
@@ -217,24 +271,66 @@ function draftFromMonitor(monitor: Monitor): MonitorDraft {
 }
 
 function statusLabel(status: string): string {
-    if (status === 'ok' || status === 'success' || status === 'up') return 'OK'
-    if (status === 'down' || status === 'failure') return 'Down'
-    if (status === 'warning' || status === 'degraded') return 'Warning'
-    if (status === 'checking') return 'Checking'
-    if (status === 'paused') return 'Paused'
-    if (status === 'empty') return 'Empty'
+    if (status === 'ok' || status === 'success' || status === 'up') return 'Работает'
+    if (status === 'down' || status === 'failure') return 'Ошибка'
+    if (status === 'warning' || status === 'degraded') return 'Предупреждение'
+    if (status === 'checking') return 'Проверяется'
+    if (status === 'paused') return 'На паузе'
+    if (status === 'empty') return 'Нет проверок'
 
-    return 'Unknown'
+    return 'Неизвестно'
+}
+
+function normalizedStatus(status: string): string {
+    if (status === 'success' || status === 'up') return 'ok'
+    if (status === 'failure') return 'down'
+    if (status === 'degraded') return 'warning'
+
+    return status
 }
 
 function statusClass(status: string): string {
-    if (status === 'ok' || status === 'success' || status === 'up') return 'bg-[#ECFDF3] text-[#16A34A]'
-    if (status === 'down' || status === 'failure') return 'bg-[#FEECEC] text-[#EF4444]'
-    if (status === 'warning' || status === 'degraded') return 'bg-[#FFF7E8] text-[#F59E0B]'
-    if (status === 'checking') return 'bg-[#EAF2FF] text-[#0F6BFF]'
-    if (status === 'paused') return 'bg-[#F1F5F9] text-[#64748B]'
+    const normalized = normalizedStatus(status)
 
-    return 'bg-[#EAF2FF] text-[#0F6BFF]'
+    if (normalized === 'ok') return 'bg-[#E9F8EF] text-[#159653]'
+    if (normalized === 'down') return 'bg-[#FEECEC] text-[#E11D25]'
+    if (normalized === 'warning') return 'bg-[#FFF7E8] text-[#D97706]'
+    if (normalized === 'checking') return 'bg-[#E9F8EF] text-[#1E9B5D]'
+    if (normalized === 'paused') return 'bg-[#ECEFF1] text-[#64706A]'
+
+    return 'bg-[#F3F8F5] text-[#52645A]'
+}
+
+function statusIconBoxClass(status: string): string {
+    const normalized = normalizedStatus(status)
+
+    if (normalized === 'down') return 'border-[#FFC7C7] bg-[#FEECEC] text-[#E11D25] [animation:pulse_2.8s_cubic-bezier(0.4,0,0.6,1)_infinite]'
+    if (normalized === 'warning') return 'border-[#F7D59A] bg-[#FFF7E8] text-[#D97706]'
+    if (normalized === 'paused') return 'border-[#D7DDDA] bg-[#ECEFF1] text-[#64706A]'
+    if (normalized === 'checking') return 'border-[#BFEBD0] bg-white text-[#24A869]'
+
+    return 'border-[#BFEBD0] bg-[#E9F8EF] text-[#159653]'
+}
+
+function statusTextClass(status: string): string {
+    const normalized = normalizedStatus(status)
+
+    if (normalized === 'ok') return 'text-[#159653]'
+    if (normalized === 'down') return 'text-[#E11D25]'
+    if (normalized === 'warning') return 'text-[#D97706]'
+
+    return 'text-[#6A7A70]'
+}
+
+function statusIcon(status: string): typeof Check {
+    const normalized = normalizedStatus(status)
+
+    if (normalized === 'ok') return Check
+    if (normalized === 'down') return X
+    if (normalized === 'warning') return AlertTriangle
+    if (normalized === 'paused') return Pause
+
+    return Activity
 }
 
 function monitorStatus(monitor: Monitor): string {
@@ -249,32 +345,57 @@ function monitorStatus(monitor: Monitor): string {
 }
 
 function typeLabel(type: string): string {
-    if (type === 'http') return 'HTTP'
-    if (type === 'ssl') return 'SSL'
-    if (type === 'domain') return 'Domain'
+    return {
+        http: 'Доступность сайта',
+        ssl: 'SSL',
+        domain: 'Домен',
+        dns: 'DNS',
+        robots_txt: 'Robots.txt',
+        sitemap_xml: 'Sitemap.xml',
+        tcp_port: 'TCP-порт',
+        api_endpoint: 'API endpoint',
+    }[type] ?? type.toUpperCase()
+}
 
-    return type.toUpperCase()
+function shortTypeLabel(type: string): string {
+    return {
+        http: 'HTTP',
+        ssl: 'SSL',
+        domain: 'Domain',
+        dns: 'DNS',
+        robots_txt: 'Robots',
+        sitemap_xml: 'Sitemap',
+        tcp_port: 'TCP',
+        api_endpoint: 'API',
+    }[type] ?? type.toUpperCase()
+}
+
+function typeIcon(type: string): typeof Globe2 {
+    if (type === 'ssl') return ShieldCheck
+    if (type === 'domain' || type === 'dns') return Globe2
+    if (type === 'robots_txt' || type === 'sitemap_xml') return FileText
+
+    return Activity
 }
 
 function typeClass(type: string): string {
-    if (type === 'http') return 'bg-[#EAF2FF] text-[#0F6BFF]'
-    if (type === 'ssl') return 'bg-[#ECFDF3] text-[#16A34A]'
-    if (type === 'domain') return 'bg-[#FFF7E8] text-[#F59E0B]'
+    if (type === 'http') return 'bg-[#E9F8EF] text-[#159653]'
+    if (type === 'ssl') return 'bg-[#E9F8EF] text-[#159653]'
+    if (type === 'domain') return 'bg-[#F3F8F5] text-[#52645A]'
 
-    return 'bg-[#F1F5F9] text-[#64748B]'
+    return 'bg-[#F3F8F5] text-[#52645A]'
 }
 
 function monitorCardClass(monitor: Monitor): string {
-    if (!monitor.is_available) return 'border-[#E5E7EB] bg-[#F3F4F6]'
+    if (!monitor.is_available) return 'border-[#D7DDDA] bg-[#F6F7F7]'
 
     const status = monitorStatus(monitor)
 
-    if (status === 'down') return 'border-[#FECACA] bg-[#FFF8F8]'
-    if (status === 'warning') return 'border-[#FDE68A] bg-[#FFFCF4]'
-    if (status === 'checking') return 'border-[#BFDBFE] bg-[#F7FBFF]'
-    if (status === 'ok') return 'border-[#BBF7D0] bg-[#F6FEF9]'
+    if (status === 'down') return 'border-[#FFC7C7] bg-[#FFF8F8]'
+    if (status === 'warning') return 'border-[#F7D59A] bg-[#FFFCF4]'
+    if (status === 'checking') return 'border-[#BFEBD0] bg-white'
 
-    return 'border-[#E5E7EB] bg-[#F8FAFC]'
+    return 'border-[#DDEBE3] bg-white'
 }
 
 function formatDate(value: string | null): string {
@@ -286,6 +407,20 @@ function formatDate(value: string | null): string {
         hour: '2-digit',
         minute: '2-digit',
     }).format(new Date(value))
+}
+
+function relativeDate(value: string | null): string {
+    if (!value) return 'нет данных'
+
+    const diffMinutes = Math.max(1, Math.round((Date.now() - new Date(value).getTime()) / 60000))
+
+    if (diffMinutes < 60) return `${diffMinutes} мин назад`
+
+    const diffHours = Math.round(diffMinutes / 60)
+
+    if (diffHours < 24) return `${diffHours} ч назад`
+
+    return formatDate(value)
 }
 
 function formatInterval(seconds: number | null): string {
@@ -305,61 +440,12 @@ function setDraftIntervalMinutes(draft: MonitorDraft, minutes: number): void {
     draft.interval_seconds = minutes * 60
 }
 
-function intervalText(seconds: number): string {
-    const minutes = intervalMinutes(seconds)
-
-    if (minutes === 60) return 'Каждый час'
-    if (minutes === 1440) return 'Раз в день'
-    if (minutes > 60 && minutes % 60 === 0) return `Каждые ${minutes / 60} ч`
-
-    return `Каждые ${minutes} мин`
-}
-
 function formatDuration(seconds: number | null): string {
     if (!seconds) return '0 мин'
     if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} мин`
     if (seconds < 86400) return `${Math.round(seconds / 3600)} ч`
 
     return `${Math.round(seconds / 86400)} д`
-}
-
-function resultText(monitor: Monitor): string {
-    const result = monitor.latest_result
-
-    if (isChecking(monitor)) return 'Идет проверка'
-    if (!result) return 'Нет результата'
-    if (result.error_message) return result.error_message
-
-    if (monitor.type === 'http') {
-        const code = result.status_code ? `${result.status_code}` : 'HTTP'
-        const time = result.response_time_ms ? ` · ${result.response_time_ms} мс` : ''
-
-        return `${code}${time}`
-    }
-
-    const days = result.normalized_result.days_until_expiration
-
-    if (typeof days === 'number') {
-        return `истекает через ${days} ${dayWord(days)}`
-    }
-
-    return statusLabel(result.status)
-}
-
-function checkResultText(result: CheckResult): string {
-    if (result.error_message) return result.error_message
-    if (result.check_type === 'http') {
-        const code = result.status_code ? `${result.status_code}` : 'HTTP'
-        const time = result.response_time_ms ? ` · ${result.response_time_ms} мс` : ''
-
-        return `${code}${time}`
-    }
-
-    const days = result.normalized_result.days_until_expiration
-
-    if (typeof days === 'number') return `${days} ${dayWord(days)}`
-
-    return statusLabel(result.status)
 }
 
 function dayWord(days: number): string {
@@ -370,6 +456,46 @@ function dayWord(days: number): string {
     if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'дня'
 
     return 'дней'
+}
+
+function resultText(monitor: Monitor): string {
+    const result = monitor.latest_result
+
+    if (isChecking(monitor)) return 'Идет проверка'
+    if (!monitor.is_available) return 'Недоступно на текущем тарифе'
+    if (!result) return 'Нет результата'
+    if (result.error_message) return result.error_message
+
+    if (monitor.type === 'http') {
+        const code = result.status_code ? `HTTP ${result.status_code}` : 'HTTP'
+        const time = result.response_time_ms ? ` · ${result.response_time_ms} мс` : ''
+
+        return `${code}${time}`
+    }
+
+    const days = result.normalized_result.days_until_expiration
+
+    if (typeof days === 'number') {
+        return `${days} ${dayWord(days)} до истечения`
+    }
+
+    return statusLabel(result.status)
+}
+
+function checkResultText(result: CheckResult): string {
+    if (result.error_message) return result.error_message
+    if (result.check_type === 'http') {
+        const code = result.status_code ? `HTTP ${result.status_code}` : 'HTTP'
+        const time = result.response_time_ms ? ` · ${result.response_time_ms} мс` : ''
+
+        return `${code}${time}`
+    }
+
+    const days = result.normalized_result.days_until_expiration
+
+    if (typeof days === 'number') return `${days} ${dayWord(days)}`
+
+    return statusLabel(result.status)
 }
 
 function parseNumberList(value: string): number[] {
@@ -498,13 +624,34 @@ function checkNow(monitor: Monitor): void {
                 [monitor.id]: setTimeout(() => stopChecking(monitor.id), 30000),
             }
         },
-        onError: () => {
-            stopChecking(monitor.id)
-        },
-        onCancel: () => {
-            stopChecking(monitor.id)
-        },
+        onError: () => stopChecking(monitor.id),
+        onCancel: () => stopChecking(monitor.id),
     })
+}
+
+function checkSiteNow(): void {
+    if (isSiteChecking.value) return
+
+    router.post(`/sites/${props.site.id}/check-now`, {}, {
+        preserveScroll: true,
+        onStart: () => {
+            checkingSite.value = true
+            checkingSiteStartedFrom.value = latestCheckAt.value
+            checkingSiteTimeout.value = setTimeout(stopSiteChecking, 30000)
+        },
+        onError: stopSiteChecking,
+        onCancel: stopSiteChecking,
+    })
+}
+
+function stopSiteChecking(): void {
+    checkingSite.value = false
+    checkingSiteStartedFrom.value = null
+
+    if (checkingSiteTimeout.value) {
+        clearTimeout(checkingSiteTimeout.value)
+        checkingSiteTimeout.value = null
+    }
 }
 
 function deleteSite(): void {
@@ -514,6 +661,22 @@ function deleteSite(): void {
             isDeleteModalOpen.value = false
         },
     })
+}
+
+function sparkBars(seed: string, status = props.site.status): number[] {
+    const base = seed.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+
+    return Array.from({ length: 12 }, (_, index) => 8 + ((base + index * 7) % 22))
+}
+
+function sparkClass(status: string): string {
+    const normalized = normalizedStatus(status)
+
+    if (normalized === 'down') return 'bg-[#EF6B6B]'
+    if (normalized === 'warning') return 'bg-[#F3A83B]'
+    if (normalized === 'paused') return 'bg-[#9AA5A0]'
+
+    return 'bg-[#62C98F]'
 }
 </script>
 
@@ -528,347 +691,435 @@ function deleteSite(): void {
         :subtitle="site.url"
         :usage-current="site.monitors.length"
     >
-        <template #actions>
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <Link
-                    href="/sites"
-                    class="inline-flex h-11 items-center justify-center rounded-xl border border-[#E5E7EB] bg-white px-5 text-sm font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF]"
-                >
-                    Назад к сайтам
-                </Link>
-            </div>
+        <template #header-actions>
+            <Link
+                href="/sites"
+                class="hidden h-10 items-center justify-center rounded-xl border border-[#DDEBE3] bg-white px-4 text-sm font-medium text-[#52645A] transition hover:border-[#24A869] hover:text-[#173B2A] md:inline-flex"
+            >
+                К списку сайтов
+            </Link>
         </template>
 
-        <div class="mx-auto max-w-7xl px-5 py-8 sm:px-8">
-            <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                    <p class="text-sm font-bold text-[#667085]">Здоровье сайта</p>
-                    <div class="mt-4 flex items-center gap-3">
-                        <span class="rounded-full px-3 py-1 text-xs font-extrabold" :class="statusClass(site.status)">
-                            {{ statusLabel(site.status) }}
-                        </span>
-                        <span class="text-sm font-semibold text-[#667085]">{{ site.problem_label }}</span>
-                    </div>
-                    <p class="mt-4 truncate text-sm text-[#667085]">{{ site.host }}<template v-if="site.port">:{{ site.port }}</template></p>
-                </article>
+        <div class="mx-auto grid max-w-7xl gap-6 px-5 py-5 sm:px-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:py-6">
+            <main class="min-w-0 space-y-6">
+                <section class="rounded-3xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
+                    <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                        <div class="flex min-w-0 gap-4">
+                            <span
+                                class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border"
+                                :class="isSiteChecking ? 'border-[#BFEBD0] bg-white text-[#24A869]' : statusIconBoxClass(site.status)"
+                            >
+                                <LoaderCircle v-if="isSiteChecking" class="h-5 w-5 animate-spin" :stroke-width="2.2" />
+                                <component v-else :is="statusIcon(site.status)" class="h-5 w-5" :stroke-width="2.2" />
+                            </span>
 
-                <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                    <p class="text-sm font-bold text-[#667085]">Мониторинги</p>
-                    <p class="mt-3 text-4xl font-extrabold text-[#111827]">{{ enabledCount }} / {{ site.monitors.length }}</p>
-                    <p class="mt-2 text-sm text-[#667085]">Включено сейчас</p>
-                </article>
-
-                <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                    <p class="text-sm font-bold text-[#667085]">Последняя проверка</p>
-                    <p class="mt-3 text-xl font-extrabold text-[#111827]">{{ formatDate(latestCheckAt) }}</p>
-                    <p class="mt-2 text-sm text-[#667085]">По любому мониторингу сайта</p>
-                </article>
-
-                <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                    <p class="text-sm font-bold text-[#667085]">Активные инциденты</p>
-                    <p class="mt-3 text-4xl font-extrabold" :class="activeIncidentCount ? 'text-[#EF4444]' : 'text-[#16A34A]'">{{ activeIncidentCount }}</p>
-                    <p class="mt-2 text-sm text-[#667085]">Открытые проблемы</p>
-                </article>
-            </section>
-
-            <section class="mt-6 grid gap-5">
-                <article
-                    v-for="monitor in site.monitors"
-                    :key="monitor.id"
-                    class="relative overflow-hidden rounded-3xl border p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)] transition"
-                    :class="monitorCardClass(monitor)"
-                >
-                    <div :class="!monitor.is_available ? 'pointer-events-none select-none opacity-35 grayscale' : ''">
-                    <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                        <div class="min-w-0">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <span class="rounded-full px-3 py-1 text-xs font-extrabold" :class="typeClass(monitor.type)">
-                                    {{ typeLabel(monitor.type) }}
-                                </span>
-                                <span class="rounded-full px-3 py-1 text-xs font-extrabold" :class="statusClass(monitorStatus(monitor))">
-                                    {{ statusLabel(monitorStatus(monitor)) }}
-                                </span>
-                                <span class="rounded-full px-3 py-1 text-xs font-extrabold" :class="monitor.is_enabled ? 'bg-[#ECFDF3] text-[#16A34A]' : 'bg-[#F1F5F9] text-[#64748B]'">
-                                    {{ monitor.is_available && monitor.is_enabled ? 'Включен' : 'На паузе' }}
-                                </span>
+                            <div class="min-w-0">
+                                <h1 class="truncate text-2xl font-semibold leading-tight text-[#17231C] sm:text-3xl">{{ site.name }}</h1>
+                                <p class="mt-2 truncate text-sm text-[#6A7A70]">
+                                    {{ site.url }}<span v-if="site.project"> · Проект: {{ site.project.name }}</span>
+                                </p>
+                                <div class="mt-3 flex flex-wrap items-center gap-2">
+                                    <span class="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium" :class="statusClass(isSiteChecking ? 'checking' : site.status)">
+                                        <LoaderCircle v-if="isSiteChecking" class="mr-1.5 h-3.5 w-3.5 animate-spin" :stroke-width="2.2" />
+                                        <component v-else :is="statusIcon(site.status)" class="mr-1.5 h-3.5 w-3.5" :stroke-width="2.2" />
+                                        {{ statusLabel(isSiteChecking ? 'checking' : site.status) }}
+                                    </span>
+                                    <span class="text-xs font-medium" :class="statusTextClass(site.status)">
+                                        {{ site.problem_label }}
+                                    </span>
+                                </div>
                             </div>
-
-                            <h2 class="mt-3 text-xl font-extrabold text-[#111827]">{{ monitor.name }}</h2>
-                            <p class="mt-1 text-sm leading-6 text-[#667085]">
-                                {{ resultText(monitor) }} · последняя: {{ formatDate(monitor.last_check_at) }} · следующая: {{ formatDate(monitor.next_check_at) }}
-                            </p>
                         </div>
 
                         <div class="flex flex-wrap gap-2">
                             <button
                                 type="button"
-                                class="inline-flex h-9 min-w-[104px] items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition enabled:hover:border-[#0F6BFF] enabled:hover:text-[#0F6BFF] disabled:cursor-not-allowed disabled:opacity-60"
-                                :disabled="!monitor.is_available || !monitor.is_enabled || isChecking(monitor)"
-                                @click="checkNow(monitor)"
+                                class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#2FA568] px-4 text-sm font-medium text-white transition hover:bg-[#278C58] disabled:cursor-not-allowed disabled:opacity-70"
+                                :disabled="isSiteChecking"
+                                @click="checkSiteNow"
                             >
-                                <span
-                                    v-if="isChecking(monitor)"
-                                    class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#0F6BFF]/25 border-t-[#0F6BFF]"
-                                    aria-hidden="true"
-                                />
-                                <span>{{ isChecking(monitor) ? 'Проверяем...' : 'Проверить' }}</span>
+                                <LoaderCircle v-if="isSiteChecking" class="h-4 w-4 animate-spin" :stroke-width="2" />
+                                <RotateCw v-else class="h-4 w-4" :stroke-width="2" />
+                                Запустить проверку
                             </button>
-                            <button
-                                type="button"
-                                class="h-9 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF] cursor-pointer"
-                                :disabled="!monitor.is_available"
-                                @click="toggleMonitor(monitor)"
+                            <Link
+                                :href="`/sites/${site.id}/monitors/create`"
+                                class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#D4E3DA] bg-white px-4 text-sm font-medium text-[#26332D] transition hover:border-[#24A869] hover:text-[#1E9B5D]"
                             >
-                                {{ monitor.is_enabled ? 'Пауза' : 'Включить' }}
-                            </button>
-                            <button
-                                type="button"
-                                class="h-9 rounded-xl border border-[#E5E7EB] bg-white px-3 text-xs font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF] cursor-pointer"
-                                :disabled="!monitor.is_available"
-                                @click="toggleSettings(monitor)"
-                            >
-                                {{ expandedMonitorId === monitor.id ? 'Скрыть настройки' : 'Настроить' }}
-                            </button>
+                                <Plus class="h-4 w-4" :stroke-width="2" />
+                                Добавить проверку
+                            </Link>
                         </div>
-                    </div>
-
-                    <div class="mt-5 grid gap-3 border-t border-[#E5E7EB] pt-5 sm:grid-cols-2 xl:grid-cols-4">
-                        <div>
-                            <p class="text-xs font-extrabold uppercase text-[#98A2B3]">Интервал</p>
-                            <p class="mt-1 text-sm font-bold text-[#111827]">{{ formatInterval(monitor.interval_seconds) }}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs font-extrabold uppercase text-[#98A2B3]">Таймаут</p>
-                            <p class="mt-1 text-sm font-bold text-[#111827]">{{ monitor.timeout_ms ?? 10000 }} мс</p>
-                        </div>
-                        <div>
-                            <p class="text-xs font-extrabold uppercase text-[#98A2B3]">Успешно</p>
-                            <p class="mt-1 text-sm font-bold text-[#111827]">{{ formatDate(monitor.last_success_at) }}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs font-extrabold uppercase text-[#98A2B3]">Ошибка</p>
-                            <p class="mt-1 text-sm font-bold text-[#111827]">{{ formatDate(monitor.last_failure_at) }}</p>
-                        </div>
-                    </div>
-
-                    <form
-                        v-if="monitor.is_available && expandedMonitorId === monitor.id"
-                        class="mt-5 rounded-3xl border border-[#E5E7EB] bg-white p-5"
-                        @submit.prevent="saveMonitor(monitor)"
-                    >
-                        <div class="grid gap-5 md:grid-cols-2">
-                            <div>
-                                <label :for="`monitor-name-${monitor.id}`" class="mb-2 block text-sm font-extrabold text-[#111827]">Название</label>
-                                <input :id="`monitor-name-${monitor.id}`" v-model="monitorDrafts[monitor.id].name" type="text" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                            </div>
-                            <div>
-                                <div class="mb-2 flex items-center justify-between gap-3">
-                                    <label :for="`interval-${monitor.id}`" class="block text-sm font-extrabold text-[#111827]">Частота проверки</label>
-                                    <span class="text-xs font-extrabold text-[#0F6BFF]">{{ intervalText(monitorDrafts[monitor.id].interval_seconds) }}</span>
-                                </div>
-                                <div class="rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
-                                    <div class="flex flex-wrap gap-2">
-                                        <button
-                                            v-for="minutes in intervalPresets"
-                                            :key="`${monitor.id}-${minutes}`"
-                                            type="button"
-                                            class="h-8 rounded-full px-3 text-xs font-extrabold transition"
-                                            :class="intervalMinutes(monitorDrafts[monitor.id].interval_seconds) === minutes ? 'bg-[#0F6BFF] text-white' : 'bg-white text-[#667085] hover:bg-[#EAF2FF] hover:text-[#0F6BFF]'"
-                                            @click="setDraftIntervalMinutes(monitorDrafts[monitor.id], minutes)"
-                                        >
-                                            {{ minutes === 60 ? '1 час' : minutes === 1440 ? '1 день' : minutes < 60 ? `${minutes} мин` : `${minutes / 60} ч` }}
-                                        </button>
-                                    </div>
-                                    <input
-                                        :id="`interval-${monitor.id}`"
-                                        :value="intervalMinutes(monitorDrafts[monitor.id].interval_seconds)"
-                                        type="range"
-                                        min="5"
-                                        max="1440"
-                                        step="1"
-                                        class="mt-4 w-full accent-[#0F6BFF]"
-                                        @input="setDraftIntervalMinutes(monitorDrafts[monitor.id], Number(($event.target as HTMLInputElement).value))"
-                                    >
-                                </div>
-                            </div>
-                            <div>
-                                <label :for="`timeout-${monitor.id}`" class="mb-2 block text-sm font-extrabold text-[#111827]">Таймаут, мс</label>
-                                <input :id="`timeout-${monitor.id}`" v-model.number="monitorDrafts[monitor.id].timeout_ms" type="number" min="1000" max="60000" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                            </div>
-                            <button
-                                type="button"
-                                class="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3 text-left transition hover:border-[#0F6BFF]"
-                                :aria-pressed="monitorDrafts[monitor.id].is_enabled"
-                                @click="monitorDrafts[monitor.id].is_enabled = !monitorDrafts[monitor.id].is_enabled"
-                            >
-                                <span
-                                    class="flex h-6 w-11 shrink-0 items-center rounded-full p-1 transition"
-                                    :class="monitorDrafts[monitor.id].is_enabled ? 'justify-end bg-[#0F6BFF]' : 'justify-start bg-[#CBD5E1]'"
-                                >
-                                    <span class="h-4 w-4 rounded-full bg-white shadow-sm" />
-                                </span>
-                                <span class="text-sm font-extrabold text-[#111827]">{{ monitorDrafts[monitor.id].is_enabled ? 'Включен' : 'На паузе' }}</span>
-                            </button>
-                        </div>
-
-                        <div v-if="monitor.type === 'http'" class="mt-5 grid gap-5 md:grid-cols-2">
-                            <div>
-                                <label :for="`method-${monitor.id}`" class="mb-2 block text-sm font-extrabold text-[#111827]">Метод</label>
-                                <select :id="`method-${monitor.id}`" v-model="monitorDrafts[monitor.id].method" class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                                    <option value="GET">GET</option>
-                                    <option value="HEAD">HEAD</option>
-                                    <option value="POST">POST</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label :for="`url-${monitor.id}`" class="mb-2 block text-sm font-extrabold text-[#111827]">URL</label>
-                                <input :id="`url-${monitor.id}`" v-model="monitorDrafts[monitor.id].url" type="url" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                            </div>
-                            <div>
-                                <label :for="`codes-${monitor.id}`" class="mb-2 block text-sm font-extrabold text-[#111827]">Ожидаемые коды</label>
-                                <input :id="`codes-${monitor.id}`" v-model="monitorDrafts[monitor.id].status_codes" type="text" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                            </div>
-                            <div>
-                                <label :for="`response-${monitor.id}`" class="mb-2 block text-sm font-extrabold text-[#111827]">Макс. время ответа, мс</label>
-                                <input :id="`response-${monitor.id}`" v-model.number="monitorDrafts[monitor.id].max_response_time_ms" type="number" min="1" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                            </div>
-                            <label class="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3">
-                                <input v-model="monitorDrafts[monitor.id].follow_redirects" type="checkbox" class="h-4 w-4 rounded border-[#CBD5E1] text-[#0F6BFF]">
-                                <span class="text-sm font-bold text-[#111827]">Следовать редиректам</span>
-                            </label>
-                            <label class="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3">
-                                <input v-model="monitorDrafts[monitor.id].verify_ssl" type="checkbox" class="h-4 w-4 rounded border-[#CBD5E1] text-[#0F6BFF]">
-                                <span class="text-sm font-bold text-[#111827]">Проверять SSL</span>
-                            </label>
-                        </div>
-
-                        <div v-if="monitor.type === 'ssl' || monitor.type === 'domain'" class="mt-5 grid gap-5 md:grid-cols-2">
-                            <div>
-                                <label :for="`domain-${monitor.id}`" class="mb-2 block text-sm font-extrabold text-[#111827]">Домен</label>
-                                <input :id="`domain-${monitor.id}`" v-model="monitorDrafts[monitor.id].domain" type="text" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                            </div>
-                            <div v-if="monitor.type === 'ssl'">
-                                <label :for="`port-${monitor.id}`" class="mb-2 block text-sm font-extrabold text-[#111827]">Порт</label>
-                                <input :id="`port-${monitor.id}`" v-model.number="monitorDrafts[monitor.id].port" type="number" min="1" max="65535" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                            </div>
-                            <div :class="monitor.type === 'domain' ? 'md:col-span-2' : ''">
-                                <label :for="`warning-${monitor.id}`" class="mb-2 block text-sm font-extrabold text-[#111827]">Дни предупреждений</label>
-                                <input :id="`warning-${monitor.id}`" v-model="monitorDrafts[monitor.id].warning_days" type="text" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                            </div>
-                        </div>
-
-                        <div class="mt-5 flex justify-end">
-                            <button type="submit" class="inline-flex h-11 items-center justify-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-extrabold text-white shadow-[0_10px_28px_rgba(15,107,255,0.18)] transition hover:bg-[#0757D8]">
-                                Сохранить настройки
-                            </button>
-                        </div>
-                    </form>
                     </div>
 
                     <div
-                        v-if="!monitor.is_available"
-                        class="absolute inset-0 flex items-center justify-center px-6 text-center"
-                        aria-hidden="true"
+                        v-if="site.status === 'down' || site.status === 'warning'"
+                        class="mt-5 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-start sm:justify-between"
+                        :class="site.status === 'down' ? 'border-[#FFB8B8] bg-[#FFF4F4]' : 'border-[#F7D59A] bg-[#FFFCF4]'"
                     >
-                        <p class="rounded-xl bg-white/85 px-5 py-3 text-sm font-extrabold text-[#4B5563] shadow-sm ring-1 ring-[#E5E7EB]">
-                            Доступно на подписке Pro и Plus
-                        </p>
-                    </div>
-                </article>
-            </section>
-
-            <section class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-                <div class="overflow-hidden rounded-3xl border border-[#E5E7EB] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                    <div class="border-b border-[#E5E7EB] p-5">
-                        <h2 class="text-xl font-extrabold text-[#111827]">Последние проверки</h2>
-                        <p class="mt-1 text-sm text-[#667085]">Технические результаты, полученные от poller.</p>
-                    </div>
-
-                    <div v-if="site.recent_checks.length" class="overflow-x-auto">
-                        <table class="min-w-[760px] w-full border-separate border-spacing-0 text-left text-sm">
-                            <thead class="bg-[#F8FAFC] text-xs font-extrabold text-[#667085]">
-                            <tr>
-                                <th class="px-5 py-4">Тип</th>
-                                <th class="px-5 py-4">Статус</th>
-                                <th class="px-5 py-4">Результат</th>
-                                <th class="px-5 py-4">Время</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <tr v-for="result in site.recent_checks" :key="result.id">
-                                <td class="border-t border-[#E5E7EB] px-5 py-4">
-                                    <span class="rounded-full px-3 py-1 text-xs font-extrabold" :class="typeClass(result.check_type)">
-                                        {{ typeLabel(result.check_type) }}
-                                    </span>
-                                </td>
-                                <td class="border-t border-[#E5E7EB] px-5 py-4">
-                                    <span class="rounded-full px-3 py-1 text-xs font-extrabold" :class="statusClass(result.status)">
-                                        {{ statusLabel(result.status) }}
-                                    </span>
-                                </td>
-                                <td class="max-w-96 truncate border-t border-[#E5E7EB] px-5 py-4 font-semibold text-[#111827]">
-                                    {{ checkResultText(result) }}
-                                </td>
-                                <td class="border-t border-[#E5E7EB] px-5 py-4 text-[#667085]">
-                                    {{ formatDate(result.checked_at) }}
-                                </td>
-                            </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div v-else class="p-8 text-center text-sm font-semibold text-[#667085]">
-                        Проверок еще не было.
-                    </div>
-                </div>
-
-                <aside class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                    <h2 class="text-xl font-extrabold text-[#111827]">Инциденты</h2>
-                    <p class="mt-1 text-sm text-[#667085]">История падений и восстановлений сайта.</p>
-
-                    <div v-if="site.incidents.length" class="mt-5 grid gap-3">
-                        <article
-                            v-for="incident in site.incidents"
-                            :key="incident.id"
-                            class="rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4"
-                        >
-                            <div class="flex items-start justify-between gap-3">
-                                <h3 class="text-sm font-extrabold text-[#111827]">{{ incident.title }}</h3>
-                                <span class="shrink-0 rounded-full px-3 py-1 text-xs font-extrabold" :class="incident.status === 'open' ? 'bg-[#FEECEC] text-[#EF4444]' : 'bg-[#ECFDF3] text-[#16A34A]'">
-                                    {{ incident.status === 'open' ? 'Open' : 'Resolved' }}
-                                </span>
+                        <div class="flex gap-3">
+                            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-xl" :class="site.status === 'down' ? 'bg-[#FEECEC] text-[#E11D25]' : 'bg-[#FFF7E8] text-[#D97706]'">
+                                <AlertTriangle class="h-4 w-4" :stroke-width="2" />
+                            </span>
+                            <div>
+                                <h2 class="text-base font-semibold" :class="site.status === 'down' ? 'text-[#E11D25]' : 'text-[#D97706]'">
+                                    {{ site.status === 'down' ? 'Есть активная проблема' : 'Есть предупреждение' }}
+                                </h2>
+                                <p class="mt-1 text-sm leading-6 text-[#6A7A70]">{{ site.problem_label }}</p>
                             </div>
-                            <p v-if="incident.summary" class="mt-2 text-sm leading-6 text-[#667085]">{{ incident.summary }}</p>
-                            <p class="mt-3 text-xs font-semibold text-[#667085]">
-                                {{ formatDate(incident.started_at) }} · {{ formatDuration(incident.duration_seconds) }}
-                            </p>
+                        </div>
+                        <a
+                            v-if="openIncident"
+                            href="#incidents"
+                            class="inline-flex h-10 items-center justify-center rounded-xl bg-[#E11D25] px-4 text-sm font-medium text-white transition hover:bg-[#C9151C]"
+                        >
+                            Открыть инцидент
+                        </a>
+                    </div>
+                </section>
+
+                <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    <article class="rounded-2xl border border-[#DDEBE3] bg-white p-4 shadow-[0_8px_22px_rgba(31,68,49,0.04)]">
+                        <p class="text-2xl font-semibold" :class="statusTextClass(site.status)">{{ successRate }}%</p>
+                        <p class="mt-2 text-sm font-medium text-[#26332D]">Успешность</p>
+                        <p class="mt-1 text-xs text-[#6A7A70]">по мониторингам</p>
+                        <div class="mt-3 flex h-7 items-end gap-1">
+                            <span v-for="(height, index) in sparkBars('rate')" :key="index" class="w-1.5 rounded-t-full" :class="sparkClass(site.status)" :style="{ height: `${height}px` }"></span>
+                        </div>
+                    </article>
+                    <article class="rounded-2xl border border-[#DDEBE3] bg-white p-4 shadow-[0_8px_22px_rgba(31,68,49,0.04)]">
+                        <p class="text-2xl font-semibold text-[#26332D]">{{ averageResponse === null ? '-' : `${averageResponse} мс` }}</p>
+                        <p class="mt-2 text-sm font-medium text-[#26332D]">Ответ</p>
+                        <p class="mt-1 text-xs text-[#6A7A70]">среднее</p>
+                        <div class="mt-3 flex h-7 items-end gap-1">
+                            <span v-for="(height, index) in sparkBars('response')" :key="index" class="w-1.5 rounded-t-full bg-[#62C98F]" :style="{ height: `${height}px` }"></span>
+                        </div>
+                    </article>
+                    <article class="rounded-2xl border border-[#DDEBE3] bg-white p-4 shadow-[0_8px_22px_rgba(31,68,49,0.04)]">
+                        <p class="text-2xl font-semibold" :class="successfulMonitorsCount === site.monitors.length ? 'text-[#159653]' : 'text-[#E11D25]'">{{ successfulMonitorsCount }} из {{ site.monitors.length }}</p>
+                        <p class="mt-2 text-sm font-medium text-[#26332D]">Проверки</p>
+                        <p class="mt-1 text-xs text-[#6A7A70]">успешно</p>
+                        <div class="mt-3 flex h-7 items-end gap-1">
+                            <span v-for="(height, index) in sparkBars('checks')" :key="index" class="w-1.5 rounded-t-full" :class="sparkClass(site.status)" :style="{ height: `${height}px` }"></span>
+                        </div>
+                    </article>
+                    <article class="rounded-2xl border border-[#DDEBE3] bg-white p-4 shadow-[0_8px_22px_rgba(31,68,49,0.04)]">
+                        <p class="text-2xl font-semibold" :class="activeIncidentCount ? 'text-[#E11D25]' : 'text-[#159653]'">{{ activeIncidentCount }}</p>
+                        <p class="mt-2 text-sm font-medium text-[#26332D]">Инциденты</p>
+                        <p class="mt-1 text-xs text-[#6A7A70]">активные</p>
+                        <div class="mt-3 flex h-7 items-end gap-1">
+                            <span v-for="(height, index) in sparkBars('incidents')" :key="index" class="w-1.5 rounded-t-full" :class="activeIncidentCount ? 'bg-[#EF6B6B]' : 'bg-[#62C98F]'" :style="{ height: `${height}px` }"></span>
+                        </div>
+                    </article>
+                    <article class="rounded-2xl border border-[#DDEBE3] bg-white p-4 shadow-[0_8px_22px_rgba(31,68,49,0.04)]">
+                        <p class="text-2xl font-semibold text-[#159653]">{{ sslDaysLeft === null ? '-' : `${sslDaysLeft} дн.` }}</p>
+                        <p class="mt-2 text-sm font-medium text-[#26332D]">SSL / домен</p>
+                        <p class="mt-1 text-xs text-[#6A7A70]">ближайший срок</p>
+                        <div class="mt-3 flex h-7 items-end gap-1">
+                            <span v-for="(height, index) in sparkBars('ssl')" :key="index" class="w-1.5 rounded-t-full bg-[#62C98F]" :style="{ height: `${height}px` }"></span>
+                        </div>
+                    </article>
+                </section>
+
+                <section>
+                    <div class="mb-4">
+                        <h2 class="text-xl font-semibold text-[#17231C]">Проверки</h2>
+                        <p class="mt-1 text-sm text-[#6A7A70]">Базовые и дополнительные мониторинги этого сайта.</p>
+                    </div>
+
+                    <div class="grid gap-4 xl:grid-cols-2">
+                        <article
+                            v-for="monitor in site.monitors"
+                            :key="monitor.id"
+                            class="relative overflow-hidden rounded-3xl border p-4 shadow-[0_10px_28px_rgba(31,68,49,0.05)]"
+                            :class="monitorCardClass(monitor)"
+                        >
+                            <div :class="!monitor.is_available ? 'pointer-events-none select-none opacity-45 grayscale' : ''">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="flex min-w-0 gap-3">
+                                        <span class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border" :class="statusIconBoxClass(monitorStatus(monitor))">
+                                            <LoaderCircle v-if="isChecking(monitor)" class="h-5 w-5 animate-spin" :stroke-width="2.2" />
+                                            <component v-else :is="typeIcon(monitor.type)" class="h-5 w-5" :stroke-width="2.2" />
+                                        </span>
+                                        <div class="min-w-0">
+                                            <h3 class="truncate text-base font-semibold text-[#17231C]">{{ typeLabel(monitor.type) }}</h3>
+                                            <span class="mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-medium" :class="statusClass(monitorStatus(monitor))">
+                                                <LoaderCircle v-if="isChecking(monitor)" class="mr-1.5 h-3.5 w-3.5 animate-spin" :stroke-width="2.2" />
+                                                <component v-else :is="statusIcon(monitorStatus(monitor))" class="mr-1.5 h-3.5 w-3.5" :stroke-width="2.2" />
+                                                {{ statusLabel(monitorStatus(monitor)) }}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        class="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#D4E3DA] text-[#52645A] transition hover:border-[#24A869] hover:text-[#1E9B5D]"
+                                        :disabled="!monitor.is_available"
+                                        @click="toggleSettings(monitor)"
+                                    >
+                                        <ChevronDown class="h-4 w-4 transition" :class="expandedMonitorId === monitor.id ? 'rotate-180' : ''" :stroke-width="2" />
+                                    </button>
+                                </div>
+
+                                <p class="mt-4 min-h-6 text-sm font-medium" :class="statusTextClass(monitorStatus(monitor))">{{ resultText(monitor) }}</p>
+                                <div class="mt-3 grid gap-2 text-xs text-[#6A7A70]">
+                                    <p>Интервал: {{ formatInterval(monitor.interval_seconds) }}</p>
+                                    <p>Последняя проверка: {{ relativeDate(monitor.last_check_at) }}</p>
+                                    <p v-if="monitor.next_check_at">Следующая: {{ formatDate(monitor.next_check_at) }}</p>
+                                </div>
+
+                                <div class="mt-4 flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#2FA568] px-4 text-sm font-medium text-white transition hover:bg-[#278C58] disabled:cursor-not-allowed disabled:opacity-60"
+                                        :disabled="!monitor.is_enabled || isChecking(monitor)"
+                                        @click="checkNow(monitor)"
+                                    >
+                                        <LoaderCircle v-if="isChecking(monitor)" class="h-4 w-4 animate-spin" :stroke-width="2" />
+                                        <RotateCw v-else class="h-4 w-4" :stroke-width="2" />
+                                        Проверить
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#D4E3DA] bg-white px-4 text-sm font-medium text-[#26332D] transition hover:border-[#24A869] hover:text-[#1E9B5D]"
+                                        :disabled="!monitor.is_available"
+                                        @click="toggleMonitor(monitor)"
+                                    >
+                                        <Pause class="h-4 w-4" :stroke-width="2" />
+                                        {{ monitor.is_enabled ? 'Пауза' : 'Включить' }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="grid h-10 w-10 place-items-center rounded-xl border border-[#D4E3DA] bg-white text-[#52645A] transition hover:border-[#24A869] hover:text-[#1E9B5D]"
+                                        :disabled="!monitor.is_available"
+                                        @click="toggleSettings(monitor)"
+                                    >
+                                        <Settings class="h-4 w-4" :stroke-width="2" />
+                                    </button>
+                                </div>
+
+                                <form
+                                    v-if="expandedMonitorId === monitor.id"
+                                    class="mt-5 rounded-2xl border border-[#DDEBE3] bg-[#FBFDFC] p-4"
+                                    @submit.prevent="saveMonitor(monitor)"
+                                >
+                                    <div class="grid gap-4 md:grid-cols-2">
+                                        <label class="block">
+                                            <span class="mb-2 block text-xs font-medium text-[#52645A]">Название</span>
+                                            <input v-model="monitorDrafts[monitor.id].name" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                        </label>
+                                        <label class="block">
+                                            <span class="mb-2 block text-xs font-medium text-[#52645A]">Таймаут, мс</span>
+                                            <input v-model.number="monitorDrafts[monitor.id].timeout_ms" type="number" min="1000" max="60000" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                        </label>
+                                        <label class="block md:col-span-2">
+                                            <span class="mb-2 block text-xs font-medium text-[#52645A]">Интервал: {{ formatInterval(monitorDrafts[monitor.id].interval_seconds) }}</span>
+                                            <input
+                                                :value="intervalMinutes(monitorDrafts[monitor.id].interval_seconds)"
+                                                type="range"
+                                                min="5"
+                                                max="1440"
+                                                step="1"
+                                                class="w-full accent-[#2FA568]"
+                                                @input="setDraftIntervalMinutes(monitorDrafts[monitor.id], Number(($event.target as HTMLInputElement).value))"
+                                            >
+                                        </label>
+
+                                        <template v-if="monitor.type === 'http'">
+                                            <label class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Метод</span>
+                                                <select v-model="monitorDrafts[monitor.id].method" class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                                    <option value="GET">GET</option>
+                                                    <option value="HEAD">HEAD</option>
+                                                    <option value="POST">POST</option>
+                                                </select>
+                                            </label>
+                                            <label class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Ожидаемые коды</span>
+                                                <input v-model="monitorDrafts[monitor.id].status_codes" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                            <label class="block md:col-span-2">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">URL</span>
+                                                <input v-model="monitorDrafts[monitor.id].url" type="url" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                        </template>
+
+                                        <template v-if="monitor.type === 'ssl' || monitor.type === 'domain'">
+                                            <label class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Домен</span>
+                                                <input v-model="monitorDrafts[monitor.id].domain" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                            <label v-if="monitor.type === 'ssl'" class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Порт</span>
+                                                <input v-model.number="monitorDrafts[monitor.id].port" type="number" min="1" max="65535" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                            <label class="block md:col-span-2">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Дни предупреждений</span>
+                                                <input v-model="monitorDrafts[monitor.id].warning_days" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                        </template>
+                                    </div>
+
+                                    <div class="mt-4 flex items-center justify-between gap-3">
+                                        <button
+                                            type="button"
+                                            class="inline-flex items-center gap-3 rounded-xl border border-[#D4E3DA] bg-white px-3 py-2 text-sm font-medium text-[#26332D]"
+                                            @click="monitorDrafts[monitor.id].is_enabled = !monitorDrafts[monitor.id].is_enabled"
+                                        >
+                                            <span class="flex h-5 w-9 items-center rounded-full p-0.5 transition" :class="monitorDrafts[monitor.id].is_enabled ? 'justify-end bg-[#2FA568]' : 'justify-start bg-[#AAB6AF]'">
+                                                <span class="h-4 w-4 rounded-full bg-white shadow-sm"></span>
+                                            </span>
+                                            {{ monitorDrafts[monitor.id].is_enabled ? 'Включен' : 'На паузе' }}
+                                        </button>
+                                        <button type="submit" class="inline-flex h-10 items-center justify-center rounded-xl bg-[#2FA568] px-4 text-sm font-medium text-white transition hover:bg-[#278C58]">
+                                            Сохранить
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div
+                                v-if="!monitor.is_available"
+                                class="absolute inset-0 flex items-center justify-center px-6 text-center"
+                                aria-hidden="true"
+                            >
+                                <p class="rounded-xl bg-white/90 px-5 py-3 text-sm font-medium text-[#52645A] shadow-sm ring-1 ring-[#DDEBE3]">
+                                    Доступно на другом тарифе
+                                </p>
+                            </div>
                         </article>
                     </div>
+                </section>
 
-                    <div v-else class="mt-5 rounded-2xl border border-dashed border-[#E5E7EB] p-6 text-center text-sm font-semibold text-[#667085]">
-                        Инцидентов пока нет.
+                <section id="incidents" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+                    <div class="overflow-hidden rounded-3xl border border-[#DDEBE3] bg-white shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
+                        <div class="flex items-start justify-between gap-3 border-b border-[#DDEBE3] p-5">
+                            <div>
+                                <h2 class="text-xl font-semibold text-[#17231C]">История проверок</h2>
+                                <p class="mt-1 text-sm text-[#6A7A70]">Последние технические результаты от poller.</p>
+                            </div>
+                            <History class="h-5 w-5 text-[#8A9A91]" :stroke-width="2" />
+                        </div>
+
+                        <div v-if="site.recent_checks.length" class="overflow-x-auto">
+                            <table class="w-full min-w-[720px] border-separate border-spacing-0 text-left text-sm">
+                                <thead class="bg-[#FBFDFC] text-xs font-semibold text-[#6A7A70]">
+                                    <tr>
+                                        <th class="px-5 py-4">Время</th>
+                                        <th class="px-5 py-4">Тип</th>
+                                        <th class="px-5 py-4">Статус</th>
+                                        <th class="px-5 py-4">Результат</th>
+                                        <th class="px-5 py-4">Ответ</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="result in site.recent_checks" :key="result.id">
+                                        <td class="whitespace-nowrap border-t border-[#DDEBE3] px-5 py-4 text-[#6A7A70]">{{ formatDate(result.checked_at) }}</td>
+                                        <td class="border-t border-[#DDEBE3] px-5 py-4">
+                                            <span class="rounded-full px-3 py-1 text-xs font-medium" :class="typeClass(result.check_type)">
+                                                {{ shortTypeLabel(result.check_type) }}
+                                            </span>
+                                        </td>
+                                        <td class="border-t border-[#DDEBE3] px-5 py-4">
+                                            <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium" :class="statusClass(result.status)">
+                                                <component :is="statusIcon(result.status)" class="mr-1.5 h-3.5 w-3.5" :stroke-width="2.2" />
+                                                {{ statusLabel(result.status) }}
+                                            </span>
+                                        </td>
+                                        <td class="max-w-80 truncate border-t border-[#DDEBE3] px-5 py-4 font-medium text-[#26332D]">{{ checkResultText(result) }}</td>
+                                        <td class="border-t border-[#DDEBE3] px-5 py-4 text-[#6A7A70]">{{ result.response_time_ms === null ? '-' : `${result.response_time_ms} мс` }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div v-else class="p-8 text-center text-sm font-medium text-[#6A7A70]">
+                            Проверок еще не было.
+                        </div>
                     </div>
-                </aside>
-            </section>
 
-            <section class="mt-6 rounded-3xl border border-[#FECACA] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <h2 class="text-xl font-extrabold text-[#111827]">Опасная зона</h2>
-                        <p class="mt-1 max-w-3xl text-sm leading-6 text-[#667085]">
-                            Удаление скроет сайт из кабинета и поставит в архив связанные мониторинги. История проверок и инциденты останутся в системе для внутреннего учета.
+                    <aside class="rounded-3xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
+                        <h2 class="text-xl font-semibold text-[#17231C]">Инциденты</h2>
+                        <p class="mt-1 text-sm text-[#6A7A70]">Падения и восстановления сайта.</p>
+
+                        <div v-if="site.incidents.length" class="mt-5 grid gap-3">
+                            <article
+                                v-for="incident in site.incidents"
+                                :key="incident.id"
+                                class="rounded-2xl border p-4"
+                                :class="incident.status === 'open' ? 'border-[#FFB8B8] bg-[#FFF4F4]' : 'border-[#DDEBE3] bg-[#FBFDFC]'"
+                            >
+                                <div class="flex items-start justify-between gap-3">
+                                    <h3 class="text-sm font-semibold text-[#17231C]">{{ incident.title }}</h3>
+                                    <span class="shrink-0 rounded-full px-3 py-1 text-xs font-medium" :class="incident.status === 'open' ? 'bg-[#FEECEC] text-[#E11D25]' : 'bg-[#E9F8EF] text-[#159653]'">
+                                        {{ incident.status === 'open' ? 'Активный' : 'Закрыт' }}
+                                    </span>
+                                </div>
+                                <p v-if="incident.summary" class="mt-2 text-sm leading-6 text-[#6A7A70]">{{ incident.summary }}</p>
+                                <p class="mt-3 text-xs font-medium text-[#6A7A70]">
+                                    {{ formatDate(incident.started_at) }} · {{ formatDuration(incident.duration_seconds) }}
+                                </p>
+                            </article>
+                        </div>
+
+                        <div v-else class="mt-5 rounded-2xl border border-dashed border-[#DDEBE3] p-6 text-center text-sm font-medium text-[#6A7A70]">
+                            Инцидентов пока нет.
+                        </div>
+                    </aside>
+                </section>
+            </main>
+
+            <aside class="space-y-4 lg:sticky lg:top-24 lg:self-start">
+                <section class="rounded-3xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
+                    <h2 class="text-lg font-semibold text-[#17231C]">Статус сайта</h2>
+                    <span class="mt-4 inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium" :class="statusClass(isSiteChecking ? 'checking' : site.status)">
+                        <LoaderCircle v-if="isSiteChecking" class="mr-1.5 h-3.5 w-3.5 animate-spin" :stroke-width="2.2" />
+                        <component v-else :is="statusIcon(site.status)" class="mr-1.5 h-3.5 w-3.5" :stroke-width="2.2" />
+                        {{ statusLabel(isSiteChecking ? 'checking' : site.status) }}
+                    </span>
+                    <div class="mt-4 grid gap-3 text-sm">
+                        <p class="flex items-center gap-2 text-[#6A7A70]">
+                            <Clock3 class="h-4 w-4" :stroke-width="2" />
+                            Последняя: {{ relativeDate(latestCheckAt) }}
+                        </p>
+                        <p class="flex items-center gap-2 text-[#6A7A70]">
+                            <ShieldCheck class="h-4 w-4" :stroke-width="2" />
+                            Доступно проверок: {{ availableCount }} / {{ site.monitors.length }}
+                        </p>
+                        <p class="flex items-center gap-2 text-[#6A7A70]">
+                            <CalendarClock class="h-4 w-4" :stroke-width="2" />
+                            Создан: {{ formatDate(site.created_at) }}
                         </p>
                     </div>
+                </section>
 
-                    <button
-                        type="button"
-                        class="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-[#EF4444] px-5 text-sm font-extrabold text-white shadow-[0_10px_28px_rgba(239,68,68,0.18)] transition hover:bg-[#DC2626]"
-                        @click="isDeleteModalOpen = true"
-                    >
-                        Удалить сайт
-                    </button>
-                </div>
-            </section>
+                <section class="rounded-3xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
+                    <h2 class="text-lg font-semibold text-[#17231C]">Быстрые действия</h2>
+                    <div class="mt-4 grid gap-2">
+                        <button type="button" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#2FA568] px-4 text-sm font-medium text-white transition hover:bg-[#278C58]" :disabled="isSiteChecking" @click="checkSiteNow">
+                            <LoaderCircle v-if="isSiteChecking" class="h-4 w-4 animate-spin" :stroke-width="2" />
+                            <RotateCw v-else class="h-4 w-4" :stroke-width="2" />
+                            Проверить сайт
+                        </button>
+                        <Link :href="`/sites/${site.id}/monitors/create`" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#D4E3DA] bg-white px-4 text-sm font-medium text-[#26332D] transition hover:border-[#24A869] hover:text-[#1E9B5D]">
+                            <Plus class="h-4 w-4" :stroke-width="2" />
+                            Добавить проверку
+                        </Link>
+                        <button type="button" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#D4E3DA] bg-white px-4 text-sm font-medium text-[#26332D] transition hover:border-[#24A869] hover:text-[#1E9B5D]">
+                            <Bell class="h-4 w-4" :stroke-width="2" />
+                            Уведомления
+                        </button>
+                        <button type="button" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#D4E3DA] bg-white px-4 text-sm font-medium text-[#26332D] transition hover:border-[#24A869] hover:text-[#1E9B5D]">
+                            <FileText class="h-4 w-4" :stroke-width="2" />
+                            Создать отчет
+                        </button>
+                        <button type="button" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#FECACA] bg-white px-4 text-sm font-medium text-[#E11D25] transition hover:bg-[#FFF4F4]" @click="isDeleteModalOpen = true">
+                            <Trash2 class="h-4 w-4" :stroke-width="2" />
+                            Удалить сайт
+                        </button>
+                    </div>
+                </section>
+            </aside>
         </div>
 
         <div
@@ -882,10 +1133,12 @@ function deleteSite(): void {
             <section class="w-full max-w-lg overflow-hidden rounded-3xl border border-[#FECACA] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
                 <div class="border-b border-[#FECACA] bg-[#FFF8F8] p-5">
                     <div class="flex items-start gap-4">
-                        <span class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#FEECEC] text-xl font-extrabold text-[#EF4444]">!</span>
+                        <span class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#FEECEC] text-[#EF4444]">
+                            <Trash2 class="h-5 w-5" :stroke-width="2" />
+                        </span>
                         <div>
-                            <h2 id="delete-site-title" class="text-xl font-extrabold text-[#111827]">Удалить сайт?</h2>
-                            <p class="mt-1 text-sm leading-6 text-[#667085]">
+                            <h2 id="delete-site-title" class="text-xl font-semibold text-[#17231C]">Удалить сайт?</h2>
+                            <p class="mt-1 text-sm leading-6 text-[#6A7A70]">
                                 Сайт {{ site.name }} будет скрыт из кабинета, а его мониторинги будут отправлены в архив.
                             </p>
                         </div>
@@ -893,28 +1146,27 @@ function deleteSite(): void {
                 </div>
 
                 <div class="p-5">
-                    <div class="rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
-                        <p class="text-xs font-extrabold uppercase text-[#98A2B3]">Сайт</p>
-                        <p class="mt-2 truncate text-sm font-extrabold text-[#111827]">{{ site.name }}</p>
-                        <p class="mt-1 truncate text-xs font-semibold text-[#667085]">{{ site.url }}</p>
+                    <div class="rounded-2xl border border-[#DDEBE3] bg-[#FBFDFC] p-4">
+                        <p class="text-xs font-medium uppercase text-[#8A9A91]">Сайт</p>
+                        <p class="mt-2 truncate text-sm font-semibold text-[#17231C]">{{ site.name }}</p>
+                        <p class="mt-1 truncate text-xs font-medium text-[#6A7A70]">{{ site.url }}</p>
                     </div>
-
-                    <p class="mt-4 text-sm leading-6 text-[#667085]">
-                        История проверок и инциденты останутся в системе для внутреннего учета. Восстановление через интерфейс пока не реализовано.
+                    <p class="mt-4 text-sm leading-6 text-[#6A7A70]">
+                        История проверок и инциденты останутся в системе для внутреннего учета.
                     </p>
                 </div>
 
-                <div class="flex flex-col-reverse gap-3 border-t border-[#E5E7EB] bg-white p-5 sm:flex-row sm:justify-end">
+                <div class="flex flex-col-reverse gap-3 border-t border-[#DDEBE3] bg-white p-5 sm:flex-row sm:justify-end">
                     <button
                         type="button"
-                        class="inline-flex h-11 items-center justify-center rounded-xl border border-[#E5E7EB] bg-white px-5 text-sm font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF]"
+                        class="inline-flex h-11 items-center justify-center rounded-xl border border-[#D4E3DA] bg-white px-5 text-sm font-medium text-[#26332D] transition hover:border-[#24A869] hover:text-[#1E9B5D]"
                         @click="isDeleteModalOpen = false"
                     >
                         Отмена
                     </button>
                     <button
                         type="button"
-                        class="inline-flex h-11 items-center justify-center rounded-xl bg-[#EF4444] px-5 text-sm font-extrabold text-white shadow-[0_10px_28px_rgba(239,68,68,0.18)] transition hover:bg-[#DC2626]"
+                        class="inline-flex h-11 items-center justify-center rounded-xl bg-[#E11D25] px-5 text-sm font-medium text-white transition hover:bg-[#C9151C]"
                         @click="deleteSite"
                     >
                         Удалить сайт

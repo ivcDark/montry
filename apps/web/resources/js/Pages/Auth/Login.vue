@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import MarketingHeader from '@/Components/MarketingHeader.vue'
+import BrandMark from '@/Components/BrandMark.vue'
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
 import { computed } from 'vue'
 
 const props = defineProps<{
     intendedPlanCode?: string | null
+    googleAuthEnabled?: boolean
 }>()
 
-const page = usePage<{ errors?: { yandex?: string } }>()
+const page = usePage<{ errors?: { yandex?: string; google?: string } }>()
 
 const registerHref = computed(() => props.intendedPlanCode ? `/register?plan=${props.intendedPlanCode}` : '/register')
 const yandexHref = computed(() => props.intendedPlanCode ? `/auth/yandex/redirect?plan=${props.intendedPlanCode}` : '/auth/yandex/redirect')
+const googleHref = computed(() => props.intendedPlanCode ? `/auth/google/redirect?plan=${props.intendedPlanCode}` : '/auth/google/redirect')
 const yandexError = computed(() => page.props.errors?.yandex)
+const googleError = computed(() => page.props.errors?.google)
 
 const form = useForm({
     email: '',
@@ -29,152 +32,174 @@ function submit() {
 <template>
     <Head title="Вход" />
 
-    <main class="min-h-screen bg-[#F6F8FB] font-sans text-[#111827]">
-        <MarketingHeader context-label="Авторизация" />
+    <main class="min-h-screen bg-[#F3F8F5] font-sans text-[#1F2B24]">
+        <div class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-5 py-8 sm:px-8 lg:px-10">
+            <header class="flex items-center justify-between">
+                <Link href="/" class="inline-flex items-center gap-3" aria-label="Montry">
+                    <BrandMark class="h-9 w-9" />
+                    <span class="text-xl font-bold tracking-normal text-[#163B2A]">Montry</span>
+                </Link>
 
-        <section class="mx-auto grid min-h-[calc(100vh-80px)] max-w-7xl gap-10 px-5 py-12 sm:px-8 lg:grid-cols-[minmax(0,1fr)_460px] lg:items-center lg:py-16">
-            <div class="hidden lg:block">
-                <p class="text-sm font-extrabold text-[#12B3A8]">Montry account</p>
-                <h1 class="mt-4 max-w-2xl text-5xl font-extrabold leading-tight tracking-normal text-[#111827]">
-                    Вернитесь к мониторингу сайтов, SSL и доменов
-                </h1>
-                <p class="mt-6 max-w-xl text-lg leading-8 text-[#667085]">
-                    Войдите в аккаунт, чтобы увидеть статусы проектов, последние проверки и открытые инциденты.
-                </p>
+                <Link href="/" class="text-sm font-medium text-[#52645A] transition hover:text-[#24A869]">
+                    На главную
+                </Link>
+            </header>
 
-                <div class="mt-10 grid max-w-xl gap-4">
-                    <div class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                        <div class="flex items-center justify-between gap-4">
-                            <div>
-                                <p class="font-extrabold text-[#111827]">client-shop.ru</p>
-                                <p class="mt-1 text-sm text-[#667085]">HTTP/HTTPS мониторинг</p>
-                            </div>
-                            <span class="rounded-full bg-[#FEECEC] px-3 py-1 text-xs font-extrabold text-[#EF4444]">Down</span>
-                        </div>
-                    </div>
-
-                    <div class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                        <div class="flex items-center justify-between gap-4">
-                            <div>
-                                <p class="font-extrabold text-[#111827]">studio-site.ru</p>
-                                <p class="mt-1 text-sm text-[#667085]">SSL-сертификат</p>
-                            </div>
-                            <span class="rounded-full bg-[#FFF7E8] px-3 py-1 text-xs font-extrabold text-[#F59E0B]">9 дней</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <section class="rounded-3xl border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(15,23,42,0.12)] sm:p-8">
-                <div>
-                    <Link href="/" class="inline-flex items-center gap-3" aria-label="Montry">
-                        <span class="grid h-10 w-10 place-items-center rounded-xl bg-[#0F6BFF] text-lg font-extrabold text-white">M</span>
-                        <span class="text-2xl font-extrabold tracking-normal text-[#111827]">Montry</span>
-                    </Link>
-
-                    <h1 class="mt-8 text-3xl font-extrabold tracking-normal text-[#111827]">
-                        Войти в аккаунт
-                    </h1>
-
-                    <p class="mt-3 leading-7 text-[#667085]">
-                        Используйте email и пароль, указанные при регистрации.
-                    </p>
-                </div>
-
-                <div class="mt-8">
-                    <a
-                        :href="yandexHref"
-                        class="inline-flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#E5E7EB] bg-white px-5 text-sm font-extrabold text-[#111827] shadow-[0_10px_28px_rgba(15,23,42,0.06)] transition hover:border-[#0F6BFF]/40 hover:bg-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#0F6BFF]/20 focus:ring-offset-2"
-                    >
-                        <span class="grid h-6 w-6 place-items-center rounded-lg bg-[#FC3F1D] text-sm font-black text-white">Я</span>
-                        Войти через Яндекс
-                    </a>
-
-                    <p v-if="yandexError" class="mt-3 text-sm font-semibold text-[#EF4444]">
-                        {{ yandexError }}
-                    </p>
-                </div>
-
-                <div class="my-6 flex items-center gap-4 text-xs font-bold uppercase tracking-[0.18em] text-[#98A2B3]">
-                    <span class="h-px flex-1 bg-[#E5E7EB]"></span>
-                    или
-                    <span class="h-px flex-1 bg-[#E5E7EB]"></span>
-                </div>
-
-                <form class="space-y-5" @submit.prevent="submit">
+            <section class="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[minmax(0,1fr)_456px] lg:gap-16 lg:py-12">
+                <aside class="hidden min-h-[620px] rounded-[28px] border border-[#CBE6D5] bg-[radial-gradient(circle_at_10%_0%,#E2F8EB_0%,#F8FCFA_44%,#FFFFFF_100%)] p-12 shadow-[0_24px_80px_rgba(31,68,49,0.08)] lg:flex lg:flex-col lg:justify-between">
                     <div>
-                        <label for="email" class="mb-2 block text-sm font-bold text-[#111827]">
-                            Email
-                        </label>
+                        <h1 class="max-w-xl text-[52px] font-extrabold leading-[1.15] tracking-normal text-[#17231C]">
+                            Следите за сайтами без лишней сложности
+                        </h1>
+                        <p class="mt-6 max-w-lg text-lg leading-8 text-[#6A7A70]">
+                            Получайте понятные уведомления о проблемах с доступностью, SSL, доменом, DNS и техническими файлами.
+                        </p>
 
-                        <input
-                            id="email"
-                            v-model="form.email"
-                            type="email"
-                            autocomplete="email"
-                            autofocus
-                            required
-                            inputmode="email"
-                            :aria-invalid="Boolean(form.errors.email)"
-                            aria-describedby="email-error"
-                            class="h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm text-[#111827] outline-none transition placeholder:text-[#98A2B3] focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
-                            placeholder="you@example.ru"
-                        >
+                        <ul class="mt-10 grid gap-5 text-base font-semibold text-[#26332D]">
+                            <li class="flex items-center gap-4"><span class="h-3 w-3 rounded-full bg-[#2FA568]"></span> базовый мониторинг сайта</li>
+                            <li class="flex items-center gap-4"><span class="h-3 w-3 rounded-full bg-[#2FA568]"></span> уведомления на почту и в Telegram</li>
+                            <li class="flex items-center gap-4"><span class="h-3 w-3 rounded-full bg-[#2FA568]"></span> история проверок</li>
+                            <li class="flex items-center gap-4"><span class="h-3 w-3 rounded-full bg-[#2FA568]"></span> отчеты по сайтам</li>
+                        </ul>
+                    </div>
 
-                        <p id="email-error" v-if="form.errors.email" class="mt-2 text-sm font-semibold text-[#EF4444]">
-                            {{ form.errors.email }}
+                    <div class="w-full max-w-[380px] rounded-[24px] border border-[#DDEBE3] bg-white p-6 shadow-[0_22px_60px_rgba(31,68,49,0.10)]">
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="flex items-center gap-3">
+                                <span class="h-3 w-3 rounded-full bg-[#16A85A]"></span>
+                                <h2 class="text-xl font-extrabold text-[#26332D]">example.ru</h2>
+                            </div>
+                            <span class="rounded-full bg-[#E9F8EF] px-3 py-1 text-xs font-semibold text-[#1E9B5D]">Работает</span>
+                        </div>
+
+                        <div class="mt-5 grid grid-cols-2 gap-3">
+                            <div class="rounded-2xl border border-[#DDEBE3] p-4">
+                                <p class="text-2xl font-extrabold text-[#2FA568]">99.98%</p>
+                                <p class="mt-1 text-xs text-[#6A7A70]">uptime</p>
+                            </div>
+                            <div class="rounded-2xl border border-[#DDEBE3] p-4">
+                                <p class="text-2xl font-extrabold text-[#2FA568]">184 мс</p>
+                                <p class="mt-1 text-xs text-[#6A7A70]">ответ</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 grid gap-3 text-sm text-[#6A7A70]">
+                            <p class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-[#16A85A]"></span>SSL: действителен</p>
+                            <p class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-[#16A85A]"></span>DNS: без ошибок</p>
+                            <p class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-[#16A85A]"></span>Robots.txt: найден</p>
+                        </div>
+                    </div>
+                </aside>
+
+                <section class="mx-auto w-full max-w-[456px] rounded-[26px] border border-[#DDEBE3] bg-white p-6 shadow-[0_24px_80px_rgba(31,68,49,0.10)] sm:p-8">
+                    <div>
+                        <h1 class="text-3xl font-extrabold tracking-normal text-[#17231C]">
+                            Войти в Montry
+                        </h1>
+                        <p class="mt-4 text-base leading-7 text-[#6A7A70]">
+                            Продолжите следить за состоянием ваших сайтов.
                         </p>
                     </div>
 
-                    <div>
-                        <label for="password" class="mb-2 block text-sm font-bold text-[#111827]">
-                            Пароль
-                        </label>
-
-                        <input
-                            id="password"
-                            v-model="form.password"
-                            type="password"
-                            autocomplete="current-password"
-                            required
-                            :aria-invalid="Boolean(form.errors.password)"
-                            aria-describedby="password-error"
-                            class="h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm text-[#111827] outline-none transition placeholder:text-[#98A2B3] focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
-                            placeholder="Введите пароль"
+                    <div class="mt-6 grid gap-3">
+                        <a
+                            :href="yandexHref"
+                            class="inline-flex h-13 items-center justify-center gap-3 rounded-xl border border-[#F0C8BF] bg-white px-5 text-sm font-semibold text-[#26332D] transition hover:border-[#FF6A4D]/60 hover:bg-[#FFF7F4] focus:outline-none focus:ring-2 focus:ring-[#FF4B2F]/15 focus:ring-offset-2"
                         >
+                            <span class="grid h-6 w-6 place-items-center rounded-full bg-[#FC3F1D] text-sm font-bold text-white">Я</span>
+                            Войти через Яндекс
+                        </a>
 
-                        <p id="password-error" v-if="form.errors.password" class="mt-2 text-sm font-semibold text-[#EF4444]">
-                            {{ form.errors.password }}
-                        </p>
+                        <a
+                            v-if="googleAuthEnabled"
+                            :href="googleHref"
+                            class="inline-flex h-13 items-center justify-center gap-3 rounded-xl border border-[#DDEBE3] bg-white px-5 text-sm font-semibold text-[#26332D] transition hover:border-[#B8D0C2] hover:bg-[#FBFDFC] focus:outline-none focus:ring-2 focus:ring-[#24A869]/15 focus:ring-offset-2"
+                        >
+                            <span class="grid h-6 w-6 place-items-center rounded-full border border-[#DDEBE3] text-sm font-bold text-[#4285F4]">G</span>
+                            Войти через Google
+                        </a>
+
+                        <p v-if="yandexError" class="text-sm font-semibold text-[#D94B4B]">{{ yandexError }}</p>
+                        <p v-if="googleError" class="text-sm font-semibold text-[#D94B4B]">{{ googleError }}</p>
                     </div>
 
-                    <label class="flex items-center gap-3 rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3 text-sm font-semibold text-[#667085]">
-                        <input
-                            v-model="form.remember"
-                            type="checkbox"
-                            class="h-4 w-4 rounded border-[#E5E7EB] text-[#0F6BFF] focus:ring-[#0F6BFF]/20"
+                    <div class="my-6 flex items-center gap-4 text-xs font-medium text-[#98A69E]">
+                        <span class="h-px flex-1 bg-[#E2ECE6]"></span>
+                        или войдите по email
+                        <span class="h-px flex-1 bg-[#E2ECE6]"></span>
+                    </div>
+
+                    <form class="space-y-5" @submit.prevent="submit">
+                        <div>
+                            <label for="email" class="mb-2 block text-sm font-semibold text-[#26332D]">Email</label>
+                            <input
+                                id="email"
+                                v-model="form.email"
+                                type="email"
+                                autocomplete="email"
+                                autofocus
+                                required
+                                inputmode="email"
+                                :aria-invalid="Boolean(form.errors.email)"
+                                aria-describedby="email-error"
+                                class="h-12 w-full rounded-xl border border-[#D4E3DA] bg-white px-4 text-sm font-medium text-[#26332D] outline-none transition placeholder:text-[#98A69E] focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15"
+                                placeholder="you@example.com"
+                            >
+                            <p id="email-error" v-if="form.errors.email" class="mt-2 text-sm font-semibold text-[#D94B4B]">{{ form.errors.email }}</p>
+                        </div>
+
+                        <div>
+                            <label for="password" class="mb-2 block text-sm font-semibold text-[#26332D]">Пароль</label>
+                            <input
+                                id="password"
+                                v-model="form.password"
+                                type="password"
+                                autocomplete="current-password"
+                                required
+                                :aria-invalid="Boolean(form.errors.password)"
+                                aria-describedby="password-error"
+                                class="h-12 w-full rounded-xl border border-[#D4E3DA] bg-white px-4 text-sm font-medium text-[#26332D] outline-none transition placeholder:text-[#98A69E] focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15"
+                                placeholder="Введите пароль"
+                            >
+                            <p id="password-error" v-if="form.errors.password" class="mt-2 text-sm font-semibold text-[#D94B4B]">{{ form.errors.password }}</p>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-4">
+                            <label class="flex items-center gap-3 text-sm font-medium text-[#6A7A70]">
+                                <input
+                                    v-model="form.remember"
+                                    type="checkbox"
+                                    class="h-4 w-4 rounded border-[#D4E3DA] text-[#24A869] focus:ring-[#24A869]/20"
+                                >
+                                Запомнить меня
+                            </label>
+
+                            <a href="#" class="text-sm font-semibold text-[#1E9B5D] transition hover:text-[#167D49]">Забыли пароль?</a>
+                        </div>
+
+                        <button
+                            type="submit"
+                            :disabled="form.processing"
+                            class="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#2FA568] px-5 text-sm font-semibold text-white shadow-[0_12px_26px_rgba(47,165,104,0.20)] transition hover:bg-[#278C58] focus:outline-none focus:ring-2 focus:ring-[#24A869]/30 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                         >
+                            <span v-if="form.processing">Входим...</span>
+                            <span v-else>Войти</span>
+                        </button>
+                    </form>
 
-                        Запомнить меня
-                    </label>
+                    <p class="mt-5 text-sm text-[#6A7A70]">
+                        Нет аккаунта?
+                        <Link :href="registerHref" class="font-semibold text-[#1E9B5D] transition hover:text-[#167D49]">
+                            Зарегистрироваться
+                        </Link>
+                    </p>
 
-                    <button
-                        type="submit"
-                        :disabled="form.processing"
-                        class="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-bold text-white shadow-[0_10px_28px_rgba(15,107,255,0.18)] transition hover:bg-[#0757D8] focus:outline-none focus:ring-2 focus:ring-[#0F6BFF]/30 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                        <span v-if="form.processing">Входим...</span>
-                        <span v-else>Войти</span>
-                    </button>
-                </form>
-
-                <p class="mt-6 text-sm text-[#667085]">
-                    Нет аккаунта?
-                    <Link :href="registerHref" class="font-bold text-[#0F6BFF] hover:text-[#0757D8]">
-                        Создать аккаунт
-                    </Link>
-                </p>
+                    <div class="mt-6 rounded-xl border border-[#BFD2FF] bg-[#F4F8FF] px-4 py-3 text-sm leading-6 text-[#26332D]">
+                        <span class="mr-2 inline-block h-3 w-3 rounded-full bg-[#2D6CDF]"></span>
+                        Безопасный вход. Мы не публикуем ничего от вашего имени.
+                    </div>
+                </section>
             </section>
-        </section>
+        </div>
     </main>
 </template>

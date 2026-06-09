@@ -59,6 +59,10 @@ return [
         'user_info_url' => env('YANDEX_USER_INFO_URL', 'https://login.yandex.ru/info'),
     ],
 
+    'google' => [
+        'enabled' => env('GOOGLE_AUTH_ENABLED', false),
+    ],
+
     'fake_bank' => [
         'webhook_secret' => env('FAKE_BANK_WEBHOOK_SECRET'),
     ],
