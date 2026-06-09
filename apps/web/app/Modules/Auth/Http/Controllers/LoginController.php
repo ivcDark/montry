@@ -20,6 +20,7 @@ final class LoginController extends Controller
 
         return Inertia::render('Auth/Login', [
             'intendedPlanCode' => $planIntent->get($request),
+            'googleAuthEnabled' => (bool) config('services.google.enabled', false),
         ]);
     }
 

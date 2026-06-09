@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3'
+import BrandMark from '@/Components/BrandMark.vue'
 
 type User = {
     id: number | string
@@ -22,9 +23,11 @@ const user = page.props.auth.user
 
 const navItems = [
     { label: 'Возможности', href: '/#features' },
-    { label: 'Для кого', href: '/#audience' },
+    { label: 'Проверки', href: '/#checks' },
     { label: 'Тарифы', href: '/#pricing' },
+    { label: 'Новости', href: '/#news' },
     { label: 'FAQ', href: '/#faq' },
+    { label: 'Связаться', href: '/#feedback' },
 ]
 
 const ctaHref = user ? '/dashboard' : '/register'
@@ -32,21 +35,19 @@ const ctaLabel = user ? 'Перейти в кабинет' : 'Начать бе�
 </script>
 
 <template>
-    <header class="sticky top-0 z-30 border-b border-[#E5E7EB]/80 bg-white/95 backdrop-blur">
-        <div class="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-8">
+    <header class="sticky top-0 z-30 border-b border-[#DDEBE3]/80 bg-white/95 backdrop-blur">
+        <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-8">
             <Link href="/" class="flex items-center gap-3" aria-label="Montry">
-                <span class="grid h-10 w-10 place-items-center rounded-xl bg-[#0F6BFF] text-lg font-extrabold text-white shadow-[0_10px_28px_rgba(15,107,255,0.18)]">
-                    M
-                </span>
-                <span class="text-2xl font-extrabold tracking-normal text-[#111827]">Montry</span>
+                <BrandMark class="h-8 w-8 drop-shadow-[0_10px_20px_rgba(18,61,43,0.16)]" />
+                <span class="text-lg font-extrabold tracking-normal text-[#26332D]">Montry</span>
             </Link>
 
-            <nav class="hidden items-center gap-8 lg:flex" aria-label="Главная навигация">
+            <nav class="hidden items-center gap-7 lg:flex" aria-label="Главная навигация">
                 <a
                     v-for="item in navItems"
                     :key="item.href"
                     :href="item.href"
-                    class="text-[15px] font-semibold text-[#667085] transition hover:text-[#111827]"
+                    class="text-sm font-semibold text-[#6B7D72] transition hover:text-[#26332D]"
                 >
                     {{ item.label }}
                 </a>
@@ -55,7 +56,7 @@ const ctaLabel = user ? 'Перейти в кабинет' : 'Начать бе�
             <div class="flex items-center gap-3">
                 <span
                     v-if="contextLabel"
-                    class="text-[15px] font-extrabold text-[#111827]"
+                    class="text-[15px] font-semibold text-[#111827]"
                 >
                     {{ contextLabel }}
                 </span>
@@ -64,14 +65,14 @@ const ctaLabel = user ? 'Перейти в кабинет' : 'Начать бе�
                     <Link
                         v-if="!user"
                         href="/login"
-                        class="hidden text-[15px] font-semibold text-[#111827] transition hover:text-[#0F6BFF] sm:inline-flex"
+                        class="hidden text-sm font-bold text-[#26332D] transition hover:text-[#24A869] sm:inline-flex"
                     >
                         Войти
                     </Link>
 
                     <Link
                         :href="ctaHref"
-                        class="inline-flex h-11 items-center justify-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-bold text-white shadow-[0_10px_28px_rgba(15,107,255,0.18)] transition hover:bg-[#0757D8] focus:outline-none focus:ring-2 focus:ring-[#0F6BFF]/30 focus:ring-offset-2"
+                        class="inline-flex h-10 items-center justify-center rounded-xl bg-[#24A869] px-4 text-xs font-semibold text-white shadow-[0_10px_24px_rgba(36,168,105,0.18)] transition hover:bg-[#1D9059] focus:outline-none focus:ring-2 focus:ring-[#24A869]/30 focus:ring-offset-2 sm:px-5 sm:text-sm"
                     >
                         {{ ctaLabel }}
                     </Link>

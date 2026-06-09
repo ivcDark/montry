@@ -1,0 +1,25 @@
+<template>
+    <svg
+        viewBox="0 0 64 64"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+    >
+        <rect width="64" height="64" rx="18" fill="#123D2B" />
+        <path
+            d="M17 41V25.5C17 22.9 20.2 21.7 21.9 23.7L30.5 34L40.6 20.5C42.2 18.3 45.8 19.5 45.8 22.3V41"
+            stroke="#FFFFFF"
+            stroke-width="7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+        />
+        <path
+            d="M17 41H25.5L31.8 31.8L38.8 41H46.5"
+            stroke="#5EE49A"
+            stroke-width="7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+        />
+        <circle cx="49" cy="17" r="5" fill="#5EE49A" />
+    </svg>
+</template>

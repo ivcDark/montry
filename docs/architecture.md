@@ -18,7 +18,22 @@
 
 ## Pragmatic boundary for the first version
 
-All user-facing and business workflows live in Laravel first. A separate Go poller is added later only when background checks need stronger isolation or throughput.
+All user-facing and business workflows live in Laravel first. Go poller performs technical checks, but Laravel remains the source of truth for tariffs, paid add-ons, monitor state, incidents and notifications.
+
+## Redesign baseline
+
+The current redesign baseline is documented in:
+
+- `docs/product/redesign.md`
+- `docs/product/tariffs.md`
+
+Key decisions:
+
+- basic monitoring types are website availability, SSL, domain check, DNS monitoring and `robots.txt`;
+- paid monitoring/add-ons are `sitemap_xml`, `tcp_port`, `extra_5_sites` and `api_endpoint`;
+- the dashboard must be compact, light and green-accented, close in feel to `prufen.ru` but adapted to Montry;
+- user actions should produce clear toast messages;
+- Laravel/UI may expose new monitor types before Go poller implementation, using safe stub results.
 
 ## Registration verification
 
