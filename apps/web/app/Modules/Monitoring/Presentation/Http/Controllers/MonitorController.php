@@ -65,7 +65,7 @@ final class MonitorController extends Controller
                 expected: $validated['expected'] ?? [],
             ));
         } catch (AuthorizationException $exception) {
-            if ($exception->getMessage() !== 'Monitor limit reached for the current plan.') {
+            if (! $this->isBillingLimitException($exception)) {
                 throw $exception;
             }
 
@@ -128,7 +128,7 @@ final class MonitorController extends Controller
                 expected: $validated['expected'] ?? [],
             ));
         } catch (AuthorizationException $exception) {
-            if ($exception->getMessage() !== 'Monitor limit reached for the current plan.') {
+            if (! $this->isBillingLimitException($exception)) {
                 throw $exception;
             }
 
@@ -158,7 +158,7 @@ final class MonitorController extends Controller
                 $resumeMonitor->handle(new ResumeMonitorCommand($siteMonitor->id));
             }
         } catch (AuthorizationException $exception) {
-            if ($exception->getMessage() !== 'Monitor limit reached for the current plan.') {
+            if (! $this->isBillingLimitException($exception)) {
                 throw $exception;
             }
 
@@ -201,9 +201,24 @@ final class MonitorController extends Controller
     private function limitErrorMessage(AuthorizationException $exception): string
     {
         return match ($exception->getMessage()) {
-            'Monitor limit reached for the current plan.' => 'Лимит по мониторингам исчерпан. Повысьте тариф для добавления мониторинга.',
+            'Monitor limit reached for the current plan.' => 'Лимит по мониторингам больше не используется. Проверьте выбранные платные проверки.',
+            'Paid check is not purchased for the current subscription.' => 'Эта проверка платная. Подключите её в тарифе или уберите из формы.',
+            'Paid check limit reached for the current subscription.' => 'Лимит по этой платной проверке исчерпан. Докупите ещё одну проверку или отключите лишнюю.',
+            'Check interval is below the current plan limit.' => 'Интервал проверки меньше, чем разрешено на текущем тарифе.',
+            'Monitor type is not available for the current plan.' => 'Этот тип проверки недоступен на текущем тарифе.',
             default => $exception->getMessage(),
         };
+    }
+
+    private function isBillingLimitException(AuthorizationException $exception): bool
+    {
+        return in_array($exception->getMessage(), [
+            'Monitor limit reached for the current plan.',
+            'Paid check is not purchased for the current subscription.',
+            'Paid check limit reached for the current subscription.',
+            'Check interval is below the current plan limit.',
+            'Monitor type is not available for the current plan.',
+        ], true);
     }
 
     private function monitorTypes(CheckTypeRegistry $checkTypes): array

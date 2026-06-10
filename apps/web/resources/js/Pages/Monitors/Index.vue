@@ -155,17 +155,23 @@ function statusClass(monitor: Monitor): string {
 }
 
 function typeLabel(type: string): string {
-    if (type === 'http') return 'HTTP/HTTPS'
-    if (type === 'ssl') return 'SSL'
-    if (type === 'domain') return 'Domain'
-
-    return type.toUpperCase()
+    return {
+        http: 'HTTP/HTTPS',
+        ssl: 'SSL',
+        domain: 'Domain',
+        dns: 'DNS',
+        robots_txt: 'Robots.txt',
+        sitemap_xml: 'Sitemap.xml',
+        api_endpoint: 'API endpoint',
+        tcp_port: 'TCP-порт',
+    }[type] ?? type.toUpperCase()
 }
 
 function typeClass(type: string): string {
-    if (type === 'http') return 'bg-[#EAF2FF] text-[#0F6BFF]'
+    if (type === 'http' || type === 'api_endpoint') return 'bg-[#EAF2FF] text-[#0F6BFF]'
     if (type === 'ssl') return 'bg-[#ECFDF3] text-[#16A34A]'
     if (type === 'domain') return 'bg-[#FFF7E8] text-[#F59E0B]'
+    if (type === 'dns') return 'bg-[#F3E8FF] text-[#7C3AED]'
 
     return 'bg-[#F1F5F9] text-[#64748B]'
 }

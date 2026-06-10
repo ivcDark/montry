@@ -3,7 +3,10 @@
 namespace App\Modules\MonitoredResources\Presentation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Billing\Application\Services\BillingAddonCatalog;
 use App\Modules\Billing\Application\Services\LimitChecker;
+use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
+use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Incidents\Infrastructure\Persistence\Models\Incident;
 use App\Modules\MonitoredResources\Application\Handlers\ListMonitoredResourcesHandler;
 use App\Modules\MonitoredResources\Application\Queries\ListMonitoredResourcesQuery;
@@ -44,21 +47,16 @@ final class MonitoredResourceController extends Controller
         Request $request,
         GetCurrentOrganization $getCurrentOrganization,
         CheckTypeRegistry $checkTypes,
+        BillingAddonCatalog $addonCatalog,
         LimitChecker $limits,
-    ): Response|RedirectResponse {
+    ): Response {
         $organization = $getCurrentOrganization->handle($request->user());
 
-        try {
-            $limits->assertCanCreateSite((int) $organization->id);
-        } catch (AuthorizationException $exception) {
-            if (! $this->isCreateLimitException($exception)) {
-                throw $exception;
-            }
-
-            return redirect()
-                ->route('sites.index')
-                ->with('error', $this->limitErrorMessage($exception));
-        }
+        $currentSubscription = $this->currentSubscription((int) $organization->id);
+        $currentPlan = $currentSubscription?->plan ?? Plan::query()
+            ->with('limits')
+            ->where('code', 'free')
+            ->first();
 
         return Inertia::render('Sites/Create', [
             'organization' => [
@@ -72,6 +70,26 @@ final class MonitoredResourceController extends Controller
                 ])
                 ->values()
                 ->all(),
+            'currentPlan' => $currentPlan ? $this->planPayload($currentPlan) : null,
+            'addonCatalog' => $addonCatalog->payload(),
+            'entitlements' => $limits->usageSummary((int) $organization->id),
+            'usage' => [
+                'sites' => MonitoredResource::query()
+                    ->where('organization_id', $organization->id)
+                    ->where('type', 'website')
+                    ->count(),
+                'monitors' => Monitor::query()
+                    ->where('organization_id', $organization->id)
+                    ->count(),
+                'active_monitors' => Monitor::query()
+                    ->where('organization_id', $organization->id)
+                    ->where('enabled', true)
+                    ->count(),
+                'site_limit' => $limits->effectiveSiteLimit((int) $organization->id),
+                'monitor_limit' => null,
+                'minimum_check_interval_seconds' => $limits->minimumCheckIntervalSeconds((int) $organization->id),
+                'allowed_monitor_types' => $limits->allowedMonitorTypes((int) $organization->id),
+            ],
         ]);
     }
 
@@ -97,7 +115,7 @@ final class MonitoredResourceController extends Controller
                     'url' => $siteData->url,
                     'host' => $siteData->host,
                     'port' => $siteData->port,
-                ], $limits->allowedMonitorTypes($organization->id), $limits->minimumCheckIntervalSeconds($organization->id)),
+                ], null, $limits->minimumCheckIntervalSeconds($organization->id)),
             );
         } catch (AuthorizationException $exception) {
             if (! $this->isCreateLimitException($exception)) {
@@ -121,7 +139,6 @@ final class MonitoredResourceController extends Controller
         LimitChecker $limits,
     ): Response {
         $organization = $getCurrentOrganization->handle($request->user());
-        $allowedMonitorTypes = $limits->allowedMonitorTypes((int) $organization->id);
         $site->load([
             'project:id,name',
             'monitors.latestCheckResult' => fn ($query) => $query->select([
@@ -179,7 +196,7 @@ final class MonitoredResourceController extends Controller
                         'type' => $monitor->type,
                         'status' => $monitor->status,
                         'is_enabled' => $monitor->is_enabled,
-                        'is_available' => $allowedMonitorTypes === null || in_array($monitor->type, $allowedMonitorTypes, true),
+                        'is_available' => $limits->isMonitorTypeAvailable((int) $organization->id, $monitor->type),
                         'interval_seconds' => $monitor->interval_seconds,
                         'timeout_ms' => $monitor->timeout_ms,
                         'settings' => $monitor->settings,
@@ -269,11 +286,59 @@ final class MonitoredResourceController extends Controller
         return 'empty';
     }
 
+
+    private function currentSubscription(int $organizationId): ?Subscription
+    {
+        return Subscription::query()
+            ->with('plan.limits')
+            ->where('organization_id', $organizationId)
+            ->where('status', 'active')
+            ->where('starts_at', '<=', now())
+            ->where(function ($query): void {
+                $query->whereNull('ends_at')->orWhere('ends_at', '>', now());
+            })
+            ->latest('starts_at')
+            ->first();
+    }
+
+    private function planPayload(Plan $plan): array
+    {
+        return [
+            'id' => $plan->id,
+            'code' => $plan->code,
+            'name' => $plan->name,
+            'description' => $plan->description,
+            'price_cents' => $plan->price_cents,
+            'currency' => $plan->currency,
+            'sort_order' => $plan->sort_order,
+            'limits' => $plan->limits
+                ->mapWithKeys(fn ($limit): array => [$limit->key => $limit->value])
+                ->all(),
+        ];
+    }
+
+    private function planLimit(?Plan $plan, string $key): ?int
+    {
+        $value = $plan?->limits->firstWhere('key', $key)?->value;
+
+        if (! is_array($value) || ! array_key_exists('limit', $value)) {
+            return null;
+        }
+
+        $limit = $value['limit'];
+
+        return is_numeric($limit) ? (int) $limit : null;
+    }
+
     private function limitErrorMessage(AuthorizationException $exception): string
     {
         return match ($exception->getMessage()) {
             'Site limit reached for the current plan.' => 'Лимит по сайтам исчерпан. Повысьте тариф для добавления сайта.',
-            'Monitor limit reached for the current plan.' => 'Лимит по мониторингам исчерпан. Повысьте тариф для добавления мониторинга.',
+            'Monitor limit reached for the current plan.' => 'Лимит по мониторингам больше не используется. Проверьте выбранные платные проверки.',
+            'Paid check is not purchased for the current subscription.' => 'Эта проверка платная. Подключите её в тарифе или уберите из формы.',
+            'Paid check limit reached for the current subscription.' => 'Лимит по этой платной проверке исчерпан. Докупите ещё одну проверку или отключите лишнюю.',
+            'Check interval is below the current plan limit.' => 'Интервал проверки меньше, чем разрешено на текущем тарифе.',
+            'Monitor type is not available for the current plan.' => 'Этот тип проверки недоступен на текущем тарифе.',
             default => $exception->getMessage(),
         };
     }
@@ -283,6 +348,10 @@ final class MonitoredResourceController extends Controller
         return in_array($exception->getMessage(), [
             'Site limit reached for the current plan.',
             'Monitor limit reached for the current plan.',
+            'Paid check is not purchased for the current subscription.',
+            'Paid check limit reached for the current subscription.',
+            'Check interval is below the current plan limit.',
+            'Monitor type is not available for the current plan.',
         ], true);
     }
 
@@ -388,6 +457,11 @@ final class MonitoredResourceController extends Controller
             'http' => 0,
             'ssl' => 1,
             'domain' => 2,
+            'dns' => 3,
+            'robots_txt' => 4,
+            'sitemap_xml' => 5,
+            'api_endpoint' => 6,
+            'tcp_port' => 7,
             default => 99,
         };
     }

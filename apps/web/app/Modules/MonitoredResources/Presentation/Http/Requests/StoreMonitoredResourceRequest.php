@@ -12,6 +12,7 @@ use Illuminate\Validation\ValidationException;
 
 final class StoreMonitoredResourceRequest extends FormRequest
 {
+    private const BASE_MONITOR_TYPES = ['http', 'ssl', 'domain', 'dns', 'robots_txt'];
     public function authorize(): bool
     {
         return $this->user() !== null;
@@ -64,7 +65,12 @@ final class StoreMonitoredResourceRequest extends FormRequest
         $submitted = collect($this->validated('monitors', []))
             ->keyBy('type');
 
-        return collect(['http', 'ssl', 'domain'])
+        $types = collect(self::BASE_MONITOR_TYPES)
+            ->merge($submitted->keys())
+            ->unique()
+            ->values();
+
+        return $types
             ->when($allowedTypes !== null, fn ($types) => $types->filter(
                 fn (string $type): bool => in_array($type, $allowedTypes, true),
             ))
@@ -129,20 +135,141 @@ final class StoreMonitoredResourceRequest extends FormRequest
             ];
         }
 
-        return [
-            'type' => 'domain',
-            'name' => 'Domain expiration',
-            'is_enabled' => false,
-            'interval_seconds' => 86400,
-            'timeout_ms' => 10000,
-            'settings' => [
-                'domain' => $site['host'],
-                'warning_days' => [30, 14, 7, 3, 1],
-            ],
-            'expected' => [
-                'registered' => true,
-            ],
-        ];
+        if ($type === 'domain') {
+            return [
+                'type' => 'domain',
+                'name' => 'Domain expiration',
+                'is_enabled' => false,
+                'interval_seconds' => 86400,
+                'timeout_ms' => 10000,
+                'settings' => [
+                    'domain' => $site['host'],
+                    'warning_days' => [30, 14, 7, 3, 1],
+                ],
+                'expected' => [
+                    'registered' => true,
+                ],
+            ];
+        }
+
+        if ($type === 'dns') {
+            return [
+                'type' => 'dns',
+                'name' => 'DNS records',
+                'is_enabled' => false,
+                'interval_seconds' => 86400,
+                'timeout_ms' => 10000,
+                'settings' => [
+                    'domain' => $site['host'],
+                    'record_types' => ['A', 'AAAA'],
+                    'nameservers' => [],
+                ],
+                'expected' => [
+                    'resolves' => true,
+                    'min_records' => 1,
+                ],
+            ];
+        }
+
+        if ($type === 'robots_txt') {
+            return [
+                'type' => 'robots_txt',
+                'name' => 'Robots.txt',
+                'is_enabled' => false,
+                'interval_seconds' => 86400,
+                'timeout_ms' => 10000,
+                'settings' => [
+                    'url' => $this->siteRootUrl($site).'/robots.txt',
+                    'follow_redirects' => true,
+                    'verify_ssl' => true,
+                ],
+                'expected' => [
+                    'exists' => true,
+                    'status_codes' => [200],
+                    'max_response_time_ms' => 5000,
+                ],
+            ];
+        }
+
+        if ($type === 'sitemap_xml') {
+            return [
+                'type' => 'sitemap_xml',
+                'name' => 'Sitemap.xml',
+                'is_enabled' => false,
+                'interval_seconds' => 86400,
+                'timeout_ms' => 10000,
+                'settings' => [
+                    'url' => $this->siteRootUrl($site).'/sitemap.xml',
+                    'follow_redirects' => true,
+                    'verify_ssl' => true,
+                ],
+                'expected' => [
+                    'exists' => true,
+                    'valid_xml' => true,
+                    'status_codes' => [200],
+                    'max_response_time_ms' => 5000,
+                ],
+            ];
+        }
+
+        if ($type === 'api_endpoint') {
+            return [
+                'type' => 'api_endpoint',
+                'name' => 'API endpoint',
+                'is_enabled' => false,
+                'interval_seconds' => $httpInterval,
+                'timeout_ms' => 10000,
+                'settings' => [
+                    'method' => 'GET',
+                    'url' => $site['url'],
+                    'headers' => [],
+                    'body' => null,
+                    'follow_redirects' => true,
+                    'verify_ssl' => true,
+                ],
+                'expected' => [
+                    'status_codes' => [200],
+                    'max_response_time_ms' => 5000,
+                    'response_contains' => null,
+                ],
+            ];
+        }
+
+        if ($type === 'tcp_port') {
+            return [
+                'type' => 'tcp_port',
+                'name' => 'TCP port',
+                'is_enabled' => false,
+                'interval_seconds' => $httpInterval,
+                'timeout_ms' => 10000,
+                'settings' => [
+                    'host' => $site['host'],
+                    'port' => $site['port'] ?? 443,
+                ],
+                'expected' => [
+                    'open' => true,
+                    'max_response_time_ms' => 5000,
+                ],
+            ];
+        }
+
+        throw ValidationException::withMessages([
+            'monitors' => "Unsupported monitor type [{$type}].",
+        ]);
+    }
+
+
+    /**
+     * @param  array{url: string, host: string, port: int|null}  $site
+     */
+    private function siteRootUrl(array $site): string
+    {
+        $parts = parse_url($site['url']);
+        $scheme = $parts['scheme'] ?? 'https';
+        $host = $parts['host'] ?? $site['host'];
+        $port = isset($parts['port']) ? ':'.$parts['port'] : '';
+
+        return $scheme.'://'.$host.$port;
     }
 
     private function siteName(string $host): string

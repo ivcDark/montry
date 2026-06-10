@@ -13,6 +13,15 @@ type Plan = {
     limits: Record<string, any>
 }
 
+type AddonCatalogItem = {
+    code: string
+    name: string
+    description: string
+    unit_label: string
+    unit_price_cents: number
+    currency: string
+}
+
 type Subscription = {
     status: string
     starts_at?: string | null
@@ -29,7 +38,11 @@ const props = defineProps<{
         sites: number
         monitors: number
         active_monitors: number
+        site_limit?: number | null
     }
+    addonCatalog?: AddonCatalogItem[]
+    currentAddons?: Record<string, { quantity: number, unit_price_cents: number, currency: string }>
+    entitlements?: Record<string, any>
 }>()
 
 const currentPlanCode = computed(() => props.currentSubscription?.plan.code ?? 'free')
@@ -43,20 +56,43 @@ function money(plan: Plan): string {
     return `${new Intl.NumberFormat('ru-RU').format(plan.price_cents / 100)} ₽/мес`
 }
 
+function addonMoney(addon: AddonCatalogItem): string {
+    return `+${new Intl.NumberFormat('ru-RU').format(addon.unit_price_cents / 100)} ₽/мес`
+}
+
+function addonQuantity(code: string): number {
+    return props.currentAddons?.[code]?.quantity ?? 0
+}
+
+function addonCheckoutData(addon: AddonCatalogItem): Record<string, any> {
+    const addons: Record<string, number> = {}
+
+    for (const item of props.addonCatalog ?? []) {
+        const quantity = addonQuantity(item.code)
+
+        if (quantity > 0) {
+            addons[item.code] = quantity
+        }
+    }
+
+    addons[addon.code] = (addons[addon.code] ?? 0) + 1
+
+    return {
+        plan_code: currentPlanCode.value,
+        addons,
+    }
+}
+
 function planLimit(plan: Plan, key: string, valueKey: string, fallback: string | number = 'без лимита'): string | number {
     return plan.limits[key]?.[valueKey] ?? fallback
 }
 
 function limitText(plan: Plan): string[] {
     const limits = plan.limits
-    const monitorTypes = limits.allowed_monitor_types?.types?.includes('*')
-        ? 'все доступные типы'
-        : (limits.allowed_monitor_types?.types ?? []).join(', ').toUpperCase()
-
     return [
         `Сайты: до ${limits.max_sites?.limit ?? 'без лимита'}`,
-        `Мониторы: ${limits.max_monitors?.limit ?? 'без лимита'}`,
-        `Типы: ${monitorTypes}`,
+        'Базовые проверки включены',
+        'Платные проверки подключаются отдельно',
         `История: ${limits.history_retention_days?.days ?? 0} дней`,
         `Интервал: от ${Math.round((limits.minimum_check_interval_seconds?.seconds ?? 300) / 60)} мин`,
         `Уведомления: ${(limits.notification_channels?.channels ?? []).join(', ')}`,
@@ -88,8 +124,8 @@ function comparisonValue(plan: Plan, key: string): string {
         return String(planLimit(plan, 'max_sites', 'limit'))
     }
 
-    if (key === 'max_monitors') {
-        return String(planLimit(plan, 'max_monitors', 'limit'))
+    if (key === 'checks') {
+        return 'HTTP, SSL, домен, DNS, Robots.txt'
     }
 
     if (key === 'types') {
@@ -132,7 +168,7 @@ function confirmDowngrade(): void {
 const comparisonRows = [
     { key: 'price', label: 'Стоимость' },
     { key: 'max_sites', label: 'Сайты' },
-    { key: 'max_monitors', label: 'Мониторы' },
+    { key: 'checks', label: 'Базовые проверки' },
     { key: 'types', label: 'Типы проверок' },
     { key: 'history', label: 'История' },
     { key: 'projects', label: 'Проекты' },
@@ -147,8 +183,8 @@ const comparisonRows = [
         active-item="billing"
         title="Тариф"
         subtitle="Управление лимитами мониторинга и оплатой"
-        :usage-current="usage.monitors"
-        :usage-limit="currentSubscription?.plan.limits.max_monitors?.limit ?? 50"
+        :usage-current="usage.sites"
+        :usage-limit="usage.site_limit ?? currentSubscription?.plan.limits.max_sites?.limit ?? 1"
     >
         <section class="mx-auto grid max-w-7xl gap-6 px-5 py-8 sm:px-8">
             <div class="rounded-2xl border border-[#E5E7EB] bg-white p-6">
@@ -171,13 +207,13 @@ const comparisonRows = [
                     <div class="rounded-xl bg-[#F8FAFC] p-4">
                         <p class="text-xs font-bold text-[#667085]">Сайты</p>
                         <p class="mt-2 text-2xl font-extrabold text-[#111827]">
-                            {{ usage.sites }} / {{ currentSubscription?.plan.limits.max_sites?.limit ?? '∞' }}
+                            {{ usage.sites }} / {{ usage.site_limit ?? currentSubscription?.plan.limits.max_sites?.limit ?? '∞' }}
                         </p>
                     </div>
                     <div class="rounded-xl bg-[#F8FAFC] p-4">
-                        <p class="text-xs font-bold text-[#667085]">Активные мониторы</p>
+                        <p class="text-xs font-bold text-[#667085]">Активные проверки</p>
                         <p class="mt-2 text-2xl font-extrabold text-[#111827]">
-                            {{ usage.active_monitors }} / {{ currentSubscription?.plan.limits.max_monitors?.limit ?? '∞' }}
+                            {{ usage.active_monitors }} из {{ usage.monitors }}
                         </p>
                     </div>
                     <div class="rounded-xl bg-[#F8FAFC] p-4">
@@ -238,6 +274,30 @@ const comparisonRows = [
                         Выбрать тариф
                     </Link>
                 </article>
+            </div>
+
+            <div v-if="addonCatalog?.length" class="rounded-2xl border border-[#E5E7EB] bg-white p-6">
+                <p class="text-sm font-extrabold text-[#12B3A8]">Дополнения</p>
+                <h2 class="mt-2 text-2xl font-extrabold text-[#111827]">Платные проверки и пакеты</h2>
+                <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <article v-for="addon in addonCatalog" :key="addon.code" class="rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
+                        <p class="text-base font-extrabold text-[#111827]">{{ addon.name }}</p>
+                        <p class="mt-2 min-h-12 text-sm leading-6 text-[#667085]">{{ addon.description }}</p>
+                        <div class="mt-4 flex items-center justify-between gap-3">
+                            <span class="text-sm font-bold text-[#667085]">Активно: {{ addonQuantity(addon.code) }}</span>
+                            <span class="text-sm font-extrabold text-[#111827]">{{ addonMoney(addon) }}</span>
+                        </div>
+                        <Link
+                            href="/billing/checkout"
+                            method="post"
+                            as="button"
+                            :data="addonCheckoutData(addon)"
+                            class="mt-4 flex h-10 w-full items-center justify-center rounded-xl border border-[#0F6BFF] bg-white px-4 text-sm font-extrabold text-[#0F6BFF] transition hover:bg-[#EFF6FF]"
+                        >
+                            Добавить 1
+                        </Link>
+                    </article>
+                </div>
             </div>
 
             <p class="text-sm leading-6 text-[#667085]">

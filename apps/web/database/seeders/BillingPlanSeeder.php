@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Modules\Billing\Application\Services\BillingAddonCatalog;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use Illuminate\Database\Seeder;
 
@@ -9,16 +10,21 @@ final class BillingPlanSeeder extends Seeder
 {
     public function run(): void
     {
+        $allMonitorTypes = array_merge(
+            BillingAddonCatalog::BASE_MONITOR_TYPES,
+            BillingAddonCatalog::PAID_MONITOR_TYPES,
+        );
+
         $plans = [
             'free' => [
                 'name' => 'Free',
-                'description' => 'Базовый мониторинг для первых сайтов.',
+                'description' => 'Базовый мониторинг для первого сайта.',
                 'price_cents' => 0,
                 'sort_order' => 10,
                 'limits' => [
-                    'max_sites' => ['limit' => 3],
-                    'max_monitors' => ['limit' => 6],
-                    'allowed_monitor_types' => ['types' => ['http', 'ssl']],
+                    'max_sites' => ['limit' => 1],
+                    'max_monitors' => ['limit' => null],
+                    'allowed_monitor_types' => ['types' => $allMonitorTypes],
                     'history_retention_days' => ['days' => 3],
                     'minimum_check_interval_seconds' => ['seconds' => 900],
                     'notification_channels' => ['channels' => ['email']],
@@ -27,14 +33,14 @@ final class BillingPlanSeeder extends Seeder
             ],
             'pro' => [
                 'name' => 'Pro',
-                'description' => 'Мониторинг сайтов, SSL и доменов для малого портфеля.',
-                'price_cents' => 99000,
+                'description' => 'Мониторинг до 10 сайтов с Telegram-уведомлениями и историей 30 дней.',
+                'price_cents' => 39000,
                 'sort_order' => 20,
                 'limits' => [
-                    'max_sites' => ['limit' => 15],
-                    'max_monitors' => ['limit' => 35],
-                    'allowed_monitor_types' => ['types' => ['http', 'ssl', 'domain']],
-                    'history_retention_days' => ['days' => 14],
+                    'max_sites' => ['limit' => 10],
+                    'max_monitors' => ['limit' => null],
+                    'allowed_monitor_types' => ['types' => $allMonitorTypes],
+                    'history_retention_days' => ['days' => 30],
                     'minimum_check_interval_seconds' => ['seconds' => 300],
                     'notification_channels' => ['channels' => ['email', 'telegram']],
                     'can_create_projects' => ['enabled' => false],
@@ -42,15 +48,15 @@ final class BillingPlanSeeder extends Seeder
             ],
             'plus' => [
                 'name' => 'Plus',
-                'description' => 'Расширенный мониторинг с проектами и длинной историей.',
-                'price_cents' => 249000,
+                'description' => 'Расширенный мониторинг до 30 сайтов с проверками от 3 минут.',
+                'price_cents' => 69000,
                 'sort_order' => 30,
                 'limits' => [
-                    'max_sites' => ['limit' => 50],
+                    'max_sites' => ['limit' => 30],
                     'max_monitors' => ['limit' => null],
-                    'allowed_monitor_types' => ['types' => ['*']],
+                    'allowed_monitor_types' => ['types' => $allMonitorTypes],
                     'history_retention_days' => ['days' => 60],
-                    'minimum_check_interval_seconds' => ['seconds' => 300],
+                    'minimum_check_interval_seconds' => ['seconds' => 180],
                     'notification_channels' => ['channels' => ['email', 'telegram']],
                     'can_create_projects' => ['enabled' => true],
                 ],

@@ -41,4 +41,9 @@ final class Subscription extends Model
     {
         return $this->hasMany(Payment::class);
     }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(SubscriptionItem::class);
+    }
 }

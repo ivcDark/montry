@@ -22,6 +22,7 @@ final readonly class ResumeMonitorHandler
         $monitor = $this->monitors->getById($command->monitorId);
         $this->limits->assertCanEnableMonitor($monitor->organization_id);
         $this->limits->assertCanUseMonitorType($monitor->organization_id, $monitor->type);
+        $this->limits->assertCanEnablePaidMonitor($monitor);
         $this->limits->assertCanUseInterval($monitor->organization_id, (int) $monitor->interval_seconds);
         $monitor->enabled = true;
 

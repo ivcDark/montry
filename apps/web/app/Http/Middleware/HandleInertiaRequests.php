@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
@@ -79,7 +80,7 @@ class HandleInertiaRequests extends Middleware
         }
 
         $subscription = Subscription::query()
-            ->with('plan.limits')
+            ->with(['plan.limits', 'items'])
             ->where('organization_id', $organization->id)
             ->where('status', 'active')
             ->where('starts_at', '<=', now())
@@ -94,23 +95,29 @@ class HandleInertiaRequests extends Middleware
             ->where('code', 'free')
             ->first();
 
+        $limits = app(LimitChecker::class);
+        $usage = $limits->usageSummary((int) $organization->id);
+
         return [
             'plan' => $plan === null ? null : [
+                'code' => $plan->code,
                 'name' => $plan->name,
             ],
             'monitors' => [
                 'current' => Monitor::query()
                     ->where('organization_id', $organization->id)
                     ->count(),
-                'limit' => $this->planLimit($plan, 'max_monitors'),
+                'limit' => null,
             ],
             'sites' => [
-                'current' => MonitoredResource::query()
-                    ->where('organization_id', $organization->id)
-                    ->where('type', 'website')
-                    ->count(),
-                'limit' => $this->planLimit($plan, 'max_sites'),
+                'current' => $usage['sites']['current'] ?? 0,
+                'limit' => $usage['sites']['limit'] ?? null,
+                'extra_packs' => $usage['sites']['extra_packs'] ?? 0,
             ],
+            'addons' => $usage['paid_checks'] ?? [],
+            'telegram_available' => $usage['telegram_available'] ?? false,
+            'minimum_check_interval_seconds' => $usage['minimum_check_interval_seconds'] ?? null,
+            'history_retention_days' => $usage['history_retention_days'] ?? null,
         ];
     }
 

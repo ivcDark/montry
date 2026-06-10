@@ -4,9 +4,14 @@ import (
 	"fmt"
 
 	"montry/apps/poller/internal/checks"
+	"montry/apps/poller/internal/checks/apiendpointcheck"
+	"montry/apps/poller/internal/checks/dnscheck"
 	"montry/apps/poller/internal/checks/domaincheck"
 	"montry/apps/poller/internal/checks/httpcheck"
+	"montry/apps/poller/internal/checks/robotstxtcheck"
+	"montry/apps/poller/internal/checks/sitemapxmlcheck"
 	"montry/apps/poller/internal/checks/sslcheck"
+	"montry/apps/poller/internal/checks/tcpportcheck"
 	"montry/apps/poller/internal/config"
 	"montry/apps/poller/internal/jobs"
 	"montry/apps/poller/internal/laravel"
@@ -70,6 +75,21 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	}
 	if err := checkRegistry.Register(domaincheck.New()); err != nil {
 		return nil, fmt.Errorf("register %s checker: %w", domaincheck.Type, err)
+	}
+	if err := checkRegistry.Register(dnscheck.New()); err != nil {
+		return nil, fmt.Errorf("register %s checker: %w", dnscheck.Type, err)
+	}
+	if err := checkRegistry.Register(robotstxtcheck.New()); err != nil {
+		return nil, fmt.Errorf("register %s checker: %w", robotstxtcheck.Type, err)
+	}
+	if err := checkRegistry.Register(sitemapxmlcheck.New()); err != nil {
+		return nil, fmt.Errorf("register %s checker: %w", sitemapxmlcheck.Type, err)
+	}
+	if err := checkRegistry.Register(apiendpointcheck.New()); err != nil {
+		return nil, fmt.Errorf("register %s checker: %w", apiendpointcheck.Type, err)
+	}
+	if err := checkRegistry.Register(tcpportcheck.New()); err != nil {
+		return nil, fmt.Errorf("register %s checker: %w", tcpportcheck.Type, err)
 	}
 
 	laravelClient := laravel.NewHTTPClient(laravel.HTTPClientConfig{

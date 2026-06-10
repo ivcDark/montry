@@ -28,6 +28,7 @@ final readonly class UpdateMonitorHandler
         if (! $wasEnabled && $command->enabled) {
             $this->limits->assertCanEnableMonitor($monitor->organization_id);
             $this->limits->assertCanUseMonitorType($monitor->organization_id, $monitor->type);
+            $this->limits->assertCanEnablePaidMonitor($monitor);
         }
 
         $this->limits->assertCanUseInterval($monitor->organization_id, $command->intervalSeconds);

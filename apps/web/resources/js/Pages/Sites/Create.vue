@@ -5,13 +5,40 @@ import FlashToast from '@/Components/FlashToast.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 
 type Organization = {
-    id: string
+    id: string | number
     name: string
 }
+
+type MonitorType = 'http' | 'ssl' | 'domain' | 'dns' | 'robots_txt' | 'sitemap_xml' | 'api_endpoint' | 'tcp_port'
 
 type MonitorTypeOption = {
     value: string
     label: string
+}
+
+type AddonCatalogItem = {
+    code: string
+    name: string
+    unit_price_cents: number
+    unit_label?: string
+    kind?: string
+}
+
+type CurrentPlan = {
+    code: string
+    name: string
+    price_cents?: number | null
+    limits?: Record<string, any>
+}
+
+type Usage = {
+    sites: number
+    monitors: number
+    active_monitors: number
+    site_limit: number | null
+    monitor_limit: number | null
+    minimum_check_interval_seconds: number | null
+    allowed_monitor_types: string[] | null
 }
 
 type PageProps = {
@@ -20,16 +47,69 @@ type PageProps = {
     }
 }
 
-const props = defineProps<{
+type ToggleCard = {
+    type: MonitorType
+    title: string
+    label: string
+    description: string
+    summary: string
+    enabled: boolean
+    included: boolean
+    priceRub?: number
+    badge?: string
+}
+
+const props = withDefaults(defineProps<{
     organization: Organization
     monitorTypes: MonitorTypeOption[]
-}>()
+    currentPlan?: CurrentPlan | null
+    usage?: Usage | null
+    addonCatalog?: AddonCatalogItem[]
+    entitlements?: Record<string, any> | null
+}>(), {
+    currentPlan: null,
+    usage: null,
+    addonCatalog: () => [],
+    entitlements: null,
+})
 
 const page = usePage<PageProps>()
+const minimumIntervalSecondsValue = props.usage?.minimum_check_interval_seconds ?? 300
+const minimumIntervalMinutes = Math.max(5, Math.ceil(minimumIntervalSecondsValue / 60))
 const statusCodesText = ref('200')
 const sslWarningDaysText = ref('30, 14, 7, 3, 1')
 const domainWarningDaysText = ref('30, 14, 7, 3, 1')
+const dnsRecordTypesText = ref('A, AAAA')
+const robotsStatusCodesText = ref('200')
+const sitemapStatusCodesText = ref('200')
+const apiStatusCodesText = ref('200')
+const apiResponseContainsText = ref('')
+const openedAdvanced = ref<MonitorType | null>('http')
+
 const intervalPresets = [5, 10, 15, 30, 60, 360, 720, 1440]
+const availableIntervalPresets = computed(() => intervalPresets.filter((minutes) => minutes >= minimumIntervalMinutes))
+
+const tariffCatalog: Record<string, { name: string; priceRub: number; sites: number; historyDays: number; intervalText: string }> = {
+    free: { name: 'Free', priceRub: 0, sites: 1, historyDays: 3, intervalText: 'от 15 минут' },
+    pro: { name: 'Pro', priceRub: 390, sites: 10, historyDays: 30, intervalText: 'от 5 минут' },
+    plus: { name: 'Plus', priceRub: 690, sites: 30, historyDays: 60, intervalText: 'от 3 минут' },
+}
+
+function addonPriceRub(code: 'sitemap_xml' | 'api_endpoint' | 'tcp_port'): number {
+    const item = props.addonCatalog.find((addon) => addon.code === code)
+
+    if (item) {
+        return Math.round(item.unit_price_cents / 100)
+    }
+
+    const fallbackPrices: Record<'sitemap_xml' | 'api_endpoint' | 'tcp_port', number> = {
+        sitemap_xml: 20,
+        api_endpoint: 30,
+        tcp_port: 20,
+    }
+
+    return fallbackPrices[code]
+}
 
 const form = useForm({
     name: '',
@@ -38,7 +118,7 @@ const form = useForm({
         http: {
             is_enabled: true,
             name: 'HTTP availability',
-            interval_seconds: 300,
+            interval_seconds: minimumIntervalMinutes * 60,
             timeout_ms: 10000,
             method: 'GET',
             follow_redirects: true,
@@ -46,7 +126,7 @@ const form = useForm({
             max_response_time_ms: 5000,
         },
         ssl: {
-            is_enabled: false,
+            is_enabled: true,
             name: 'SSL certificate',
             interval_seconds: 86400,
             timeout_ms: 10000,
@@ -54,57 +134,214 @@ const form = useForm({
             valid: true,
         },
         domain: {
-            is_enabled: false,
+            is_enabled: true,
             name: 'Domain expiration',
             interval_seconds: 86400,
             timeout_ms: 10000,
             registered: true,
         },
+        dns: {
+            is_enabled: false,
+            name: 'DNS records',
+            interval_seconds: 86400,
+            timeout_ms: 10000,
+            min_records: 1,
+            resolves: true,
+        },
+        robots_txt: {
+            is_enabled: false,
+            name: 'Robots.txt',
+            interval_seconds: 86400,
+            timeout_ms: 10000,
+            follow_redirects: true,
+            verify_ssl: true,
+            exists: true,
+            max_response_time_ms: 5000,
+        },
+        sitemap_xml: {
+            is_enabled: false,
+            name: 'Sitemap.xml',
+            interval_seconds: 86400,
+            timeout_ms: 10000,
+            follow_redirects: true,
+            verify_ssl: true,
+            exists: true,
+            valid_xml: true,
+            max_response_time_ms: 5000,
+        },
+        api_endpoint: {
+            is_enabled: false,
+            name: 'API endpoint',
+            interval_seconds: minimumIntervalMinutes * 60,
+            timeout_ms: 10000,
+            method: 'GET',
+            path: '/api/health',
+            follow_redirects: true,
+            verify_ssl: true,
+            max_response_time_ms: 5000,
+        },
+        tcp_port: {
+            is_enabled: false,
+            name: 'TCP port',
+            interval_seconds: minimumIntervalMinutes * 60,
+            timeout_ms: 10000,
+            port: 443,
+            open: true,
+            max_response_time_ms: 5000,
+        },
     },
 })
 
 const normalizedSite = computed(() => normalizeUrl(form.url))
-const httpUrl = computed(() => normalizedSite.value?.url ?? form.url)
+const httpUrl = computed(() => normalizedSite.value?.url ?? form.url.trim())
+const rootUrl = computed(() => normalizedSite.value ? siteRootUrl(normalizedSite.value.url) : '')
 const domain = computed(() => normalizedSite.value?.host ?? '')
+const fallbackHost = computed(() => domain.value || form.url.trim())
+const robotsUrl = computed(() => rootUrl.value ? `${rootUrl.value}/robots.txt` : '')
+const sitemapUrl = computed(() => rootUrl.value ? `${rootUrl.value}/sitemap.xml` : '')
+const apiEndpointUrl = computed(() => absoluteUrl(form.monitors.api_endpoint.path, rootUrl.value || httpUrl.value))
 
-const monitorCards = computed(() => [
+const planCode = computed(() => props.currentPlan?.code ?? 'free')
+const displayPlan = computed(() => tariffCatalog[planCode.value] ?? {
+    name: props.currentPlan?.name ?? 'Free',
+    priceRub: props.currentPlan?.price_cents ? Math.round(props.currentPlan.price_cents / 100) : 0,
+    sites: props.usage?.site_limit ?? 1,
+    historyDays: Number(props.currentPlan?.limits?.history_retention_days?.days ?? 3),
+    intervalText: `от ${minimumIntervalMinutes} минут`,
+})
+const sitesUsed = computed(() => props.usage?.sites ?? 0)
+const siteLimit = computed(() => props.usage?.site_limit ?? displayPlan.value.sites)
+const sitesAfterCreate = computed(() => sitesUsed.value + 1)
+const sitesLeftAfterCreate = computed(() => Math.max(siteLimit.value - sitesAfterCreate.value, 0))
+const isSiteLimitReached = computed(() => sitesAfterCreate.value > siteLimit.value)
+
+const baseCheckCards = computed<ToggleCard[]>(() => [
     {
         type: 'http',
-        label: typeLabel('http'),
-        enabled: form.monitors.http.is_enabled,
         title: 'Доступность сайта',
-        description: 'Проверяет код ответа, время ответа и редиректы.',
-        summary: `${form.monitors.http.method} · ${statusCodesText.value} · ${form.monitors.http.max_response_time_ms} мс`,
+        label: typeLabel('http'),
+        description: 'Код ответа, редиректы и время ответа главной страницы.',
+        summary: `${form.monitors.http.method} · ${statusCodesText.value} · ${intervalText(form.monitors.http.interval_seconds)}`,
+        enabled: form.monitors.http.is_enabled,
+        included: true,
+        badge: 'В тарифе',
     },
     {
         type: 'ssl',
+        title: 'SSL-сертификат',
         label: typeLabel('ssl'),
+        description: 'Валидность сертификата и предупреждения до истечения.',
+        summary: `${fallbackHost.value || 'домен из URL'} · порт ${form.monitors.ssl.port}`,
         enabled: form.monitors.ssl.is_enabled,
-        title: 'SSL сертификат',
-        description: 'Следит за валидностью сертификата и сроком истечения.',
-        summary: `${domain.value || 'домен из URL'} · порт ${form.monitors.ssl.port}`,
+        included: true,
+        badge: 'В тарифе',
     },
     {
         type: 'domain',
-        label: typeLabel('domain'),
-        enabled: form.monitors.domain.is_enabled,
         title: 'Срок домена',
-        description: 'Предупреждает, когда домен близок к окончанию регистрации.',
-        summary: `${domain.value || 'домен из URL'} · ${domainWarningDaysText.value} дней`,
+        label: typeLabel('domain'),
+        description: 'WHOIS-проверка регистрации и даты окончания домена.',
+        summary: `${fallbackHost.value || 'домен из URL'} · ${domainWarningDaysText.value} дней`,
+        enabled: form.monitors.domain.is_enabled,
+        included: true,
+        badge: 'В тарифе',
+    },
+    {
+        type: 'dns',
+        title: 'DNS-записи',
+        label: typeLabel('dns'),
+        description: 'Проверка резолва домена и базовых DNS-записей.',
+        summary: `${dnsRecordTypesText.value} · минимум ${form.monitors.dns.min_records}`,
+        enabled: form.monitors.dns.is_enabled,
+        included: true,
+        badge: 'В тарифе',
+    },
+    {
+        type: 'robots_txt',
+        title: 'Robots.txt',
+        label: typeLabel('robots_txt'),
+        description: 'Наличие robots.txt и корректный HTTP-ответ.',
+        summary: robotsUrl.value || 'URL появится после ввода сайта',
+        enabled: form.monitors.robots_txt.is_enabled,
+        included: true,
+        badge: 'В тарифе',
     },
 ])
 
+const paidAddonCards = computed<ToggleCard[]>(() => [
+    {
+        type: 'sitemap_xml',
+        title: 'Sitemap.xml',
+        label: typeLabel('sitemap_xml'),
+        description: 'Проверка наличия и валидности XML-карты сайта.',
+        summary: sitemapUrl.value || 'URL появится после ввода сайта',
+        enabled: form.monitors.sitemap_xml.is_enabled,
+        included: false,
+        priceRub: addonPriceRub('sitemap_xml'),
+        badge: `+${addonPriceRub('sitemap_xml')} ₽/мес`,
+    },
+    {
+        type: 'api_endpoint',
+        title: 'API endpoint',
+        label: typeLabel('api_endpoint'),
+        description: 'Контроль healthcheck, webhook или любого API URL.',
+        summary: `${form.monitors.api_endpoint.method} · ${apiEndpointUrl.value || 'endpoint'} · ${apiStatusCodesText.value}`,
+        enabled: form.monitors.api_endpoint.is_enabled,
+        included: false,
+        priceRub: addonPriceRub('api_endpoint'),
+        badge: `+${addonPriceRub('api_endpoint')} ₽/endpoint`,
+    },
+    {
+        type: 'tcp_port',
+        title: 'TCP-порт',
+        label: typeLabel('tcp_port'),
+        description: 'Проверка открытого порта: HTTPS, SMTP, SSH или свой сервис.',
+        summary: `${fallbackHost.value || 'host'}:${form.monitors.tcp_port.port}`,
+        enabled: form.monitors.tcp_port.is_enabled,
+        included: false,
+        priceRub: addonPriceRub('tcp_port'),
+        badge: `+${addonPriceRub('tcp_port')} ₽/порт`,
+    },
+])
+
+const selectedPaidAddons = computed(() => paidAddonCards.value.filter((card) => card.enabled))
+const addonTotalRub = computed(() => selectedPaidAddons.value.reduce((sum, card) => sum + (card.priceRub ?? 0), 0))
+const totalMonthlyRub = computed(() => displayPlan.value.priceRub + addonTotalRub.value)
+const enabledBaseCount = computed(() => baseCheckCards.value.filter((card) => card.enabled).length)
+const activeMonitorCount = computed(() => enabledBaseCount.value + selectedPaidAddons.value.length)
+const monitorCountAfterCreate = computed(() => (props.usage?.monitors ?? 0) + baseCheckCards.value.length + selectedPaidAddons.value.length)
+
 function typeLabel(type: string): string {
     return props.monitorTypes.find((option) => option.value === type)?.label
-        ?? (type === 'http' ? 'HTTP' : type === 'ssl' ? 'SSL' : 'Domain')
+        ?? fallbackTypeLabel(type)
 }
 
-function typeClass(type: string): string {
-    if (type === 'http') return 'bg-[#EAF2FF] text-[#0F6BFF]'
-    if (type === 'ssl') return 'bg-[#ECFDF3] text-[#16A34A]'
-    if (type === 'domain') return 'bg-[#FFF7E8] text-[#F59E0B]'
+function fallbackTypeLabel(type: string): string {
+    if (type === 'http') return 'HTTP'
+    if (type === 'ssl') return 'SSL'
+    if (type === 'domain') return 'Domain'
+    if (type === 'dns') return 'DNS'
+    if (type === 'robots_txt') return 'Robots.txt'
+    if (type === 'sitemap_xml') return 'Sitemap.xml'
+    if (type === 'api_endpoint') return 'API'
+    if (type === 'tcp_port') return 'TCP'
 
-    return 'bg-[#F1F5F9] text-[#64748B]'
+    return type
+}
+
+function toggleMonitor(type: MonitorType): void {
+    if (type === 'http') form.monitors.http.is_enabled = !form.monitors.http.is_enabled
+    if (type === 'ssl') form.monitors.ssl.is_enabled = !form.monitors.ssl.is_enabled
+    if (type === 'domain') form.monitors.domain.is_enabled = !form.monitors.domain.is_enabled
+    if (type === 'dns') form.monitors.dns.is_enabled = !form.monitors.dns.is_enabled
+    if (type === 'robots_txt') form.monitors.robots_txt.is_enabled = !form.monitors.robots_txt.is_enabled
+    if (type === 'sitemap_xml') form.monitors.sitemap_xml.is_enabled = !form.monitors.sitemap_xml.is_enabled
+    if (type === 'api_endpoint') form.monitors.api_endpoint.is_enabled = !form.monitors.api_endpoint.is_enabled
+    if (type === 'tcp_port') form.monitors.tcp_port.is_enabled = !form.monitors.tcp_port.is_enabled
+}
+
+function openAdvanced(type: MonitorType): void {
+    openedAdvanced.value = openedAdvanced.value === type ? null : type
 }
 
 function parseNumberList(value: string): number[] {
@@ -114,12 +351,19 @@ function parseNumberList(value: string): number[] {
         .filter((item) => Number.isInteger(item))
 }
 
+function parseTextList(value: string): string[] {
+    return value
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+}
+
 function intervalMinutes(seconds: number): number {
     return Math.round(seconds / 60)
 }
 
 function setIntervalMinutes(target: { interval_seconds: number }, minutes: number): void {
-    target.interval_seconds = minutes * 60
+    target.interval_seconds = Math.max(minutes, minimumIntervalMinutes) * 60
 }
 
 function intervalText(seconds: number): string {
@@ -130,6 +374,10 @@ function intervalText(seconds: number): string {
     if (minutes > 60 && minutes % 60 === 0) return `Каждые ${minutes / 60} ч`
 
     return `Каждые ${minutes} мин`
+}
+
+function money(value: number): string {
+    return `${new Intl.NumberFormat('ru-RU').format(value)} ₽/мес`
 }
 
 function normalizeUrl(value: string): { url: string, host: string, port: number | null } | null {
@@ -150,59 +398,186 @@ function normalizeUrl(value: string): { url: string, host: string, port: number 
     }
 }
 
-function requestPayload() {
-    const fallbackHost = domain.value || form.url.trim()
+function siteRootUrl(value: string): string {
+    try {
+        const parsed = new URL(value)
+        const port = parsed.port ? `:${parsed.port}` : ''
 
+        return `${parsed.protocol}//${parsed.hostname}${port}`
+    } catch {
+        return ''
+    }
+}
+
+function absoluteUrl(pathOrUrl: string, baseUrl: string): string {
+    const value = pathOrUrl.trim()
+
+    if (!value) return baseUrl
+    if (value.startsWith('http://') || value.startsWith('https://')) return value
+    if (!baseUrl) return value
+
+    return `${baseUrl.replace(/\/$/, '')}/${value.replace(/^\//, '')}`
+}
+
+function baseMonitorPayloads() {
+    return [
+        {
+            type: 'http',
+            name: form.monitors.http.name,
+            is_enabled: form.monitors.http.is_enabled,
+            interval_seconds: form.monitors.http.interval_seconds,
+            timeout_ms: form.monitors.http.timeout_ms,
+            settings: {
+                method: form.monitors.http.method,
+                url: httpUrl.value,
+                follow_redirects: form.monitors.http.follow_redirects,
+                verify_ssl: form.monitors.http.verify_ssl,
+            },
+            expected: {
+                status_codes: parseNumberList(statusCodesText.value),
+                max_response_time_ms: form.monitors.http.max_response_time_ms,
+            },
+        },
+        {
+            type: 'ssl',
+            name: form.monitors.ssl.name,
+            is_enabled: form.monitors.ssl.is_enabled,
+            interval_seconds: form.monitors.ssl.interval_seconds,
+            timeout_ms: form.monitors.ssl.timeout_ms,
+            settings: {
+                domain: fallbackHost.value,
+                port: form.monitors.ssl.port,
+                warning_days: parseNumberList(sslWarningDaysText.value),
+            },
+            expected: {
+                valid: form.monitors.ssl.valid,
+            },
+        },
+        {
+            type: 'domain',
+            name: form.monitors.domain.name,
+            is_enabled: form.monitors.domain.is_enabled,
+            interval_seconds: form.monitors.domain.interval_seconds,
+            timeout_ms: form.monitors.domain.timeout_ms,
+            settings: {
+                domain: fallbackHost.value,
+                warning_days: parseNumberList(domainWarningDaysText.value),
+            },
+            expected: {
+                registered: form.monitors.domain.registered,
+            },
+        },
+        {
+            type: 'dns',
+            name: form.monitors.dns.name,
+            is_enabled: form.monitors.dns.is_enabled,
+            interval_seconds: form.monitors.dns.interval_seconds,
+            timeout_ms: form.monitors.dns.timeout_ms,
+            settings: {
+                domain: fallbackHost.value,
+                record_types: parseTextList(dnsRecordTypesText.value),
+                nameservers: [],
+            },
+            expected: {
+                resolves: form.monitors.dns.resolves,
+                min_records: form.monitors.dns.min_records,
+            },
+        },
+        {
+            type: 'robots_txt',
+            name: form.monitors.robots_txt.name,
+            is_enabled: form.monitors.robots_txt.is_enabled,
+            interval_seconds: form.monitors.robots_txt.interval_seconds,
+            timeout_ms: form.monitors.robots_txt.timeout_ms,
+            settings: {
+                url: robotsUrl.value || absoluteUrl('/robots.txt', rootUrl.value || httpUrl.value),
+                follow_redirects: form.monitors.robots_txt.follow_redirects,
+                verify_ssl: form.monitors.robots_txt.verify_ssl,
+            },
+            expected: {
+                exists: form.monitors.robots_txt.exists,
+                status_codes: parseNumberList(robotsStatusCodesText.value),
+                max_response_time_ms: form.monitors.robots_txt.max_response_time_ms,
+            },
+        },
+    ]
+}
+
+function paidAddonPayloads() {
+    const payloads = []
+
+    if (form.monitors.sitemap_xml.is_enabled) {
+        payloads.push({
+            type: 'sitemap_xml',
+            name: form.monitors.sitemap_xml.name,
+            is_enabled: true,
+            interval_seconds: form.monitors.sitemap_xml.interval_seconds,
+            timeout_ms: form.monitors.sitemap_xml.timeout_ms,
+            settings: {
+                url: sitemapUrl.value || absoluteUrl('/sitemap.xml', rootUrl.value || httpUrl.value),
+                follow_redirects: form.monitors.sitemap_xml.follow_redirects,
+                verify_ssl: form.monitors.sitemap_xml.verify_ssl,
+            },
+            expected: {
+                exists: form.monitors.sitemap_xml.exists,
+                valid_xml: form.monitors.sitemap_xml.valid_xml,
+                status_codes: parseNumberList(sitemapStatusCodesText.value),
+                max_response_time_ms: form.monitors.sitemap_xml.max_response_time_ms,
+            },
+        })
+    }
+
+    if (form.monitors.api_endpoint.is_enabled) {
+        payloads.push({
+            type: 'api_endpoint',
+            name: form.monitors.api_endpoint.name,
+            is_enabled: true,
+            interval_seconds: form.monitors.api_endpoint.interval_seconds,
+            timeout_ms: form.monitors.api_endpoint.timeout_ms,
+            settings: {
+                method: form.monitors.api_endpoint.method,
+                url: apiEndpointUrl.value,
+                headers: {},
+                body: null,
+                follow_redirects: form.monitors.api_endpoint.follow_redirects,
+                verify_ssl: form.monitors.api_endpoint.verify_ssl,
+            },
+            expected: {
+                status_codes: parseNumberList(apiStatusCodesText.value),
+                max_response_time_ms: form.monitors.api_endpoint.max_response_time_ms,
+                response_contains: apiResponseContainsText.value.trim() || null,
+            },
+        })
+    }
+
+    if (form.monitors.tcp_port.is_enabled) {
+        payloads.push({
+            type: 'tcp_port',
+            name: form.monitors.tcp_port.name,
+            is_enabled: true,
+            interval_seconds: form.monitors.tcp_port.interval_seconds,
+            timeout_ms: form.monitors.tcp_port.timeout_ms,
+            settings: {
+                host: fallbackHost.value,
+                port: form.monitors.tcp_port.port,
+            },
+            expected: {
+                open: form.monitors.tcp_port.open,
+                max_response_time_ms: form.monitors.tcp_port.max_response_time_ms,
+            },
+        })
+    }
+
+    return payloads
+}
+
+function requestPayload() {
     return {
         name: form.name,
         url: form.url,
         monitors: [
-            {
-                type: 'http',
-                name: form.monitors.http.name,
-                is_enabled: form.monitors.http.is_enabled,
-                interval_seconds: form.monitors.http.interval_seconds,
-                timeout_ms: form.monitors.http.timeout_ms,
-                settings: {
-                    method: form.monitors.http.method,
-                    url: httpUrl.value,
-                    follow_redirects: form.monitors.http.follow_redirects,
-                    verify_ssl: form.monitors.http.verify_ssl,
-                },
-                expected: {
-                    status_codes: parseNumberList(statusCodesText.value),
-                    max_response_time_ms: form.monitors.http.max_response_time_ms,
-                },
-            },
-            {
-                type: 'ssl',
-                name: form.monitors.ssl.name,
-                is_enabled: form.monitors.ssl.is_enabled,
-                interval_seconds: form.monitors.ssl.interval_seconds,
-                timeout_ms: form.monitors.ssl.timeout_ms,
-                settings: {
-                    domain: fallbackHost,
-                    port: form.monitors.ssl.port,
-                    warning_days: parseNumberList(sslWarningDaysText.value),
-                },
-                expected: {
-                    valid: form.monitors.ssl.valid,
-                },
-            },
-            {
-                type: 'domain',
-                name: form.monitors.domain.name,
-                is_enabled: form.monitors.domain.is_enabled,
-                interval_seconds: form.monitors.domain.interval_seconds,
-                timeout_ms: form.monitors.domain.timeout_ms,
-                settings: {
-                    domain: fallbackHost,
-                    warning_days: parseNumberList(domainWarningDaysText.value),
-                },
-                expected: {
-                    registered: form.monitors.domain.registered,
-                },
-            },
+            ...baseMonitorPayloads(),
+            ...paidAddonPayloads(),
         ],
     }
 }
@@ -224,371 +599,469 @@ function submit(): void {
         :organization="organization"
         active-item="sites"
         title="Добавить сайт"
-        subtitle="Создайте сайт и сразу подготовьте HTTP, SSL и доменный мониторинг"
+        subtitle="Базовые проверки входят в тариф, дополнительные можно отметить сразу"
     >
         <template #actions>
             <Link
                 href="/sites"
-                class="inline-flex h-11 items-center justify-center rounded-xl border border-[#E5E7EB] bg-white px-5 text-sm font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF]"
+                class="inline-flex h-11 items-center justify-center rounded-2xl border border-[#DDEBE3] bg-white px-5 text-sm font-semibold text-[#173B2A] transition hover:border-[#B8D0C2] hover:bg-[#F6FBF8]"
             >
                 Назад к сайтам
             </Link>
         </template>
 
         <form class="mx-auto max-w-7xl px-5 py-8 sm:px-8" @submit.prevent="submit">
-            <div class="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-                <aside class="space-y-4">
-                    <section class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                        <h2 class="text-xl font-extrabold text-[#111827]">Сайт</h2>
-                        <p class="mt-1 text-sm leading-6 text-[#667085]">URL обязателен. Название можно оставить пустым, тогда будет использован домен.</p>
+            <section class="overflow-hidden rounded-[32px] border border-[#DDEBE3] bg-white shadow-[0_18px_60px_rgba(38,51,45,0.08)]">
+                <div class="grid gap-0 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
+                    <div class="border-b border-[#DDEBE3] p-6 sm:p-8 lg:border-b-0 lg:border-r">
+                        <p class="inline-flex rounded-full bg-[#E9F8EF] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#1E9B5D]">
+                            Новый мониторинг
+                        </p>
+                        <h1 class="mt-5 max-w-3xl text-3xl font-bold tracking-[-0.03em] text-[#173B2A] sm:text-4xl">
+                            Добавьте сайт и выберите проверки перед созданием
+                        </h1>
+                        <p class="mt-4 max-w-2xl text-base leading-7 text-[#6A7A70]">
+                            Montry создаст базовый набор мониторингов для сайта. Платные проверки можно подключить кликом — справа сразу появится итоговая сумма.
+                        </p>
+                    </div>
 
-                        <div class="mt-5 grid gap-5">
+                    <aside class="bg-[#F6FBF8] p-6 sm:p-8">
+                        <div class="rounded-3xl border border-[#CFE1D7] bg-white p-5">
+                            <div class="flex items-start justify-between gap-4">
+                                <div>
+                                    <p class="text-sm font-medium text-[#6A7A70]">Текущий тариф</p>
+                                    <h2 class="mt-1 text-2xl font-bold text-[#173B2A]">{{ displayPlan.name }}</h2>
+                                </div>
+                                <span class="rounded-full bg-[#E9F8EF] px-3 py-1 text-sm font-semibold text-[#1E9B5D]">
+                                    {{ money(displayPlan.priceRub) }}
+                                </span>
+                            </div>
+
+                            <div class="mt-5 grid grid-cols-2 gap-3">
+                                <div class="rounded-2xl bg-[#F3F8F5] p-4">
+                                    <p class="text-xs font-semibold text-[#6A7A70]">Сайты после добавления</p>
+                                    <p class="mt-2 text-2xl font-bold text-[#173B2A]">{{ sitesAfterCreate }} / {{ siteLimit }}</p>
+                                </div>
+                                <div class="rounded-2xl bg-[#F3F8F5] p-4">
+                                    <p class="text-xs font-semibold text-[#6A7A70]">История</p>
+                                    <p class="mt-2 text-2xl font-bold text-[#173B2A]">{{ displayPlan.historyDays }} дн.</p>
+                                </div>
+                            </div>
+
+                            <p class="mt-4 text-sm leading-6 text-[#6A7A70]">
+                                <span v-if="isSiteLimitReached" class="font-semibold text-[#B45309]">Лимит сайтов будет превышен. Докупите пакет +5 сайтов или перейдите на тариф выше.</span><span v-else>После создания останется {{ sitesLeftAfterCreate }} сайтов в текущем тарифе.</span> Минимальный интервал проверок: {{ displayPlan.intervalText }}.
+                            </p>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+
+            <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <div class="space-y-6">
+                    <section class="rounded-[28px] border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_35px_rgba(38,51,45,0.06)] sm:p-6">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                             <div>
-                                <label for="url" class="mb-2 block text-sm font-extrabold text-[#111827]">URL сайта</label>
+                                <p class="text-sm font-semibold text-[#1E9B5D]">Шаг 1</p>
+                                <h2 class="mt-1 text-2xl font-bold text-[#173B2A]">Сайт</h2>
+                            </div>
+                            <p class="text-sm font-medium text-[#6A7A70]">Название можно оставить пустым — возьмём домен.</p>
+                        </div>
+
+                        <div class="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,0.6fr)]">
+                            <div>
+                                <label for="url" class="mb-2 block text-sm font-semibold text-[#26332D]">URL сайта</label>
                                 <input
                                     id="url"
                                     v-model="form.url"
                                     type="text"
                                     required
                                     placeholder="https://example.com"
-                                    class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition placeholder:text-[#98A2B3] focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
+                                    class="h-12 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm font-medium text-[#26332D] outline-none transition placeholder:text-[#9AA9A0] focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15"
                                 >
-                                <p v-if="form.errors.url" class="mt-2 text-xs font-semibold text-[#EF4444]">{{ form.errors.url }}</p>
+                                <p v-if="form.errors.url" class="mt-2 text-sm font-semibold text-[#EF4444]">{{ form.errors.url }}</p>
                             </div>
 
                             <div>
-                                <label for="name" class="mb-2 block text-sm font-extrabold text-[#111827]">Название</label>
+                                <label for="name" class="mb-2 block text-sm font-semibold text-[#26332D]">Название</label>
                                 <input
                                     id="name"
                                     v-model="form.name"
                                     type="text"
                                     placeholder="Основной сайт"
-                                    class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition placeholder:text-[#98A2B3] focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
+                                    class="h-12 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm font-medium text-[#26332D] outline-none transition placeholder:text-[#9AA9A0] focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15"
                                 >
-                                <p v-if="form.errors.name" class="mt-2 text-xs font-semibold text-[#EF4444]">{{ form.errors.name }}</p>
+                                <p v-if="form.errors.name" class="mt-2 text-sm font-semibold text-[#EF4444]">{{ form.errors.name }}</p>
                             </div>
                         </div>
 
-                        <div class="mt-5 rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
-                            <p class="text-xs font-extrabold uppercase text-[#667085]">Будет создано</p>
-                            <p class="mt-2 truncate text-sm font-extrabold text-[#111827]">{{ normalizedSite?.host ?? 'Домен появится после ввода URL' }}</p>
-                            <p class="mt-1 truncate text-xs font-semibold text-[#667085]">{{ normalizedSite?.url ?? 'Montry автоматически добавит HTTPS, если схема не указана' }}</p>
+                        <div class="mt-5 grid gap-3 rounded-3xl border border-[#DDEBE3] bg-[#F6FBF8] p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                            <div class="min-w-0">
+                                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[#6A7A70]">Предпросмотр</p>
+                                <p class="mt-2 truncate text-lg font-bold text-[#173B2A]">{{ normalizedSite?.host ?? 'Домен появится после ввода URL' }}</p>
+                                <p class="mt-1 truncate text-sm font-medium text-[#6A7A70]">{{ normalizedSite?.url ?? 'Если схема не указана, Montry добавит HTTPS' }}</p>
+                            </div>
+                            <span class="inline-flex h-10 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-[#52645A]">
+                                {{ normalizedSite ? 'URL распознан' : 'Ожидаем URL' }}
+                            </span>
                         </div>
                     </section>
 
-                    <section class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                        <h2 class="text-lg font-extrabold text-[#111827]">Мониторинги</h2>
-                        <div class="mt-4 grid gap-3">
+                    <section class="rounded-[28px] border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_35px_rgba(38,51,45,0.06)] sm:p-6">
+                        <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                            <div>
+                                <p class="text-sm font-semibold text-[#1E9B5D]">Шаг 2</p>
+                                <h2 class="mt-1 text-2xl font-bold text-[#173B2A]">Базовые проверки в тарифе</h2>
+                                <p class="mt-2 max-w-2xl text-sm leading-6 text-[#6A7A70]">
+                                    Эти проверки не увеличивают стоимость тарифа. Отключенные проверки будут созданы на паузе и останутся доступны в карточке сайта.
+                                </p>
+                            </div>
+                            <span class="inline-flex w-fit rounded-full bg-[#E9F8EF] px-4 py-2 text-sm font-semibold text-[#1E9B5D]">
+                                {{ enabledBaseCount }} из {{ baseCheckCards.length }} активны
+                            </span>
+                        </div>
+
+                        <div class="mt-6 grid gap-4 md:grid-cols-2">
                             <article
-                                v-for="card in monitorCards"
+                                v-for="card in baseCheckCards"
                                 :key="card.type"
-                                class="rounded-2xl border p-4 transition"
-                                :class="card.enabled ? 'border-[#0F6BFF] bg-[#F8FBFF]' : 'border-[#E5E7EB] bg-white'"
+                                class="group rounded-3xl border p-4 transition"
+                                :class="card.enabled ? 'border-[#BEE7CE] bg-[#F8FFFB] shadow-[0_10px_28px_rgba(47,165,104,0.08)]' : 'border-[#DDEBE3] bg-[#F8FAFC]'"
                             >
-                                <div class="flex items-start justify-between gap-3">
-                                    <div>
-                                        <span class="rounded-full px-3 py-1 text-xs font-extrabold" :class="typeClass(card.type)">{{ card.label }}</span>
-                                        <h3 class="mt-3 font-extrabold text-[#111827]">{{ card.title }}</h3>
-                                        <p class="mt-1 text-sm leading-6 text-[#667085]">{{ card.description }}</p>
+                                <button type="button" class="block w-full text-left" @click="toggleMonitor(card.type)">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#1E9B5D] ring-1 ring-[#DDEBE3]">{{ card.label }}</span>
+                                                <span class="rounded-full bg-[#E9F8EF] px-3 py-1 text-xs font-semibold text-[#1E9B5D]">{{ card.badge }}</span>
+                                            </div>
+                                            <h3 class="mt-4 text-lg font-bold text-[#173B2A]">{{ card.title }}</h3>
+                                            <p class="mt-2 text-sm leading-6 text-[#6A7A70]">{{ card.description }}</p>
+                                        </div>
+                                        <span
+                                            class="flex h-7 w-12 shrink-0 items-center rounded-full p-1 transition"
+                                            :class="card.enabled ? 'justify-end bg-[#2FA568]' : 'justify-start bg-[#CFE1D7]'"
+                                        >
+                                            <span class="h-5 w-5 rounded-full bg-white shadow-sm" />
+                                        </span>
                                     </div>
-                                    <span
-                                        class="flex h-6 w-11 shrink-0 items-center rounded-full p-1 transition"
-                                        :class="card.enabled ? 'justify-end bg-[#0F6BFF]' : 'justify-start bg-[#CBD5E1]'"
-                                    >
-                                        <span class="h-4 w-4 rounded-full bg-white shadow-sm" />
-                                    </span>
+                                </button>
+
+                                <div class="mt-4 flex items-center justify-between gap-3 border-t border-[#DDEBE3] pt-4">
+                                    <p class="min-w-0 truncate text-xs font-semibold text-[#6A7A70]">{{ card.summary }}</p>
+                                    <button type="button" class="shrink-0 text-xs font-bold text-[#1E9B5D] hover:text-[#173B2A]" @click="openAdvanced(card.type)">
+                                        Настроить
+                                    </button>
                                 </div>
-                                <p class="mt-3 truncate text-xs font-bold text-[#667085]">{{ card.summary }}</p>
                             </article>
                         </div>
                     </section>
-                </aside>
 
-                <section class="rounded-3xl border border-[#E5E7EB] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
-                    <div class="border-b border-[#E5E7EB] p-5">
-                        <h2 class="text-xl font-extrabold text-[#111827]">Настройки мониторингов</h2>
-                        <p class="mt-1 text-sm text-[#667085]">Все три мониторинга будут созданы сразу. Выключенные останутся на паузе до редактирования сайта.</p>
-                    </div>
+                    <section class="rounded-[28px] border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_35px_rgba(38,51,45,0.06)] sm:p-6">
+                        <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                            <div>
+                                <p class="text-sm font-semibold text-[#E08600]">Дополнительно</p>
+                                <h2 class="mt-1 text-2xl font-bold text-[#173B2A]">Платные проверки</h2>
+                                <p class="mt-2 max-w-2xl text-sm leading-6 text-[#6A7A70]">
+                                    Отметьте нужные проверки — сумма пересчитается сразу. Пока подключается один Sitemap, один API endpoint и один TCP-порт на сайт.
+                                </p>
+                            </div>
+                            <span class="inline-flex w-fit rounded-full bg-[#FFF7E8] px-4 py-2 text-sm font-semibold text-[#E08600]">
+                                +{{ addonTotalRub }} ₽/мес
+                            </span>
+                        </div>
 
-                    <div class="grid gap-5 p-5">
-                        <section
-                            class="rounded-3xl border p-5 transition"
-                            :class="form.monitors.http.is_enabled ? 'border-[#0F6BFF] bg-[#F8FBFF] shadow-[0_10px_28px_rgba(15,107,255,0.08)]' : 'border-[#E5E7EB] bg-[#F8FAFC]'"
-                        >
-                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <h3 class="text-lg font-extrabold text-[#111827]">HTTP availability</h3>
+                        <div class="mt-6 grid gap-4 lg:grid-cols-3">
+                            <article
+                                v-for="card in paidAddonCards"
+                                :key="card.type"
+                                class="rounded-3xl border p-4 transition"
+                                :class="card.enabled ? 'border-[#F6C66E] bg-[#FFFCF4] shadow-[0_10px_28px_rgba(224,134,0,0.10)]' : 'border-[#DDEBE3] bg-[#F8FAFC]'"
+                            >
+                                <button type="button" class="block w-full text-left" @click="toggleMonitor(card.type)">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div>
+                                            <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#E08600] ring-1 ring-[#F6C66E]/60">{{ card.badge }}</span>
+                                            <h3 class="mt-4 text-lg font-bold text-[#173B2A]">{{ card.title }}</h3>
+                                            <p class="mt-2 text-sm leading-6 text-[#6A7A70]">{{ card.description }}</p>
+                                        </div>
                                         <span
-                                            class="rounded-full px-3 py-1 text-xs font-extrabold"
-                                            :class="form.monitors.http.is_enabled ? 'bg-[#EAF2FF] text-[#0F6BFF]' : 'bg-[#F1F5F9] text-[#64748B]'"
+                                            class="flex h-7 w-12 shrink-0 items-center rounded-full p-1 transition"
+                                            :class="card.enabled ? 'justify-end bg-[#E08600]' : 'justify-start bg-[#CFE1D7]'"
                                         >
-                                            {{ form.monitors.http.is_enabled ? 'Активен' : 'На паузе' }}
+                                            <span class="h-5 w-5 rounded-full bg-white shadow-sm" />
                                         </span>
                                     </div>
-                                    <p class="mt-1 text-sm text-[#667085]">Основная проверка доступности сайта.</p>
-                                </div>
-                                <button
-                                    type="button"
-                                    class="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-left transition hover:border-[#0F6BFF]"
-                                    :aria-pressed="form.monitors.http.is_enabled"
-                                    @click="form.monitors.http.is_enabled = !form.monitors.http.is_enabled"
-                                >
-                                    <span
-                                        class="flex h-6 w-11 shrink-0 items-center rounded-full p-1 transition"
-                                        :class="form.monitors.http.is_enabled ? 'justify-end bg-[#0F6BFF]' : 'justify-start bg-[#CBD5E1]'"
-                                    >
-                                        <span class="h-4 w-4 rounded-full bg-white shadow-sm" />
-                                    </span>
-                                    <span class="text-sm font-extrabold text-[#111827]">{{ form.monitors.http.is_enabled ? 'Включен' : 'Выключен' }}</span>
                                 </button>
-                            </div>
-
-                            <div class="mt-5 grid gap-5 md:grid-cols-2">
-                                <div>
-                                    <label for="http-name" class="mb-2 block text-sm font-extrabold text-[#111827]">Название</label>
-                                    <input id="http-name" v-model="form.monitors.http.name" type="text" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
+                                <div class="mt-4 flex items-center justify-between gap-3 border-t border-[#EADFD0] pt-4">
+                                    <p class="min-w-0 truncate text-xs font-semibold text-[#6A7A70]">{{ card.summary }}</p>
+                                    <button type="button" class="shrink-0 text-xs font-bold text-[#E08600] hover:text-[#173B2A]" @click="openAdvanced(card.type)">
+                                        Настроить
+                                    </button>
                                 </div>
-                                <div>
-                                    <div class="mb-2 flex items-center justify-between gap-3">
-                                        <label for="http-interval" class="block text-sm font-extrabold text-[#111827]">Частота проверки</label>
-                                        <span class="text-xs font-extrabold text-[#0F6BFF]">{{ intervalText(form.monitors.http.interval_seconds) }}</span>
+                            </article>
+                        </div>
+                    </section>
+
+                    <section class="rounded-[28px] border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_35px_rgba(38,51,45,0.06)] sm:p-6">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h2 class="text-2xl font-bold text-[#173B2A]">Тонкие настройки</h2>
+                                <p class="mt-2 text-sm leading-6 text-[#6A7A70]">Меняйте только то, что отличается от стандартного сценария.</p>
+                            </div>
+                            <span class="rounded-full bg-[#F3F8F5] px-4 py-2 text-sm font-semibold text-[#52645A]">Интервал: минимум {{ minimumIntervalMinutes }} мин</span>
+                        </div>
+
+                        <div class="mt-6 space-y-3">
+                            <article class="rounded-3xl border border-[#DDEBE3] bg-[#F8FAFC]">
+                                <button type="button" class="flex w-full items-center justify-between gap-4 p-4 text-left" @click="openAdvanced('http')">
+                                    <span class="font-bold text-[#173B2A]">HTTP availability</span>
+                                    <span class="text-sm font-semibold text-[#6A7A70]">{{ openedAdvanced === 'http' ? 'Скрыть' : 'Открыть' }}</span>
+                                </button>
+                                <div v-if="openedAdvanced === 'http'" class="grid gap-4 border-t border-[#DDEBE3] p-4 md:grid-cols-2">
+                                    <div>
+                                        <label for="http-name" class="mb-2 block text-sm font-semibold text-[#26332D]">Название</label>
+                                        <input id="http-name" v-model="form.monitors.http.name" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
                                     </div>
-                                    <div class="rounded-2xl border border-[#E5E7EB] bg-white p-4">
+                                    <div>
+                                        <label for="http-method" class="mb-2 block text-sm font-semibold text-[#26332D]">Метод</label>
+                                        <select id="http-method" v-model="form.monitors.http.method" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                            <option value="GET">GET</option>
+                                            <option value="HEAD">HEAD</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="http-status" class="mb-2 block text-sm font-semibold text-[#26332D]">Ожидаемые коды</label>
+                                        <input id="http-status" v-model="statusCodesText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                    <div>
+                                        <label for="http-time" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                        <input id="http-time" v-model.number="form.monitors.http.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <div class="mb-3 flex items-center justify-between gap-3">
+                                            <span class="text-sm font-semibold text-[#26332D]">Частота проверки</span>
+                                            <span class="text-sm font-bold text-[#1E9B5D]">{{ intervalText(form.monitors.http.interval_seconds) }}</span>
+                                        </div>
                                         <div class="flex flex-wrap gap-2">
-                                            <button
-                                                v-for="minutes in intervalPresets"
-                                                :key="`http-${minutes}`"
-                                                type="button"
-                                                class="h-8 rounded-full px-3 text-xs font-extrabold transition"
-                                                :class="intervalMinutes(form.monitors.http.interval_seconds) === minutes ? 'bg-[#0F6BFF] text-white' : 'bg-[#F8FAFC] text-[#667085] hover:bg-[#EAF2FF] hover:text-[#0F6BFF]'"
-                                                @click="setIntervalMinutes(form.monitors.http, minutes)"
-                                            >
+                                            <button v-for="minutes in availableIntervalPresets" :key="`http-${minutes}`" type="button" class="rounded-full px-3 py-2 text-xs font-bold transition" :class="intervalMinutes(form.monitors.http.interval_seconds) === minutes ? 'bg-[#2FA568] text-white' : 'bg-white text-[#52645A] ring-1 ring-[#DDEBE3] hover:text-[#173B2A]'" @click="setIntervalMinutes(form.monitors.http, minutes)">
                                                 {{ minutes === 60 ? '1 час' : minutes === 1440 ? '1 день' : minutes < 60 ? `${minutes} мин` : `${minutes / 60} ч` }}
                                             </button>
                                         </div>
-                                        <input
-                                            id="http-interval"
-                                            :value="intervalMinutes(form.monitors.http.interval_seconds)"
-                                            type="range"
-                                            min="5"
-                                            max="1440"
-                                            step="1"
-                                            class="mt-4 w-full accent-[#0F6BFF]"
-                                            @input="setIntervalMinutes(form.monitors.http, Number(($event.target as HTMLInputElement).value))"
-                                        >
                                     </div>
                                 </div>
-                                <div>
-                                    <label for="http-method" class="mb-2 block text-sm font-extrabold text-[#111827]">Метод</label>
-                                    <select id="http-method" v-model="form.monitors.http.method" class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                                        <option value="GET">GET</option>
-                                        <option value="HEAD">HEAD</option>
-                                        <option value="POST">POST</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label for="http-timeout" class="mb-2 block text-sm font-extrabold text-[#111827]">Таймаут, мс</label>
-                                    <input id="http-timeout" v-model.number="form.monitors.http.timeout_ms" type="number" min="1000" max="60000" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                                </div>
-                                <div>
-                                    <label for="status-codes" class="mb-2 block text-sm font-extrabold text-[#111827]">Ожидаемые коды</label>
-                                    <input id="status-codes" v-model="statusCodesText" type="text" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                                </div>
-                                <div>
-                                    <label for="max-response" class="mb-2 block text-sm font-extrabold text-[#111827]">Макс. время ответа, мс</label>
-                                    <input id="max-response" v-model.number="form.monitors.http.max_response_time_ms" type="number" min="1" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                                </div>
-                            </div>
+                            </article>
 
-                            <div class="mt-5 grid gap-3 sm:grid-cols-2">
-                                <label class="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3">
-                                    <input v-model="form.monitors.http.follow_redirects" type="checkbox" class="h-4 w-4 rounded border-[#CBD5E1] text-[#0F6BFF]">
-                                    <span class="text-sm font-bold text-[#111827]">Следовать редиректам</span>
-                                </label>
-                                <label class="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3">
-                                    <input v-model="form.monitors.http.verify_ssl" type="checkbox" class="h-4 w-4 rounded border-[#CBD5E1] text-[#0F6BFF]">
-                                    <span class="text-sm font-bold text-[#111827]">Проверять SSL в HTTP</span>
-                                </label>
-                            </div>
-                        </section>
-
-                        <section
-                            class="rounded-3xl border p-5 transition"
-                            :class="form.monitors.ssl.is_enabled ? 'border-[#16A34A] bg-[#F6FEF9] shadow-[0_10px_28px_rgba(22,163,74,0.08)]' : 'border-[#E5E7EB] bg-[#F8FAFC]'"
-                        >
-                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <h3 class="text-lg font-extrabold text-[#111827]">SSL certificate</h3>
-                                        <span
-                                            class="rounded-full px-3 py-1 text-xs font-extrabold"
-                                            :class="form.monitors.ssl.is_enabled ? 'bg-[#ECFDF3] text-[#16A34A]' : 'bg-[#F1F5F9] text-[#64748B]'"
-                                        >
-                                            {{ form.monitors.ssl.is_enabled ? 'Активен' : 'На паузе' }}
-                                        </span>
-                                    </div>
-                                    <p class="mt-1 text-sm text-[#667085]">Настройки берут домен из URL сайта.</p>
-                                </div>
-                                <button
-                                    type="button"
-                                    class="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-left transition hover:border-[#0F6BFF]"
-                                    :aria-pressed="form.monitors.ssl.is_enabled"
-                                    @click="form.monitors.ssl.is_enabled = !form.monitors.ssl.is_enabled"
-                                >
-                                    <span
-                                        class="flex h-6 w-11 shrink-0 items-center rounded-full p-1 transition"
-                                        :class="form.monitors.ssl.is_enabled ? 'justify-end bg-[#0F6BFF]' : 'justify-start bg-[#CBD5E1]'"
-                                    >
-                                        <span class="h-4 w-4 rounded-full bg-white shadow-sm" />
-                                    </span>
-                                    <span class="text-sm font-extrabold text-[#111827]">{{ form.monitors.ssl.is_enabled ? 'Включен' : 'Выключен' }}</span>
+                            <article class="rounded-3xl border border-[#DDEBE3] bg-[#F8FAFC]">
+                                <button type="button" class="flex w-full items-center justify-between gap-4 p-4 text-left" @click="openAdvanced('ssl')">
+                                    <span class="font-bold text-[#173B2A]">SSL certificate</span>
+                                    <span class="text-sm font-semibold text-[#6A7A70]">{{ openedAdvanced === 'ssl' ? 'Скрыть' : 'Открыть' }}</span>
                                 </button>
-                            </div>
+                                <div v-if="openedAdvanced === 'ssl'" class="grid gap-4 border-t border-[#DDEBE3] p-4 md:grid-cols-2">
+                                    <div>
+                                        <label for="ssl-port" class="mb-2 block text-sm font-semibold text-[#26332D]">Порт</label>
+                                        <input id="ssl-port" v-model.number="form.monitors.ssl.port" min="1" max="65535" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                    <div>
+                                        <label for="ssl-days" class="mb-2 block text-sm font-semibold text-[#26332D]">Дни предупреждений</label>
+                                        <input id="ssl-days" v-model="sslWarningDaysText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                </div>
+                            </article>
 
-                            <div class="mt-5 grid gap-5 md:grid-cols-2">
-                                <div>
-                                    <label for="ssl-name" class="mb-2 block text-sm font-extrabold text-[#111827]">Название</label>
-                                    <input id="ssl-name" v-model="form.monitors.ssl.name" type="text" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                                </div>
-                                <div>
-                                    <label for="ssl-port" class="mb-2 block text-sm font-extrabold text-[#111827]">Порт</label>
-                                    <input id="ssl-port" v-model.number="form.monitors.ssl.port" type="number" min="1" max="65535" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                                </div>
-                                <div>
-                                    <div class="mb-2 flex items-center justify-between gap-3">
-                                        <label for="ssl-interval" class="block text-sm font-extrabold text-[#111827]">Частота проверки</label>
-                                        <span class="text-xs font-extrabold text-[#0F6BFF]">{{ intervalText(form.monitors.ssl.interval_seconds) }}</span>
-                                    </div>
-                                    <div class="rounded-2xl border border-[#E5E7EB] bg-white p-4">
-                                        <div class="flex flex-wrap gap-2">
-                                            <button
-                                                v-for="minutes in intervalPresets"
-                                                :key="`ssl-${minutes}`"
-                                                type="button"
-                                                class="h-8 rounded-full px-3 text-xs font-extrabold transition"
-                                                :class="intervalMinutes(form.monitors.ssl.interval_seconds) === minutes ? 'bg-[#0F6BFF] text-white' : 'bg-[#F8FAFC] text-[#667085] hover:bg-[#EAF2FF] hover:text-[#0F6BFF]'"
-                                                @click="setIntervalMinutes(form.monitors.ssl, minutes)"
-                                            >
-                                                {{ minutes === 60 ? '1 час' : minutes === 1440 ? '1 день' : minutes < 60 ? `${minutes} мин` : `${minutes / 60} ч` }}
-                                            </button>
-                                        </div>
-                                        <input
-                                            id="ssl-interval"
-                                            :value="intervalMinutes(form.monitors.ssl.interval_seconds)"
-                                            type="range"
-                                            min="5"
-                                            max="1440"
-                                            step="1"
-                                            class="mt-4 w-full accent-[#0F6BFF]"
-                                            @input="setIntervalMinutes(form.monitors.ssl, Number(($event.target as HTMLInputElement).value))"
-                                        >
-                                    </div>
-                                </div>
-                                <div>
-                                    <label for="ssl-warning-days" class="mb-2 block text-sm font-extrabold text-[#111827]">Дни предупреждений</label>
-                                    <input id="ssl-warning-days" v-model="sslWarningDaysText" type="text" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
-                                </div>
-                            </div>
-                        </section>
-
-                        <section
-                            class="rounded-3xl border p-5 transition"
-                            :class="form.monitors.domain.is_enabled ? 'border-[#F59E0B] bg-[#FFFCF4] shadow-[0_10px_28px_rgba(245,158,11,0.08)]' : 'border-[#E5E7EB] bg-[#F8FAFC]'"
-                        >
-                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <h3 class="text-lg font-extrabold text-[#111827]">Domain expiration</h3>
-                                        <span
-                                            class="rounded-full px-3 py-1 text-xs font-extrabold"
-                                            :class="form.monitors.domain.is_enabled ? 'bg-[#FFF7E8] text-[#F59E0B]' : 'bg-[#F1F5F9] text-[#64748B]'"
-                                        >
-                                            {{ form.monitors.domain.is_enabled ? 'Активен' : 'На паузе' }}
-                                        </span>
-                                    </div>
-                                    <p class="mt-1 text-sm text-[#667085]">Проверка регистрации домена и предупреждения до истечения.</p>
-                                </div>
-                                <button
-                                    type="button"
-                                    class="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-left transition hover:border-[#0F6BFF]"
-                                    :aria-pressed="form.monitors.domain.is_enabled"
-                                    @click="form.monitors.domain.is_enabled = !form.monitors.domain.is_enabled"
-                                >
-                                    <span
-                                        class="flex h-6 w-11 shrink-0 items-center rounded-full p-1 transition"
-                                        :class="form.monitors.domain.is_enabled ? 'justify-end bg-[#0F6BFF]' : 'justify-start bg-[#CBD5E1]'"
-                                    >
-                                        <span class="h-4 w-4 rounded-full bg-white shadow-sm" />
-                                    </span>
-                                    <span class="text-sm font-extrabold text-[#111827]">{{ form.monitors.domain.is_enabled ? 'Включен' : 'Выключен' }}</span>
+                            <article class="rounded-3xl border border-[#DDEBE3] bg-[#F8FAFC]">
+                                <button type="button" class="flex w-full items-center justify-between gap-4 p-4 text-left" @click="openAdvanced('domain')">
+                                    <span class="font-bold text-[#173B2A]">Domain expiration</span>
+                                    <span class="text-sm font-semibold text-[#6A7A70]">{{ openedAdvanced === 'domain' ? 'Скрыть' : 'Открыть' }}</span>
                                 </button>
-                            </div>
-
-                            <div class="mt-5 grid gap-5 md:grid-cols-2">
-                                <div>
-                                    <label for="domain-name" class="mb-2 block text-sm font-extrabold text-[#111827]">Название</label>
-                                    <input id="domain-name" v-model="form.monitors.domain.name" type="text" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
+                                <div v-if="openedAdvanced === 'domain'" class="border-t border-[#DDEBE3] p-4">
+                                    <label for="domain-days" class="mb-2 block text-sm font-semibold text-[#26332D]">Дни предупреждений</label>
+                                    <input id="domain-days" v-model="domainWarningDaysText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
                                 </div>
-                                <div>
-                                    <div class="mb-2 flex items-center justify-between gap-3">
-                                        <label for="domain-interval" class="block text-sm font-extrabold text-[#111827]">Частота проверки</label>
-                                        <span class="text-xs font-extrabold text-[#0F6BFF]">{{ intervalText(form.monitors.domain.interval_seconds) }}</span>
+                            </article>
+
+                            <article class="rounded-3xl border border-[#DDEBE3] bg-[#F8FAFC]">
+                                <button type="button" class="flex w-full items-center justify-between gap-4 p-4 text-left" @click="openAdvanced('dns')">
+                                    <span class="font-bold text-[#173B2A]">DNS records</span>
+                                    <span class="text-sm font-semibold text-[#6A7A70]">{{ openedAdvanced === 'dns' ? 'Скрыть' : 'Открыть' }}</span>
+                                </button>
+                                <div v-if="openedAdvanced === 'dns'" class="grid gap-4 border-t border-[#DDEBE3] p-4 md:grid-cols-2">
+                                    <div>
+                                        <label for="dns-types" class="mb-2 block text-sm font-semibold text-[#26332D]">Типы записей</label>
+                                        <input id="dns-types" v-model="dnsRecordTypesText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
                                     </div>
-                                    <div class="rounded-2xl border border-[#E5E7EB] bg-white p-4">
-                                        <div class="flex flex-wrap gap-2">
-                                            <button
-                                                v-for="minutes in intervalPresets"
-                                                :key="`domain-${minutes}`"
-                                                type="button"
-                                                class="h-8 rounded-full px-3 text-xs font-extrabold transition"
-                                                :class="intervalMinutes(form.monitors.domain.interval_seconds) === minutes ? 'bg-[#0F6BFF] text-white' : 'bg-[#F8FAFC] text-[#667085] hover:bg-[#EAF2FF] hover:text-[#0F6BFF]'"
-                                                @click="setIntervalMinutes(form.monitors.domain, minutes)"
-                                            >
-                                                {{ minutes === 60 ? '1 час' : minutes === 1440 ? '1 день' : minutes < 60 ? `${minutes} мин` : `${minutes / 60} ч` }}
-                                            </button>
-                                        </div>
-                                        <input
-                                            id="domain-interval"
-                                            :value="intervalMinutes(form.monitors.domain.interval_seconds)"
-                                            type="range"
-                                            min="5"
-                                            max="1440"
-                                            step="1"
-                                            class="mt-4 w-full accent-[#0F6BFF]"
-                                            @input="setIntervalMinutes(form.monitors.domain, Number(($event.target as HTMLInputElement).value))"
-                                        >
+                                    <div>
+                                        <label for="dns-min" class="mb-2 block text-sm font-semibold text-[#26332D]">Минимум записей</label>
+                                        <input id="dns-min" v-model.number="form.monitors.dns.min_records" min="0" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
                                     </div>
                                 </div>
-                                <div class="md:col-span-2">
-                                    <label for="domain-warning-days" class="mb-2 block text-sm font-extrabold text-[#111827]">Дни предупреждений</label>
-                                    <input id="domain-warning-days" v-model="domainWarningDaysText" type="text" required class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15">
+                            </article>
+
+                            <article class="rounded-3xl border border-[#DDEBE3] bg-[#F8FAFC]">
+                                <button type="button" class="flex w-full items-center justify-between gap-4 p-4 text-left" @click="openAdvanced('robots_txt')">
+                                    <span class="font-bold text-[#173B2A]">Robots.txt</span>
+                                    <span class="text-sm font-semibold text-[#6A7A70]">{{ openedAdvanced === 'robots_txt' ? 'Скрыть' : 'Открыть' }}</span>
+                                </button>
+                                <div v-if="openedAdvanced === 'robots_txt'" class="grid gap-4 border-t border-[#DDEBE3] p-4 md:grid-cols-2">
+                                    <div>
+                                        <label for="robots-status" class="mb-2 block text-sm font-semibold text-[#26332D]">Ожидаемые коды</label>
+                                        <input id="robots-status" v-model="robotsStatusCodesText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                    <div>
+                                        <label for="robots-time" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                        <input id="robots-time" v-model.number="form.monitors.robots_txt.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                </div>
+                            </article>
+
+                            <article class="rounded-3xl border border-[#DDEBE3] bg-[#F8FAFC]">
+                                <button type="button" class="flex w-full items-center justify-between gap-4 p-4 text-left" @click="openAdvanced('sitemap_xml')">
+                                    <span class="font-bold text-[#173B2A]">Sitemap.xml</span>
+                                    <span class="text-sm font-semibold text-[#6A7A70]">{{ openedAdvanced === 'sitemap_xml' ? 'Скрыть' : 'Открыть' }}</span>
+                                </button>
+                                <div v-if="openedAdvanced === 'sitemap_xml'" class="grid gap-4 border-t border-[#DDEBE3] p-4 md:grid-cols-2">
+                                    <div>
+                                        <label for="sitemap-status" class="mb-2 block text-sm font-semibold text-[#26332D]">Ожидаемые коды</label>
+                                        <input id="sitemap-status" v-model="sitemapStatusCodesText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                    <div>
+                                        <label for="sitemap-time" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                        <input id="sitemap-time" v-model.number="form.monitors.sitemap_xml.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                </div>
+                            </article>
+
+                            <article class="rounded-3xl border border-[#DDEBE3] bg-[#F8FAFC]">
+                                <button type="button" class="flex w-full items-center justify-between gap-4 p-4 text-left" @click="openAdvanced('api_endpoint')">
+                                    <span class="font-bold text-[#173B2A]">API endpoint</span>
+                                    <span class="text-sm font-semibold text-[#6A7A70]">{{ openedAdvanced === 'api_endpoint' ? 'Скрыть' : 'Открыть' }}</span>
+                                </button>
+                                <div v-if="openedAdvanced === 'api_endpoint'" class="grid gap-4 border-t border-[#DDEBE3] p-4 md:grid-cols-2">
+                                    <div>
+                                        <label for="api-method" class="mb-2 block text-sm font-semibold text-[#26332D]">Метод</label>
+                                        <select id="api-method" v-model="form.monitors.api_endpoint.method" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                            <option value="GET">GET</option>
+                                            <option value="HEAD">HEAD</option>
+                                            <option value="POST">POST</option>
+                                            <option value="PUT">PUT</option>
+                                            <option value="PATCH">PATCH</option>
+                                            <option value="DELETE">DELETE</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="api-path" class="mb-2 block text-sm font-semibold text-[#26332D]">Endpoint</label>
+                                        <input id="api-path" v-model="form.monitors.api_endpoint.path" type="text" placeholder="/api/health" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                    <div>
+                                        <label for="api-status" class="mb-2 block text-sm font-semibold text-[#26332D]">Ожидаемые коды</label>
+                                        <input id="api-status" v-model="apiStatusCodesText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                    <div>
+                                        <label for="api-time" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                        <input id="api-time" v-model.number="form.monitors.api_endpoint.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label for="api-contains" class="mb-2 block text-sm font-semibold text-[#26332D]">Ответ должен содержать</label>
+                                        <input id="api-contains" v-model="apiResponseContainsText" type="text" placeholder="опционально" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                </div>
+                            </article>
+
+                            <article class="rounded-3xl border border-[#DDEBE3] bg-[#F8FAFC]">
+                                <button type="button" class="flex w-full items-center justify-between gap-4 p-4 text-left" @click="openAdvanced('tcp_port')">
+                                    <span class="font-bold text-[#173B2A]">TCP port</span>
+                                    <span class="text-sm font-semibold text-[#6A7A70]">{{ openedAdvanced === 'tcp_port' ? 'Скрыть' : 'Открыть' }}</span>
+                                </button>
+                                <div v-if="openedAdvanced === 'tcp_port'" class="grid gap-4 border-t border-[#DDEBE3] p-4 md:grid-cols-2">
+                                    <div>
+                                        <label for="tcp-port" class="mb-2 block text-sm font-semibold text-[#26332D]">Порт</label>
+                                        <input id="tcp-port" v-model.number="form.monitors.tcp_port.port" min="1" max="65535" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                    <div>
+                                        <label for="tcp-time" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                        <input id="tcp-time" v-model.number="form.monitors.tcp_port.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                    </div>
+                                </div>
+                            </article>
+                        </div>
+                    </section>
+                </div>
+
+                <aside class="space-y-4 xl:sticky xl:top-28 xl:self-start">
+                    <section class="rounded-[28px] border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_35px_rgba(38,51,45,0.08)]">
+                        <h2 class="text-xl font-bold text-[#173B2A]">Итого</h2>
+                        <div class="mt-5 rounded-3xl bg-[#F6FBF8] p-4">
+                            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[#6A7A70]">Сайт</p>
+                            <p class="mt-2 truncate text-lg font-bold text-[#173B2A]">{{ normalizedSite?.host ?? 'Не указан' }}</p>
+                            <p class="mt-1 truncate text-sm font-medium text-[#6A7A70]">{{ form.name || 'Название будет взято из домена' }}</p>
+                        </div>
+
+                        <div class="mt-5 space-y-3">
+                            <div class="flex items-center justify-between gap-3 text-sm">
+                                <span class="font-medium text-[#6A7A70]">Базовые активные проверки</span>
+                                <span class="font-bold text-[#173B2A]">{{ enabledBaseCount }}</span>
+                            </div>
+                            <div class="flex items-center justify-between gap-3 text-sm">
+                                <span class="font-medium text-[#6A7A70]">Дополнительные проверки</span>
+                                <span class="font-bold text-[#173B2A]">{{ selectedPaidAddons.length }}</span>
+                            </div>
+                            <div class="flex items-center justify-between gap-3 text-sm">
+                                <span class="font-medium text-[#6A7A70]">Всего активных проверок</span>
+                                <span class="font-bold text-[#173B2A]">{{ activeMonitorCount }}</span>
+                            </div>
+                            <div class="flex items-center justify-between gap-3 text-sm">
+                                <span class="font-medium text-[#6A7A70]">Мониторов после создания</span>
+                                <span class="font-bold text-[#173B2A]">{{ monitorCountAfterCreate }}</span>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 border-t border-[#DDEBE3] pt-5">
+                            <div class="flex items-center justify-between gap-3 text-sm">
+                                <span class="font-medium text-[#6A7A70]">Тариф {{ displayPlan.name }}</span>
+                                <span class="font-bold text-[#173B2A]">{{ money(displayPlan.priceRub) }}</span>
+                            </div>
+                            <div class="mt-3 flex items-center justify-between gap-3 text-sm">
+                                <span class="font-medium text-[#6A7A70]">Доп. проверки</span>
+                                <span class="font-bold text-[#173B2A]">+{{ money(addonTotalRub) }}</span>
+                            </div>
+                            <div class="mt-5 rounded-3xl bg-[#173B2A] p-4 text-white">
+                                <div class="flex items-end justify-between gap-3">
+                                    <span class="text-sm font-medium text-white/75">Итог в месяц</span>
+                                    <span class="text-2xl font-bold">{{ money(totalMonthlyRub) }}</span>
                                 </div>
                             </div>
-                        </section>
+                        </div>
 
-                        <div v-if="form.errors.monitors" class="rounded-2xl border border-[#FECACA] bg-[#FEECEC] px-4 py-3 text-sm font-semibold text-[#EF4444]">
+                        <div v-if="selectedPaidAddons.length" class="mt-5 rounded-3xl border border-[#F6C66E] bg-[#FFFCF4] p-4">
+                            <p class="text-sm font-bold text-[#173B2A]">Выбрано к докупке</p>
+                            <ul class="mt-3 space-y-2 text-sm font-medium text-[#6A7A70]">
+                                <li v-for="addon in selectedPaidAddons" :key="addon.type" class="flex justify-between gap-3">
+                                    <span>{{ addon.title }}</span>
+                                    <span class="font-bold text-[#E08600]">+{{ addon.priceRub }} ₽</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div v-if="form.errors.monitors" class="mt-5 rounded-3xl border border-[#FECACA] bg-[#FEECEC] px-4 py-3 text-sm font-semibold text-[#EF4444]">
                             {{ form.errors.monitors }}
                         </div>
-                    </div>
 
-                    <div class="flex flex-col gap-3 border-t border-[#E5E7EB] p-5 sm:flex-row sm:justify-end">
+                        <button
+                            type="submit"
+                            class="mt-5 inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[#2FA568] px-5 text-sm font-bold text-white shadow-[0_14px_32px_rgba(47,165,104,0.22)] transition hover:bg-[#248653] disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="form.processing"
+                        >
+                            <span v-if="form.processing">Создаём сайт...</span>
+                            <span v-else>Создать сайт</span>
+                        </button>
+
                         <Link
                             href="/sites"
-                            class="inline-flex h-11 items-center justify-center rounded-xl border border-[#E5E7EB] bg-white px-5 text-sm font-extrabold text-[#111827] transition hover:border-[#0F6BFF] hover:text-[#0F6BFF]"
+                            class="mt-3 inline-flex h-12 w-full items-center justify-center rounded-2xl border border-[#DDEBE3] bg-white px-5 text-sm font-semibold text-[#52645A] transition hover:border-[#B8D0C2] hover:bg-[#F6FBF8] hover:text-[#173B2A]"
                         >
                             Отмена
                         </Link>
-                        <button
-                            type="submit"
-                            class="inline-flex h-11 items-center justify-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-extrabold text-white shadow-[0_10px_28px_rgba(15,107,255,0.18)] transition hover:bg-[#0757D8] disabled:cursor-not-allowed disabled:opacity-60"
-                            :disabled="form.processing"
-                        >
-                            <span v-if="form.processing">Создаем...</span>
-                            <span v-else>Создать сайт</span>
-                        </button>
-                    </div>
-                </section>
+                    </section>
+                </aside>
             </div>
         </form>
     </DashboardLayout>
