@@ -150,6 +150,17 @@ type MonitorDraft = {
     warning_days: string
     valid: boolean
     registered: boolean
+    host: string
+    record_types: string
+    nameservers: string
+    exists: boolean
+    valid_xml: boolean
+    resolves: boolean
+    min_records: number
+    open: boolean
+    headers: string
+    body: string
+    response_contains: string
 }
 
 const props = defineProps<{
@@ -267,6 +278,19 @@ function draftFromMonitor(monitor: Monitor): MonitorDraft {
         warning_days: Array.isArray(settings.warning_days) ? settings.warning_days.join(', ') : '30, 14, 7, 3, 1',
         valid: Boolean(expected.valid ?? true),
         registered: Boolean(expected.registered ?? true),
+        host: String(settings.host ?? props.site.host),
+        record_types: Array.isArray(settings.record_types) ? settings.record_types.join(', ') : 'A, AAAA',
+        nameservers: Array.isArray(settings.nameservers) ? settings.nameservers.join(', ') : '',
+        exists: Boolean(expected.exists ?? true),
+        valid_xml: Boolean(expected.valid_xml ?? true),
+        resolves: Boolean(expected.resolves ?? true),
+        min_records: Number(expected.min_records ?? 1),
+        open: Boolean(expected.open ?? true),
+        headers: settings.headers && typeof settings.headers === 'object'
+            ? Object.entries(settings.headers as Record<string, unknown>).map(([key, value]) => `${key}: ${String(value)}`).join('\n')
+            : '',
+        body: String(settings.body ?? ''),
+        response_contains: String(expected.response_contains ?? ''),
     }
 }
 
@@ -466,11 +490,25 @@ function resultText(monitor: Monitor): string {
     if (!result) return 'Нет результата'
     if (result.error_message) return result.error_message
 
-    if (monitor.type === 'http') {
+    if (['http', 'api_endpoint', 'robots_txt', 'sitemap_xml'].includes(monitor.type)) {
         const code = result.status_code ? `HTTP ${result.status_code}` : 'HTTP'
         const time = result.response_time_ms ? ` · ${result.response_time_ms} мс` : ''
 
         return `${code}${time}`
+    }
+
+    if (monitor.type === 'dns') {
+        const records = result.normalized_result.records
+        const count = Array.isArray(records) ? records.length : 0
+
+        return count ? `${count} DNS записей` : statusLabel(result.status)
+    }
+
+    if (monitor.type === 'tcp_port') {
+        const open = result.normalized_result.open === true ? 'порт открыт' : 'порт закрыт'
+        const time = result.response_time_ms ? ` · ${result.response_time_ms} мс` : ''
+
+        return `${open}${time}`
     }
 
     const days = result.normalized_result.days_until_expiration
@@ -484,11 +522,25 @@ function resultText(monitor: Monitor): string {
 
 function checkResultText(result: CheckResult): string {
     if (result.error_message) return result.error_message
-    if (result.check_type === 'http') {
+    if (['http', 'api_endpoint', 'robots_txt', 'sitemap_xml'].includes(result.check_type)) {
         const code = result.status_code ? `HTTP ${result.status_code}` : 'HTTP'
         const time = result.response_time_ms ? ` · ${result.response_time_ms} мс` : ''
 
         return `${code}${time}`
+    }
+
+    if (result.check_type === 'dns') {
+        const records = result.normalized_result.records
+        const count = Array.isArray(records) ? records.length : 0
+
+        return count ? `${count} DNS записей` : statusLabel(result.status)
+    }
+
+    if (result.check_type === 'tcp_port') {
+        const open = result.normalized_result.open === true ? 'порт открыт' : 'порт закрыт'
+        const time = result.response_time_ms ? ` · ${result.response_time_ms} мс` : ''
+
+        return `${open}${time}`
     }
 
     const days = result.normalized_result.days_until_expiration
@@ -505,16 +557,43 @@ function parseNumberList(value: string): number[] {
         .filter((item) => Number.isInteger(item))
 }
 
+function parseStringList(value: string): string[] {
+    return value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+}
+
+function parseHeaders(value: string): Record<string, string> {
+    return Object.fromEntries(
+        value
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => {
+                const separatorIndex = line.indexOf(':')
+
+                if (separatorIndex === -1) return [line, '']
+
+                return [line.slice(0, separatorIndex).trim(), line.slice(separatorIndex + 1).trim()]
+            })
+            .filter(([key]) => Boolean(key)),
+    )
+}
+
 function payloadForMonitor(monitor: Monitor) {
     const draft = monitorDrafts.value[monitor.id]
+    const basePayload = {
+        type: draft.type,
+        name: draft.name,
+        is_enabled: draft.is_enabled,
+        interval_seconds: draft.interval_seconds,
+        timeout_ms: draft.timeout_ms,
+    }
 
     if (draft.type === 'http') {
         return {
-            type: draft.type,
-            name: draft.name,
-            is_enabled: draft.is_enabled,
-            interval_seconds: draft.interval_seconds,
-            timeout_ms: draft.timeout_ms,
+            ...basePayload,
             settings: {
                 method: draft.method,
                 url: draft.url,
@@ -528,13 +607,28 @@ function payloadForMonitor(monitor: Monitor) {
         }
     }
 
+    if (draft.type === 'api_endpoint') {
+        return {
+            ...basePayload,
+            settings: {
+                method: draft.method,
+                url: draft.url,
+                headers: parseHeaders(draft.headers),
+                body: draft.body || null,
+                follow_redirects: draft.follow_redirects,
+                verify_ssl: draft.verify_ssl,
+            },
+            expected: {
+                status_codes: parseNumberList(draft.status_codes),
+                max_response_time_ms: draft.max_response_time_ms,
+                response_contains: draft.response_contains || null,
+            },
+        }
+    }
+
     if (draft.type === 'ssl') {
         return {
-            type: draft.type,
-            name: draft.name,
-            is_enabled: draft.is_enabled,
-            interval_seconds: draft.interval_seconds,
-            timeout_ms: draft.timeout_ms,
+            ...basePayload,
             settings: {
                 domain: draft.domain,
                 port: draft.port,
@@ -546,18 +640,76 @@ function payloadForMonitor(monitor: Monitor) {
         }
     }
 
+    if (draft.type === 'domain') {
+        return {
+            ...basePayload,
+            settings: {
+                domain: draft.domain,
+                warning_days: parseNumberList(draft.warning_days),
+            },
+            expected: {
+                registered: draft.registered,
+            },
+        }
+    }
+
+    if (draft.type === 'dns') {
+        return {
+            ...basePayload,
+            settings: {
+                domain: draft.domain,
+                record_types: parseStringList(draft.record_types),
+                nameservers: parseStringList(draft.nameservers),
+            },
+            expected: {
+                resolves: draft.resolves,
+                min_records: draft.min_records,
+            },
+        }
+    }
+
+    if (draft.type === 'robots_txt') {
+        return {
+            ...basePayload,
+            settings: {
+                url: draft.url,
+                follow_redirects: draft.follow_redirects,
+                verify_ssl: draft.verify_ssl,
+            },
+            expected: {
+                exists: draft.exists,
+                status_codes: parseNumberList(draft.status_codes),
+                max_response_time_ms: draft.max_response_time_ms,
+            },
+        }
+    }
+
+    if (draft.type === 'sitemap_xml') {
+        return {
+            ...basePayload,
+            settings: {
+                url: draft.url,
+                follow_redirects: draft.follow_redirects,
+                verify_ssl: draft.verify_ssl,
+            },
+            expected: {
+                exists: draft.exists,
+                valid_xml: draft.valid_xml,
+                status_codes: parseNumberList(draft.status_codes),
+                max_response_time_ms: draft.max_response_time_ms,
+            },
+        }
+    }
+
     return {
-        type: draft.type,
-        name: draft.name,
-        is_enabled: draft.is_enabled,
-        interval_seconds: draft.interval_seconds,
-        timeout_ms: draft.timeout_ms,
+        ...basePayload,
         settings: {
-            domain: draft.domain,
-            warning_days: parseNumberList(draft.warning_days),
+            host: draft.host,
+            port: draft.port,
         },
         expected: {
-            registered: draft.registered,
+            open: draft.open,
+            max_response_time_ms: draft.max_response_time_ms,
         },
     }
 }
@@ -925,13 +1077,17 @@ function sparkClass(status: string): string {
                                             >
                                         </label>
 
-                                        <template v-if="monitor.type === 'http'">
-                                            <label class="block">
+                                        <template v-if="['http', 'api_endpoint', 'robots_txt', 'sitemap_xml'].includes(monitor.type)">
+                                            <label v-if="monitor.type === 'http' || monitor.type === 'api_endpoint'" class="block">
                                                 <span class="mb-2 block text-xs font-medium text-[#52645A]">Метод</span>
                                                 <select v-model="monitorDrafts[monitor.id].method" class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
                                                     <option value="GET">GET</option>
                                                     <option value="HEAD">HEAD</option>
                                                     <option value="POST">POST</option>
+                                                    <option v-if="monitor.type === 'api_endpoint'" value="PUT">PUT</option>
+                                                    <option v-if="monitor.type === 'api_endpoint'" value="PATCH">PATCH</option>
+                                                    <option v-if="monitor.type === 'api_endpoint'" value="DELETE">DELETE</option>
+                                                    <option v-if="monitor.type === 'api_endpoint'" value="OPTIONS">OPTIONS</option>
                                                 </select>
                                             </label>
                                             <label class="block">
@@ -941,6 +1097,30 @@ function sparkClass(status: string): string {
                                             <label class="block md:col-span-2">
                                                 <span class="mb-2 block text-xs font-medium text-[#52645A]">URL</span>
                                                 <input v-model="monitorDrafts[monitor.id].url" type="url" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                            <label class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Макс. время, мс</span>
+                                                <input v-model.number="monitorDrafts[monitor.id].max_response_time_ms" type="number" min="1" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                            <label v-if="monitor.type === 'sitemap_xml'" class="flex items-center gap-3 rounded-xl border border-[#D4E3DA] bg-white px-3 py-2">
+                                                <input v-model="monitorDrafts[monitor.id].valid_xml" type="checkbox" class="h-4 w-4">
+                                                <span class="text-xs font-medium text-[#52645A]">Валидный XML</span>
+                                            </label>
+                                            <label v-if="monitor.type === 'robots_txt' || monitor.type === 'sitemap_xml'" class="flex items-center gap-3 rounded-xl border border-[#D4E3DA] bg-white px-3 py-2">
+                                                <input v-model="monitorDrafts[monitor.id].exists" type="checkbox" class="h-4 w-4">
+                                                <span class="text-xs font-medium text-[#52645A]">Файл существует</span>
+                                            </label>
+                                            <label v-if="monitor.type === 'api_endpoint'" class="block md:col-span-2">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Заголовки</span>
+                                                <textarea v-model="monitorDrafts[monitor.id].headers" rows="3" class="w-full rounded-xl border border-[#D4E3DA] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15"></textarea>
+                                            </label>
+                                            <label v-if="monitor.type === 'api_endpoint'" class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Body</span>
+                                                <textarea v-model="monitorDrafts[monitor.id].body" rows="3" class="w-full rounded-xl border border-[#D4E3DA] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15"></textarea>
+                                            </label>
+                                            <label v-if="monitor.type === 'api_endpoint'" class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Ответ содержит</span>
+                                                <input v-model="monitorDrafts[monitor.id].response_contains" type="text" class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
                                             </label>
                                         </template>
 
@@ -956,6 +1136,44 @@ function sparkClass(status: string): string {
                                             <label class="block md:col-span-2">
                                                 <span class="mb-2 block text-xs font-medium text-[#52645A]">Дни предупреждений</span>
                                                 <input v-model="monitorDrafts[monitor.id].warning_days" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                        </template>
+
+                                        <template v-if="monitor.type === 'dns'">
+                                            <label class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Домен</span>
+                                                <input v-model="monitorDrafts[monitor.id].domain" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                            <label class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Типы записей</span>
+                                                <input v-model="monitorDrafts[monitor.id].record_types" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                            <label class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">DNS-серверы</span>
+                                                <input v-model="monitorDrafts[monitor.id].nameservers" type="text" class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                            <label class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Мин. записей</span>
+                                                <input v-model.number="monitorDrafts[monitor.id].min_records" type="number" min="0" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                        </template>
+
+                                        <template v-if="monitor.type === 'tcp_port'">
+                                            <label class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Host</span>
+                                                <input v-model="monitorDrafts[monitor.id].host" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                            <label class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Порт</span>
+                                                <input v-model.number="monitorDrafts[monitor.id].port" type="number" min="1" max="65535" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                            <label class="block">
+                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Макс. время, мс</span>
+                                                <input v-model.number="monitorDrafts[monitor.id].max_response_time_ms" type="number" min="1" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                            </label>
+                                            <label class="flex items-center gap-3 rounded-xl border border-[#D4E3DA] bg-white px-3 py-2">
+                                                <input v-model="monitorDrafts[monitor.id].open" type="checkbox" class="h-4 w-4">
+                                                <span class="text-xs font-medium text-[#52645A]">Порт открыт</span>
                                             </label>
                                         </template>
                                     </div>

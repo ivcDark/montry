@@ -15,22 +15,28 @@ final readonly class CheckoutService
 {
     public function __construct(
         private BusinessEventRecorder $events,
+        private BillingAddonCatalog $addons,
     ) {
     }
 
-    public function start(int $organizationId, string $planCode): Payment
+    /**
+     * @param array<string, mixed> $addonQuantities
+     */
+    public function start(int $organizationId, string $planCode, array $addonQuantities = []): Payment
     {
+        $addonQuantities = $this->addons->normalizeQuantities($addonQuantities);
         $plan = Plan::query()
             ->where('code', $planCode)
             ->where('is_active', true)
             ->firstOrFail();
 
-        return DB::transaction(function () use ($organizationId, $plan): Payment {
+        return DB::transaction(function () use ($organizationId, $plan, $addonQuantities): Payment {
             Organization::query()
                 ->lockForUpdate()
                 ->findOrFail($organizationId);
 
             $existingPayment = Payment::query()
+                ->with('subscription.items')
                 ->where('organization_id', $organizationId)
                 ->where('status', 'pending')
                 ->whereHas('subscription', function ($query) use ($plan): void {
@@ -39,7 +45,8 @@ final readonly class CheckoutService
                         ->where('status', 'pending');
                 })
                 ->latest('id')
-                ->first();
+                ->get()
+                ->first(fn (Payment $payment): bool => ($payment->payload['addon_quantities'] ?? []) === $addonQuantities);
 
             if ($existingPayment !== null) {
                 return $existingPayment;
@@ -52,18 +59,33 @@ final readonly class CheckoutService
                 'starts_at' => now(),
             ]);
 
+            foreach ($addonQuantities as $code => $quantity) {
+                $subscription->items()->create([
+                    'code' => $code,
+                    'quantity' => $quantity,
+                    'unit_price_cents' => $this->addons->unitPriceCents($code),
+                    'currency' => $plan->currency,
+                    'meta' => $this->addons->all()[$code] ?? [],
+                ]);
+            }
+
+            $addonsTotalCents = $this->addons->totalCents($addonQuantities);
+
             $payment = Payment::query()->create([
                 'organization_id' => $organizationId,
                 'subscription_id' => $subscription->id,
                 'provider' => 'robokassa',
                 'status' => 'pending',
-                'amount_cents' => $plan->price_cents,
+                'amount_cents' => $plan->price_cents + $addonsTotalCents,
                 'currency' => $plan->currency,
                 'payload' => [
                     'plan_code' => $plan->code,
                     'period' => 'month',
                     'provider' => 'robokassa',
                     'mode' => config('services.robokassa.mode', 'test'),
+                    'base_plan_amount_cents' => $plan->price_cents,
+                    'addons_amount_cents' => $addonsTotalCents,
+                    'addon_quantities' => $addonQuantities,
                 ],
             ]);
 
@@ -80,6 +102,7 @@ final readonly class CheckoutService
                     'provider' => $payment->provider,
                     'amount_cents' => $payment->amount_cents,
                     'currency' => $payment->currency,
+                    'addon_quantities' => $addonQuantities,
                 ],
             ));
 
@@ -95,7 +118,7 @@ final readonly class CheckoutService
         return DB::transaction(function () use ($payment, $providerPayload, $providerPaymentId): Subscription {
             $payment = Payment::query()
                 ->lockForUpdate()
-                ->with('subscription.plan')
+                ->with(['subscription.plan', 'subscription.items'])
                 ->findOrFail($payment->id);
 
             if ($payment->subscription === null) {
@@ -160,6 +183,7 @@ final readonly class CheckoutService
                     'provider' => $payment->provider,
                     'amount_cents' => $payment->amount_cents,
                     'currency' => $payment->currency,
+                    'addon_quantities' => $payment->payload['addon_quantities'] ?? [],
                 ],
             ));
 
@@ -176,6 +200,7 @@ final readonly class CheckoutService
                     'plan_id' => $plan?->id,
                     'starts_at' => $subscription->starts_at?->toISOString(),
                     'ends_at' => $subscription->ends_at?->toISOString(),
+                    'addon_quantities' => $payment->payload['addon_quantities'] ?? [],
                 ],
             ));
 

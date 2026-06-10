@@ -85,9 +85,10 @@ final class DueMonitorController extends Controller
                 'event_type' => 'scheduled_check_due',
                 'monitor_id' => $monitor->id,
                 'check_type' => $monitor->type,
-                'target' => $monitor->monitoredResource?->target
-                    ?? $monitor->settings['url']
+                'target' => $monitor->settings['url']
                     ?? $monitor->settings['domain']
+                    ?? $monitor->settings['host']
+                    ?? $monitor->monitoredResource?->target
                     ?? '',
                 'settings' => $monitor->settings ?? [],
                 'expected' => $monitor->expected ?? [],

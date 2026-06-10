@@ -31,7 +31,12 @@ const props = defineProps<{
 
 const statusCodesText = ref('200')
 const warningDaysText = ref('30, 14, 7, 3, 1')
+const dnsRecordTypesText = ref('A, AAAA')
+const dnsNameserversText = ref('')
+const headersText = ref('')
 const intervalPresets = [5, 10, 15, 30, 60, 360, 720, 1440]
+
+const rootUrl = computed(() => siteRootUrl(props.site.url))
 
 const form = useForm({
     type: 'http',
@@ -45,14 +50,25 @@ const form = useForm({
         follow_redirects: true,
         verify_ssl: true,
         domain: props.site.host,
+        host: props.site.host,
         port: props.site.port ?? 443,
         warning_days: [30, 14, 7, 3, 1],
+        record_types: ['A', 'AAAA'],
+        nameservers: [],
+        headers: {},
+        body: '',
     },
     expected: {
         status_codes: [200],
         max_response_time_ms: 5000,
         valid: true,
         registered: true,
+        resolves: true,
+        min_records: 1,
+        exists: true,
+        valid_xml: true,
+        open: true,
+        response_contains: '',
     },
 })
 
@@ -74,6 +90,31 @@ const typeHints: Record<string, { title: string, description: string, result: st
         description: 'Проверяет срок регистрации домена и заранее подсвечивает риск.',
         result: 'Предупреждения: 30, 14, 7, 3, 1 дней',
     },
+    dns: {
+        title: 'DNS',
+        description: 'Проверяет, что DNS-записи домена резолвятся.',
+        result: 'A/AAAA записи, минимум 1 ответ',
+    },
+    robots_txt: {
+        title: 'Robots.txt',
+        description: 'Проверяет наличие и доступность файла robots.txt.',
+        result: 'Ожидаемый результат: 200 OK',
+    },
+    sitemap_xml: {
+        title: 'Sitemap.xml',
+        description: 'Проверяет наличие sitemap.xml и валидность XML.',
+        result: 'Ожидаемый результат: 200 OK и валидный XML',
+    },
+    api_endpoint: {
+        title: 'API endpoint',
+        description: 'Проверяет отдельный API-адрес, метод, заголовки и код ответа.',
+        result: 'Ожидаемый результат: 200 OK до 5000 мс',
+    },
+    tcp_port: {
+        title: 'TCP-порт',
+        description: 'Проверяет, что нужный TCP-порт открыт.',
+        result: 'Ожидаемый результат: порт открыт',
+    },
 }
 
 const activeHint = computed(() => typeHints[form.type] ?? {
@@ -84,33 +125,98 @@ const activeHint = computed(() => typeHints[form.type] ?? {
 
 function selectType(type: string): void {
     form.type = type
+    form.timeout_ms = 10000
 
     if (type === 'http') {
         form.name = 'HTTP check'
-        form.timeout_ms = 10000
+        form.interval_seconds = 300
         form.settings.method = 'GET'
         form.settings.url = props.site.url
         form.settings.follow_redirects = true
         form.settings.verify_ssl = true
         statusCodesText.value = '200'
         form.expected.max_response_time_ms = 5000
+        return
     }
 
     if (type === 'ssl') {
         form.name = 'SSL certificate check'
-        form.timeout_ms = 10000
+        form.interval_seconds = 86400
         form.settings.domain = props.site.host
         form.settings.port = props.site.port ?? 443
         warningDaysText.value = '30, 14, 7, 3, 1'
         form.expected.valid = true
+        return
     }
 
     if (type === 'domain') {
         form.name = 'Domain expiration check'
-        form.timeout_ms = 10000
+        form.interval_seconds = 86400
         form.settings.domain = props.site.host
         warningDaysText.value = '30, 14, 7, 3, 1'
         form.expected.registered = true
+        return
+    }
+
+    if (type === 'dns') {
+        form.name = 'DNS records check'
+        form.interval_seconds = 86400
+        form.settings.domain = props.site.host
+        dnsRecordTypesText.value = 'A, AAAA'
+        dnsNameserversText.value = ''
+        form.expected.resolves = true
+        form.expected.min_records = 1
+        return
+    }
+
+    if (type === 'robots_txt') {
+        form.name = 'Robots.txt check'
+        form.interval_seconds = 86400
+        form.settings.url = `${rootUrl.value}/robots.txt`
+        form.settings.follow_redirects = true
+        form.settings.verify_ssl = true
+        statusCodesText.value = '200'
+        form.expected.exists = true
+        form.expected.max_response_time_ms = 5000
+        return
+    }
+
+    if (type === 'sitemap_xml') {
+        form.name = 'Sitemap.xml check'
+        form.interval_seconds = 86400
+        form.settings.url = `${rootUrl.value}/sitemap.xml`
+        form.settings.follow_redirects = true
+        form.settings.verify_ssl = true
+        statusCodesText.value = '200'
+        form.expected.exists = true
+        form.expected.valid_xml = true
+        form.expected.max_response_time_ms = 5000
+        return
+    }
+
+    if (type === 'api_endpoint') {
+        form.name = 'API endpoint check'
+        form.interval_seconds = 300
+        form.settings.method = 'GET'
+        form.settings.url = props.site.url
+        form.settings.headers = {}
+        form.settings.body = ''
+        form.settings.follow_redirects = true
+        form.settings.verify_ssl = true
+        statusCodesText.value = '200'
+        headersText.value = ''
+        form.expected.max_response_time_ms = 5000
+        form.expected.response_contains = ''
+        return
+    }
+
+    if (type === 'tcp_port') {
+        form.name = 'TCP port check'
+        form.interval_seconds = 300
+        form.settings.host = props.site.host
+        form.settings.port = props.site.port ?? 443
+        form.expected.open = true
+        form.expected.max_response_time_ms = 5000
     }
 }
 
@@ -119,6 +225,30 @@ function parseNumberList(value: string): number[] {
         .split(',')
         .map((item) => Number.parseInt(item.trim(), 10))
         .filter((item) => Number.isInteger(item))
+}
+
+function parseStringList(value: string): string[] {
+    return value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+}
+
+function parseHeaders(value: string): Record<string, string> {
+    return Object.fromEntries(
+        value
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => {
+                const separatorIndex = line.indexOf(':')
+
+                if (separatorIndex === -1) return [line, '']
+
+                return [line.slice(0, separatorIndex).trim(), line.slice(separatorIndex + 1).trim()]
+            })
+            .filter(([key]) => Boolean(key)),
+    )
 }
 
 function intervalMinutes(seconds: number): number {
@@ -139,34 +269,68 @@ function intervalText(seconds: number): string {
     return `Каждые ${minutes} мин`
 }
 
+function siteRootUrl(url: string): string {
+    try {
+        const parsed = new URL(url)
+
+        return `${parsed.protocol}//${parsed.host}`
+    } catch {
+        return `https://${props.site.host}`
+    }
+}
+
+function basePayload() {
+    return {
+        type: form.type,
+        name: form.name,
+        is_enabled: form.is_enabled,
+        interval_seconds: form.interval_seconds,
+        timeout_ms: form.timeout_ms,
+    }
+}
+
+function httpExpected() {
+    return {
+        status_codes: parseNumberList(statusCodesText.value),
+        max_response_time_ms: form.expected.max_response_time_ms,
+    }
+}
+
 function requestPayload() {
     if (form.type === 'http') {
         return {
-            type: form.type,
-            name: form.name,
-            is_enabled: form.is_enabled,
-            interval_seconds: form.interval_seconds,
-            timeout_ms: form.timeout_ms,
+            ...basePayload(),
             settings: {
                 method: form.settings.method,
                 url: form.settings.url,
                 follow_redirects: form.settings.follow_redirects,
                 verify_ssl: form.settings.verify_ssl,
             },
+            expected: httpExpected(),
+        }
+    }
+
+    if (form.type === 'api_endpoint') {
+        return {
+            ...basePayload(),
+            settings: {
+                method: form.settings.method,
+                url: form.settings.url,
+                headers: parseHeaders(headersText.value),
+                body: form.settings.body || null,
+                follow_redirects: form.settings.follow_redirects,
+                verify_ssl: form.settings.verify_ssl,
+            },
             expected: {
-                status_codes: parseNumberList(statusCodesText.value),
-                max_response_time_ms: form.expected.max_response_time_ms,
+                ...httpExpected(),
+                response_contains: form.expected.response_contains || null,
             },
         }
     }
 
     if (form.type === 'ssl') {
         return {
-            type: form.type,
-            name: form.name,
-            is_enabled: form.is_enabled,
-            interval_seconds: form.interval_seconds,
-            timeout_ms: form.timeout_ms,
+            ...basePayload(),
             settings: {
                 domain: form.settings.domain,
                 port: form.settings.port,
@@ -178,18 +342,74 @@ function requestPayload() {
         }
     }
 
+    if (form.type === 'domain') {
+        return {
+            ...basePayload(),
+            settings: {
+                domain: form.settings.domain,
+                warning_days: parseNumberList(warningDaysText.value),
+            },
+            expected: {
+                registered: form.expected.registered,
+            },
+        }
+    }
+
+    if (form.type === 'dns') {
+        return {
+            ...basePayload(),
+            settings: {
+                domain: form.settings.domain,
+                record_types: parseStringList(dnsRecordTypesText.value),
+                nameservers: parseStringList(dnsNameserversText.value),
+            },
+            expected: {
+                resolves: form.expected.resolves,
+                min_records: form.expected.min_records,
+            },
+        }
+    }
+
+    if (form.type === 'robots_txt') {
+        return {
+            ...basePayload(),
+            settings: {
+                url: form.settings.url,
+                follow_redirects: form.settings.follow_redirects,
+                verify_ssl: form.settings.verify_ssl,
+            },
+            expected: {
+                exists: form.expected.exists,
+                ...httpExpected(),
+            },
+        }
+    }
+
+    if (form.type === 'sitemap_xml') {
+        return {
+            ...basePayload(),
+            settings: {
+                url: form.settings.url,
+                follow_redirects: form.settings.follow_redirects,
+                verify_ssl: form.settings.verify_ssl,
+            },
+            expected: {
+                exists: form.expected.exists,
+                valid_xml: form.expected.valid_xml,
+                ...httpExpected(),
+            },
+        }
+    }
+
     return {
-        type: form.type,
-        name: form.name,
-        is_enabled: form.is_enabled,
-        interval_seconds: form.interval_seconds,
-        timeout_ms: form.timeout_ms,
+        ...basePayload(),
         settings: {
-            domain: form.settings.domain,
-            warning_days: parseNumberList(warningDaysText.value),
+            host: form.settings.host,
+            port: form.settings.port,
         },
         expected: {
-            registered: form.expected.registered,
+            open: form.expected.open,
+            max_response_time_ms: form.expected.max_response_time_ms,
         },
     }
 }
@@ -340,9 +560,9 @@ function submit(): void {
                             </label>
                         </section>
 
-                        <section v-if="form.type === 'http'" class="rounded-3xl border border-[#E5E7EB] bg-[#F8FAFC] p-5">
+                        <section v-if="['http', 'api_endpoint', 'robots_txt', 'sitemap_xml'].includes(form.type)" class="rounded-3xl border border-[#E5E7EB] bg-[#F8FAFC] p-5">
                             <div class="grid gap-5 md:grid-cols-[150px_minmax(0,1fr)]">
-                                <div>
+                                <div v-if="form.type === 'http' || form.type === 'api_endpoint'">
                                     <label for="method" class="mb-2 block text-sm font-extrabold text-[#111827]">Метод</label>
                                     <select
                                         id="method"
@@ -352,6 +572,10 @@ function submit(): void {
                                         <option value="GET">GET</option>
                                         <option value="HEAD">HEAD</option>
                                         <option value="POST">POST</option>
+                                        <option v-if="form.type === 'api_endpoint'" value="PUT">PUT</option>
+                                        <option v-if="form.type === 'api_endpoint'" value="PATCH">PATCH</option>
+                                        <option v-if="form.type === 'api_endpoint'" value="DELETE">DELETE</option>
+                                        <option v-if="form.type === 'api_endpoint'" value="OPTIONS">OPTIONS</option>
                                     </select>
                                 </div>
 
@@ -404,6 +628,55 @@ function submit(): void {
                                     <span class="text-sm font-bold text-[#111827]">Проверять SSL при HTTP</span>
                                 </label>
                             </div>
+
+
+                            <div v-if="form.type === 'api_endpoint'" class="mt-5 grid gap-5 md:grid-cols-2">
+                                <div>
+                                    <label for="headers" class="mb-2 block text-sm font-extrabold text-[#111827]">Заголовки</label>
+                                    <textarea
+                                        id="headers"
+                                        v-model="headersText"
+                                        rows="4"
+                                        placeholder="Authorization: Bearer token"
+                                        class="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
+                                    ></textarea>
+                                    <p class="mt-1 text-xs font-semibold text-[#667085]">Один заголовок на строку в формате Header: value.</p>
+                                </div>
+
+                                <div>
+                                    <label for="body" class="mb-2 block text-sm font-extrabold text-[#111827]">Body</label>
+                                    <textarea
+                                        id="body"
+                                        v-model="form.settings.body"
+                                        rows="4"
+                                        placeholder="{&quot;ping&quot;: true}"
+                                        class="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
+                                    ></textarea>
+                                </div>
+
+                                <div class="md:col-span-2">
+                                    <label for="response-contains" class="mb-2 block text-sm font-extrabold text-[#111827]">Ответ должен содержать</label>
+                                    <input
+                                        id="response-contains"
+                                        v-model="form.expected.response_contains"
+                                        type="text"
+                                        placeholder="необязательно"
+                                        class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
+                                    >
+                                </div>
+                            </div>
+
+                            <div v-if="form.type === 'robots_txt' || form.type === 'sitemap_xml'" class="mt-5 grid gap-3 sm:grid-cols-2">
+                                <label class="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3">
+                                    <input v-model="form.expected.exists" type="checkbox" class="h-4 w-4 rounded border-[#E5E7EB] text-[#0F6BFF]">
+                                    <span class="text-sm font-bold text-[#111827]">Файл должен существовать</span>
+                                </label>
+
+                                <label v-if="form.type === 'sitemap_xml'" class="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3">
+                                    <input v-model="form.expected.valid_xml" type="checkbox" class="h-4 w-4 rounded border-[#E5E7EB] text-[#0F6BFF]">
+                                    <span class="text-sm font-bold text-[#111827]">XML должен быть валидным</span>
+                                </label>
+                            </div>
                         </section>
 
                         <section v-if="form.type === 'ssl' || form.type === 'domain'" class="rounded-3xl border border-[#E5E7EB] bg-[#F8FAFC] p-5">
@@ -445,6 +718,103 @@ function submit(): void {
                                 >
                             </div>
                         </section>
+
+
+                        <section v-if="form.type === 'dns'" class="rounded-3xl border border-[#E5E7EB] bg-[#F8FAFC] p-5">
+                            <div class="grid gap-5 md:grid-cols-2">
+                                <div>
+                                    <label for="dns-domain" class="mb-2 block text-sm font-extrabold text-[#111827]">Домен</label>
+                                    <input
+                                        id="dns-domain"
+                                        v-model="form.settings.domain"
+                                        type="text"
+                                        required
+                                        class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label for="record-types" class="mb-2 block text-sm font-extrabold text-[#111827]">Типы записей</label>
+                                    <input
+                                        id="record-types"
+                                        v-model="dnsRecordTypesText"
+                                        type="text"
+                                        placeholder="A, AAAA"
+                                        required
+                                        class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label for="nameservers" class="mb-2 block text-sm font-extrabold text-[#111827]">DNS-серверы</label>
+                                    <input
+                                        id="nameservers"
+                                        v-model="dnsNameserversText"
+                                        type="text"
+                                        placeholder="необязательно"
+                                        class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label for="min-records" class="mb-2 block text-sm font-extrabold text-[#111827]">Минимум записей</label>
+                                    <input
+                                        id="min-records"
+                                        v-model.number="form.expected.min_records"
+                                        type="number"
+                                        min="0"
+                                        required
+                                        class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
+                                    >
+                                </div>
+                            </div>
+                        </section>
+
+                        <section v-if="form.type === 'tcp_port'" class="rounded-3xl border border-[#E5E7EB] bg-[#F8FAFC] p-5">
+                            <div class="grid gap-5 md:grid-cols-2">
+                                <div>
+                                    <label for="tcp-host" class="mb-2 block text-sm font-extrabold text-[#111827]">Host</label>
+                                    <input
+                                        id="tcp-host"
+                                        v-model="form.settings.host"
+                                        type="text"
+                                        required
+                                        class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label for="tcp-port" class="mb-2 block text-sm font-extrabold text-[#111827]">Порт</label>
+                                    <input
+                                        id="tcp-port"
+                                        v-model.number="form.settings.port"
+                                        type="number"
+                                        min="1"
+                                        max="65535"
+                                        required
+                                        class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label for="tcp-response-time" class="mb-2 block text-sm font-extrabold text-[#111827]">Макс. время подключения, мс</label>
+                                    <input
+                                        id="tcp-response-time"
+                                        v-model.number="form.expected.max_response_time_ms"
+                                        type="number"
+                                        min="1"
+                                        required
+                                        class="h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm outline-none transition focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15"
+                                    >
+                                </div>
+
+                                <label class="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3">
+                                    <input v-model="form.expected.open" type="checkbox" class="h-4 w-4 rounded border-[#E5E7EB] text-[#0F6BFF]">
+                                    <span class="text-sm font-bold text-[#111827]">Порт должен быть открыт</span>
+                                </label>
+                            </div>
+                        </section>
+
 
                         <div v-if="form.errors.settings || form.errors.expected" class="rounded-2xl border border-[#FECACA] bg-[#FEECEC] px-4 py-3 text-sm font-semibold text-[#EF4444]">
                             {{ form.errors.settings || form.errors.expected }}

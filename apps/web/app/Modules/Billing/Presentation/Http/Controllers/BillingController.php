@@ -3,7 +3,9 @@
 namespace App\Modules\Billing\Presentation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Billing\Application\Services\BillingAddonCatalog;
 use App\Modules\Billing\Application\Services\CheckoutService;
+use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\Billing\Application\Services\PlanChangeClassifier;
 use App\Modules\Billing\Application\Services\RobokassaService;
 use App\Modules\Billing\Application\Services\ScheduleDowngrade;
@@ -26,7 +28,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class BillingController extends Controller
 {
-    public function index(Request $request, GetCurrentOrganization $getCurrentOrganization): Response
+    public function index(Request $request, GetCurrentOrganization $getCurrentOrganization, BillingAddonCatalog $addonCatalog, LimitChecker $limits): Response
     {
         $organization = $getCurrentOrganization->handle($request->user());
 
@@ -58,6 +60,15 @@ final class BillingController extends Controller
                 ->get()
                 ->map(fn (Plan $plan): array => $this->planPayload($plan))
                 ->values(),
+            'addonCatalog' => $addonCatalog->payload(),
+            'currentAddons' => $currentSubscription?->items
+                ? $currentSubscription->items->mapWithKeys(fn ($item): array => [$item->code => [
+                    'quantity' => $item->quantity,
+                    'unit_price_cents' => $item->unit_price_cents,
+                    'currency' => $item->currency,
+                ]])->all()
+                : [],
+            'entitlements' => $limits->usageSummary((int) $organization->id),
             'usage' => [
                 'sites' => MonitoredResource::query()
                     ->where('organization_id', $organization->id)
@@ -70,6 +81,7 @@ final class BillingController extends Controller
                     ->where('organization_id', $organization->id)
                     ->where('enabled', true)
                     ->count(),
+                'site_limit' => $limits->effectiveSiteLimit((int) $organization->id),
             ],
         ]);
     }
@@ -78,12 +90,14 @@ final class BillingController extends Controller
         StartCheckoutRequest $request,
         GetCurrentOrganization $getCurrentOrganization,
         CheckoutService $checkout,
+        BillingAddonCatalog $addonCatalog,
         ScheduleDowngrade $scheduleDowngrade,
         PlanChangeClassifier $planChangeClassifier,
         BusinessEventRecorder $events,
     ): RedirectResponse {
         $organization = $getCurrentOrganization->handle($request->user());
         $planCode = $request->string('plan_code')->toString();
+        $addonQuantities = $addonCatalog->normalizeQuantities($request->validated('addons', []));
         $plan = Plan::query()
             ->where('code', $planCode)
             ->where('is_active', true)
@@ -92,7 +106,7 @@ final class BillingController extends Controller
         $currentSubscription = $this->currentSubscription($organization->id);
         $changeType = $planChangeClassifier->classify($currentSubscription?->plan, $plan);
 
-        if ($changeType === 'same') {
+        if ($changeType === 'same' && $addonQuantities === []) {
             return to_route('billing.index');
         }
 
@@ -110,22 +124,31 @@ final class BillingController extends Controller
                 'selected_plan_code' => $plan->code,
                 'change_type' => $changeType,
                 'price_cents' => $plan->price_cents,
+                'addons_amount_cents' => $addonCatalog->totalCents($addonQuantities),
+                'addon_quantities' => $addonQuantities,
                 'currency' => $plan->currency,
             ],
         ));
 
         if ($changeType === 'downgrade') {
+            if ($addonQuantities !== []) {
+                return to_route('billing.index')
+                    ->with('error', 'Дополнительные проверки нельзя подключить вместе с понижением тарифа. Сначала запланируйте понижение, затем подключите допы после смены тарифа.');
+            }
+
             $scheduleDowngrade->handle($organization->id, $plan->code);
 
             return to_route('billing.index')
                 ->with('success', 'Смена тарифа запланирована.');
         }
 
-        if ($plan->price_cents === 0) {
+        $totalCents = $plan->price_cents + $addonCatalog->totalCents($addonQuantities);
+
+        if ($totalCents === 0) {
             return to_route('billing.index');
         }
 
-        $payment = $checkout->start($organization->id, $plan->code);
+        $payment = $checkout->start($organization->id, $plan->code, $addonQuantities);
 
         return redirect()->route('billing.payments.show', $payment);
     }
@@ -155,7 +178,7 @@ final class BillingController extends Controller
             throw new NotFoundHttpException;
         }
 
-        $payment->load('subscription.plan');
+        $payment->load(['subscription.plan', 'subscription.items']);
 
         return Inertia::render('Billing/Payment', [
             'organization' => [
@@ -190,7 +213,7 @@ final class BillingController extends Controller
             throw new NotFoundHttpException;
         }
 
-        $payment->load('subscription.plan');
+        $payment->load(['subscription.plan', 'subscription.items']);
 
         return Inertia::render('Billing/FakeBankPayment', [
             'organization' => [
@@ -233,7 +256,7 @@ final class BillingController extends Controller
     private function currentSubscription(int $organizationId): ?Subscription
     {
         return Subscription::query()
-            ->with('plan.limits')
+            ->with(['plan.limits', 'items'])
             ->where('organization_id', $organizationId)
             ->where('status', 'active')
             ->where('starts_at', '<=', now())
@@ -247,7 +270,7 @@ final class BillingController extends Controller
     private function scheduledSubscription(int $organizationId): ?Subscription
     {
         return Subscription::query()
-            ->with('plan.limits')
+            ->with(['plan.limits', 'items'])
             ->where('organization_id', $organizationId)
             ->where('status', 'scheduled')
             ->where('starts_at', '>', now())
