@@ -21,6 +21,12 @@ type PageProps = {
 
 defineProps<{
     plans?: unknown[]
+    articles?: {
+        title: string
+        slug: string
+        excerpt: string
+        published_at: string | null
+    }[]
 }>()
 
 const page = usePage<PageProps>()
@@ -71,12 +77,6 @@ const audiences = [
     ['Фрилансерам', 'Контролировать сайты клиентов и быстрее реагировать на сбои.'],
     ['Веб-студиям', 'Держать все клиентские сайты в одном рабочем списке.'],
     ['Небольшим IT-командам', 'Мониторить важные ресурсы без тяжелой инфраструктуры.'],
-]
-
-const news = [
-    ['Новые тарифы', 'Free, Pro и Plus с понятными лимитами сайтов и историей проверок.'],
-    ['Платные проверки', 'Sitemap.xml, TCP-порты и API endpoints можно подключать отдельно.'],
-    ['Редизайн кабинета', 'Следующий этап — компактный dashboard для управления сайтами и мониторингами.'],
 ]
 
 const plans = [
@@ -382,19 +382,27 @@ function submitFeedback(): void {
             </div>
         </section>
 
-        <section id="news" class="py-14 sm:py-16">
+        <section id="articles" class="py-14 sm:py-16">
             <div class="mx-auto max-w-6xl px-5 sm:px-8">
-                <div class="mx-auto max-w-2xl text-center">
-                    <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Новости продукта</h2>
-                    <p class="mt-3 text-sm leading-6 text-[#738479]">Короткие обновления о тарифах, проверках и развитии Montry.</p>
+                <div class="mx-auto flex max-w-3xl flex-col items-center text-center">
+                    <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Статьи</h2>
+                    <p class="mt-3 text-sm leading-6 text-[#738479]">Практичные материалы о мониторинге сайтов, SSL, доменов и работе с инцидентами.</p>
+                    <Link href="/articles" class="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-[#24A869] px-5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(36,168,105,0.18)] transition hover:bg-[#1D9059]">
+                        Посмотреть статьи
+                    </Link>
                 </div>
 
-                <div class="mt-9 grid gap-4 md:grid-cols-3">
-                    <article v-for="[title, text] in news" :key="title" class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
-                        <p class="text-xs font-semibold text-[#24A869]">Обновление</p>
-                        <h3 class="mt-3 text-lg font-extrabold text-[#26332D]">{{ title }}</h3>
-                        <p class="mt-2 text-sm leading-6 text-[#738479]">{{ text }}</p>
-                    </article>
+                <div v-if="articles?.length" class="mt-9 grid gap-4 md:grid-cols-3">
+                    <Link
+                        v-for="article in articles"
+                        :key="article.slug"
+                        :href="`/articles/${article.slug}`"
+                        class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)] transition hover:-translate-y-0.5 hover:border-[#BEE7CE]"
+                    >
+                        <p class="text-xs font-semibold text-[#24A869]">Статья</p>
+                        <h3 class="mt-3 text-lg font-extrabold text-[#26332D]">{{ article.title }}</h3>
+                        <p class="mt-2 text-sm leading-6 text-[#738479]">{{ article.excerpt }}</p>
+                    </Link>
                 </div>
             </div>
         </section>

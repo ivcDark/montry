@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Admin\Infrastructure\Providers\AdminModuleServiceProvider;
+use App\Modules\Articles\Infrastructure\Providers\ArticlesModuleServiceProvider;
 use App\Modules\Auth\Providers\AuthModuleServiceProvider;
 use App\Modules\Billing\Infrastructure\Providers\BillingModuleServiceProvider;
 use App\Modules\CheckTypes\Infrastructure\Providers\CheckTypesModuleServiceProvider;
@@ -32,6 +33,7 @@ return [
     IncidentsModuleServiceProvider::class,
     NotificationsModuleServiceProvider::class,
     FeedbackModuleServiceProvider::class,
+    ArticlesModuleServiceProvider::class,
     ObservabilityServiceProvider::class,
     ReportsModuleServiceProvider::class,
     WorkerGatewayModuleServiceProvider::class,

@@ -35,6 +35,20 @@ final readonly class CheckoutService
                 ->lockForUpdate()
                 ->findOrFail($organizationId);
 
+            $activeSubscription = $this->activeSubscription($organizationId);
+            $isAddonDeltaCheckout = $activeSubscription?->plan_id === $plan->id;
+            $currentAddonQuantities = $isAddonDeltaCheckout
+                ? $activeSubscription->items
+                    ->mapWithKeys(fn ($item): array => [$item->code => (int) $item->quantity])
+                    ->all()
+                : [];
+
+            $addonsTotalCents = $this->addons->totalCents($addonQuantities);
+            $currentAddonsTotalCents = $this->addons->totalCents($currentAddonQuantities);
+            $amountCents = $isAddonDeltaCheckout
+                ? max(0, $addonsTotalCents - $currentAddonsTotalCents)
+                : $plan->price_cents + $addonsTotalCents;
+
             $existingPayment = Payment::query()
                 ->with('subscription.items')
                 ->where('organization_id', $organizationId)
@@ -46,7 +60,8 @@ final readonly class CheckoutService
                 })
                 ->latest('id')
                 ->get()
-                ->first(fn (Payment $payment): bool => ($payment->payload['addon_quantities'] ?? []) === $addonQuantities);
+                ->first(fn (Payment $payment): bool => ($payment->payload['addon_quantities'] ?? []) === $addonQuantities
+                    && (int) $payment->amount_cents === $amountCents);
 
             if ($existingPayment !== null) {
                 return $existingPayment;
@@ -69,22 +84,24 @@ final readonly class CheckoutService
                 ]);
             }
 
-            $addonsTotalCents = $this->addons->totalCents($addonQuantities);
-
             $payment = Payment::query()->create([
                 'organization_id' => $organizationId,
                 'subscription_id' => $subscription->id,
                 'provider' => 'robokassa',
                 'status' => 'pending',
-                'amount_cents' => $plan->price_cents + $addonsTotalCents,
+                'amount_cents' => $amountCents,
                 'currency' => $plan->currency,
                 'payload' => [
                     'plan_code' => $plan->code,
                     'period' => 'month',
                     'provider' => 'robokassa',
                     'mode' => config('services.robokassa.mode', 'test'),
-                    'base_plan_amount_cents' => $plan->price_cents,
+                    'billing_mode' => $isAddonDeltaCheckout ? 'addon_delta' : 'plan_checkout',
+                    'base_plan_amount_cents' => $isAddonDeltaCheckout ? 0 : $plan->price_cents,
                     'addons_amount_cents' => $addonsTotalCents,
+                    'current_addons_amount_cents' => $currentAddonsTotalCents,
+                    'due_now_cents' => $amountCents,
+                    'next_month_amount_cents' => $plan->price_cents + $addonsTotalCents,
                     'addon_quantities' => $addonQuantities,
                 ],
             ]);
@@ -147,6 +164,11 @@ final readonly class CheckoutService
 
             $subscription = $payment->subscription;
             $periodStart = now();
+            $currentActiveSubscription = $this->activeSubscription($payment->organization_id);
+            $isAddonDeltaCheckout = ($payment->payload['billing_mode'] ?? null) === 'addon_delta';
+            $periodEnd = $isAddonDeltaCheckout
+                ? ($currentActiveSubscription?->ends_at?->copy() ?? $periodStart->copy()->addMonth())
+                : $periodStart->copy()->addMonth();
 
             Subscription::query()
                 ->where('organization_id', $payment->organization_id)
@@ -165,7 +187,7 @@ final readonly class CheckoutService
             $subscription->forceFill([
                 'status' => 'active',
                 'starts_at' => $periodStart,
-                'ends_at' => $periodStart->copy()->addMonth(),
+                'ends_at' => $periodEnd,
             ])->save();
 
             $plan = $subscription->plan;
@@ -296,5 +318,19 @@ final readonly class CheckoutService
         $payload = is_array($payment->payload) ? $payment->payload : [];
 
         return array_replace_recursive($payload, $providerPayload);
+    }
+
+    private function activeSubscription(int $organizationId): ?Subscription
+    {
+        return Subscription::query()
+            ->with(['plan', 'items'])
+            ->where('organization_id', $organizationId)
+            ->where('status', 'active')
+            ->where('starts_at', '<=', now())
+            ->where(function ($query): void {
+                $query->whereNull('ends_at')->orWhere('ends_at', '>', now());
+            })
+            ->latest('starts_at')
+            ->first();
     }
 }

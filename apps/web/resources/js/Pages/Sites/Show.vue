@@ -8,6 +8,7 @@ import {
     Check,
     ChevronDown,
     Clock3,
+    Crown,
     FileText,
     Globe2,
     History,
@@ -38,6 +39,21 @@ type PageProps = {
 type Project = {
     id: string
     name: string
+}
+
+type AddonCatalogItem = {
+    code: string
+    name: string
+    unit_price_cents: number
+    unit_label?: string
+    kind?: string
+}
+
+type CurrentPlan = {
+    code: string
+    name: string
+    price_cents?: number | null
+    limits?: Record<string, any>
 }
 
 type MonitorSettings = {
@@ -76,6 +92,8 @@ type Monitor = {
     status: string
     is_enabled: boolean
     is_available: boolean
+    is_paid_addon: boolean
+    is_configured: boolean
     interval_seconds: number | null
     timeout_ms: number | null
     settings: MonitorSettings | null
@@ -166,6 +184,9 @@ type MonitorDraft = {
 const props = defineProps<{
     organization: Organization
     site: Site
+    currentPlan: CurrentPlan | null
+    addonCatalog: AddonCatalogItem[]
+    currentAddons: Record<string, { quantity: number, unit_price_cents: number, currency: string }>
 }>()
 
 const page = usePage<PageProps>()
@@ -183,12 +204,48 @@ const checkingTimeouts = ref<Record<string, ReturnType<typeof setTimeout>>>({})
 const checkingSite = ref(false)
 const checkingSiteStartedFrom = ref<string | null>(null)
 const checkingSiteTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
+const selectedPaidAddonTypes = ref<string[]>([])
+const paymentProcessing = ref(false)
 const monitorDrafts = ref<Record<string, MonitorDraft>>(
     Object.fromEntries(props.site.monitors.map((monitor) => [monitor.id, draftFromMonitor(monitor)])),
 )
+const intervalPresets = [5, 10, 15, 30, 60, 360, 720, 1440]
+const availableIntervalPresets = computed(() => intervalPresets)
 
-const enabledCount = computed(() => props.site.monitors.filter((monitor) => monitor.is_enabled).length)
+const activeMonitors = computed(() => props.site.monitors.filter((monitor) => monitor.is_configured && monitor.is_available && monitor.is_enabled))
+const freeActiveMonitors = computed(() => props.site.monitors.filter((monitor) => !monitor.is_paid_addon && monitor.is_enabled))
+const freePausedMonitors = computed(() => props.site.monitors.filter((monitor) => !monitor.is_paid_addon && !monitor.is_enabled))
+const paidActiveMonitors = computed(() => props.site.monitors.filter((monitor) => monitor.is_paid_addon && monitor.is_enabled))
+const paidPausedMonitors = computed(() => props.site.monitors.filter((monitor) => monitor.is_paid_addon && !monitor.is_enabled))
+const enabledCount = computed(() => freeActiveMonitors.value.length)
+const inactiveCount = computed(() => freePausedMonitors.value.length)
+const paidActiveCount = computed(() => paidActiveMonitors.value.length)
+const paidPausedCount = computed(() => paidPausedMonitors.value.length)
 const availableCount = computed(() => props.site.monitors.filter((monitor) => monitor.is_available).length)
+const planCode = computed(() => props.currentPlan?.code ?? 'free')
+const displayPlan = computed(() => ({
+    name: props.currentPlan?.name ?? 'Free',
+    priceRub: props.currentPlan?.price_cents ? Math.round(props.currentPlan.price_cents / 100) : 0,
+}))
+const selectedPaidMonitors = computed(() => props.site.monitors.filter((monitor) => selectedPaidAddonTypes.value.includes(monitor.type)))
+const addonTotalRub = computed(() => selectedPaidMonitors.value.reduce((sum, monitor) => sum + addonPriceRub(monitor.type), 0))
+const currentAddonMonthlyRub = computed(() => Object.values(props.currentAddons).reduce((sum, addon) => {
+    return sum + Math.round((addon.unit_price_cents * addon.quantity) / 100)
+}, 0))
+const currentMonthlyRub = computed(() => displayPlan.value.priceRub + currentAddonMonthlyRub.value)
+const nextMonthlyRub = computed(() => currentMonthlyRub.value + addonTotalRub.value)
+const checkoutAmountRub = computed(() => addonTotalRub.value)
+const selectedAddonQuantities = computed<Record<string, number>>(() => {
+    const quantities = Object.fromEntries(
+        Object.entries(props.currentAddons).map(([code, addon]) => [code, addon.quantity]),
+    ) as Record<string, number>
+
+    for (const type of selectedPaidAddonTypes.value) {
+        quantities[type] = (quantities[type] ?? 0) + 1
+    }
+
+    return quantities
+})
 const activeIncidentCount = computed(() => props.site.incidents.filter((incident) => incident.status === 'open').length)
 const latestCheckAt = computed(() => {
     const dates = props.site.monitors
@@ -198,14 +255,14 @@ const latestCheckAt = computed(() => {
 
     return dates.at(-1) ?? null
 })
-const successfulMonitorsCount = computed(() => props.site.monitors.filter((monitor) => monitorStatus(monitor) === 'ok').length)
+const successfulMonitorsCount = computed(() => activeMonitors.value.filter((monitor) => monitorStatus(monitor) === 'ok').length)
 const successRate = computed(() => {
-    if (!props.site.monitors.length) return 0
+    if (!activeMonitors.value.length) return 0
 
-    return Math.round((successfulMonitorsCount.value / props.site.monitors.length) * 100)
+    return Math.round((successfulMonitorsCount.value / activeMonitors.value.length) * 100)
 })
 const averageResponse = computed(() => {
-    const values = props.site.monitors
+    const values = activeMonitors.value
         .map((monitor) => monitor.latest_result?.response_time_ms)
         .filter((value): value is number => typeof value === 'number')
 
@@ -214,7 +271,7 @@ const averageResponse = computed(() => {
     return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
 })
 const sslDaysLeft = computed(() => {
-    const values = props.site.monitors
+    const values = activeMonitors.value
         .map((monitor) => monitor.latest_result?.normalized_result.days_until_expiration)
         .filter((value): value is number => typeof value === 'number')
 
@@ -357,6 +414,28 @@ function statusIcon(status: string): typeof Check {
     return Activity
 }
 
+function monitorActivityLabel(monitor: Monitor): string {
+    return monitor.is_enabled ? 'Активна' : 'На паузе'
+}
+
+function monitorActivityClass(monitor: Monitor): string {
+    if (!monitor.is_enabled) return 'border-[#D7E4DC] bg-[#F1F7F3] text-[#6E8075]'
+
+    return 'border-[#BFEBD0] bg-[#E9F8EF] text-[#159653]'
+}
+
+function monitorAccessLabel(monitor: Monitor): string {
+    if (monitor.is_paid_addon) return 'Платная'
+
+    return 'В тарифе'
+}
+
+function monitorAccessClass(monitor: Monitor): string {
+    if (monitor.is_paid_addon) return 'border-[#E8D7A3] bg-[#FFF8E4] text-[#9A6A11]'
+
+    return 'border-[#D7E4DC] bg-white text-[#52645A]'
+}
+
 function monitorStatus(monitor: Monitor): string {
     if (!monitor.is_available) return 'paused'
     if (!monitor.is_enabled || monitor.status === 'paused') return 'paused'
@@ -402,6 +481,62 @@ function typeIcon(type: string): typeof Globe2 {
     return Activity
 }
 
+function addonPriceRub(type: string): number {
+    const item = props.addonCatalog.find((addon) => addon.code === type)
+
+    if (item) {
+        return Math.round(item.unit_price_cents / 100)
+    }
+
+    const fallbackPrices: Record<string, number> = {
+        sitemap_xml: 20,
+        api_endpoint: 30,
+        tcp_port: 20,
+    }
+
+    return fallbackPrices[type] ?? 0
+}
+
+function addonUnitLabel(type: string): string {
+    if (type === 'api_endpoint') return 'endpoint'
+    if (type === 'tcp_port') return 'порт'
+
+    return 'мес'
+}
+
+function money(value: number): string {
+    return `${new Intl.NumberFormat('ru-RU').format(value)} ₽/мес`
+}
+
+function togglePaidAddonSelection(monitor: Monitor): void {
+    if (!monitor.is_paid_addon || monitor.is_available) return
+
+    selectedPaidAddonTypes.value = selectedPaidAddonTypes.value.includes(monitor.type)
+        ? selectedPaidAddonTypes.value.filter((type) => type !== monitor.type)
+        : [...selectedPaidAddonTypes.value, monitor.type]
+}
+
+function removePaidAddonSelection(type: string): void {
+    selectedPaidAddonTypes.value = selectedPaidAddonTypes.value.filter((selectedType) => selectedType !== type)
+}
+
+function checkoutPaidAddons(): void {
+    if (!selectedPaidAddonTypes.value.length || paymentProcessing.value) return
+
+    router.post('/billing/checkout', {
+        plan_code: planCode.value,
+        addons: selectedAddonQuantities.value,
+    }, {
+        preserveScroll: true,
+        onStart: () => {
+            paymentProcessing.value = true
+        },
+        onFinish: () => {
+            paymentProcessing.value = false
+        },
+    })
+}
+
 function typeClass(type: string): string {
     if (type === 'http') return 'bg-[#E9F8EF] text-[#159653]'
     if (type === 'ssl') return 'bg-[#E9F8EF] text-[#159653]'
@@ -411,7 +546,9 @@ function typeClass(type: string): string {
 }
 
 function monitorCardClass(monitor: Monitor): string {
-    if (!monitor.is_available) return 'border-[#D7DDDA] bg-[#F6F7F7]'
+    if (monitor.is_paid_addon && !monitor.is_enabled) return 'border-[#E8D7A3] bg-[#FFFCF0]'
+    if (monitor.is_paid_addon) return 'border-[#E8D7A3] bg-white'
+    if (!monitor.is_enabled) return 'border-[#D7E4DC] bg-[#F5FAF7]'
 
     const status = monitorStatus(monitor)
 
@@ -420,6 +557,36 @@ function monitorCardClass(monitor: Monitor): string {
     if (status === 'checking') return 'border-[#BFEBD0] bg-white'
 
     return 'border-[#DDEBE3] bg-white'
+}
+
+function settingsPanelClass(monitor: Monitor): string {
+    return monitor.is_paid_addon
+        ? 'mt-5 grid gap-4 border-t border-[#EADFD0] pt-4 md:grid-cols-2'
+        : 'mt-5 grid gap-4 border-t border-[#DDEBE3] pt-4 md:grid-cols-2'
+}
+
+function settingsInputClass(monitor: Monitor): string {
+    return monitor.is_paid_addon
+        ? 'h-11 w-full rounded-2xl border border-[#F6C66E]/70 bg-white px-4 text-sm outline-none focus:border-[#E08600] focus:ring-4 focus:ring-[#E08600]/15'
+        : 'h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15'
+}
+
+function settingsTextareaClass(monitor: Monitor): string {
+    return monitor.is_paid_addon
+        ? 'w-full rounded-2xl border border-[#F6C66E]/70 bg-white px-4 py-3 text-sm outline-none focus:border-[#E08600] focus:ring-4 focus:ring-[#E08600]/15'
+        : 'w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 py-3 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15'
+}
+
+function settingsAccentClass(monitor: Monitor): string {
+    return monitor.is_paid_addon ? 'text-[#E08600]' : 'text-[#1E9B5D]'
+}
+
+function intervalPresetClass(monitor: Monitor, minutes: number): string {
+    if (intervalMinutes(monitorDrafts.value[monitor.id].interval_seconds) === minutes) {
+        return monitor.is_paid_addon ? 'bg-[#E08600] text-white' : 'bg-[#2FA568] text-white'
+    }
+
+    return 'bg-white text-[#52645A] ring-1 ring-[#DDEBE3] hover:text-[#173B2A]'
 }
 
 function formatDate(value: string | null): string {
@@ -456,6 +623,24 @@ function formatInterval(seconds: number | null): string {
     return `${Math.round(seconds / 86400)} день`
 }
 
+function intervalText(seconds: number): string {
+    const minutes = intervalMinutes(seconds)
+
+    if (minutes === 60) return 'Каждый час'
+    if (minutes === 1440) return 'Раз в день'
+    if (minutes > 60 && minutes % 60 === 0) return `Каждые ${minutes / 60} ч`
+
+    return `Каждые ${minutes} мин`
+}
+
+function intervalPresetLabel(minutes: number): string {
+    if (minutes === 60) return '1 час'
+    if (minutes === 1440) return '1 день'
+    if (minutes < 60) return `${minutes} мин`
+
+    return `${minutes / 60} ч`
+}
+
 function intervalMinutes(seconds: number): number {
     return Math.round(seconds / 60)
 }
@@ -486,7 +671,10 @@ function resultText(monitor: Monitor): string {
     const result = monitor.latest_result
 
     if (isChecking(monitor)) return 'Идет проверка'
+    if (!monitor.is_configured && monitor.is_paid_addon) return 'Платная проверка еще не добавлена'
+    if (!monitor.is_configured) return 'Проверка еще не настроена'
     if (!monitor.is_available) return 'Недоступно на текущем тарифе'
+    if (!monitor.is_enabled) return 'Проверка выключена и не запускается по расписанию'
     if (!result) return 'Нет результата'
     if (result.error_message) return result.error_message
 
@@ -723,6 +911,17 @@ function toggleSettings(monitor: Monitor): void {
 function saveMonitor(monitor: Monitor): void {
     if (!monitor.is_available) return
 
+    if (!monitor.is_configured) {
+        router.post(`/sites/${props.site.id}/monitors`, payloadForMonitor(monitor), {
+            preserveScroll: true,
+            onSuccess: () => {
+                expandedMonitorId.value = null
+            },
+        })
+
+        return
+    }
+
     router.put(`/sites/${props.site.id}/monitors/${monitor.id}`, payloadForMonitor(monitor), {
         preserveScroll: true,
     })
@@ -730,6 +929,19 @@ function saveMonitor(monitor: Monitor): void {
 
 function toggleMonitor(monitor: Monitor): void {
     if (!monitor.is_available) return
+
+    if (!monitor.is_configured) {
+        monitorDrafts.value[monitor.id] = {
+            ...monitorDrafts.value[monitor.id],
+            is_enabled: true,
+        }
+
+        router.post(`/sites/${props.site.id}/monitors`, payloadForMonitor(monitor), {
+            preserveScroll: true,
+        })
+
+        return
+    }
 
     router.patch(`/sites/${props.site.id}/monitors/${monitor.id}/toggle`, {}, {
         preserveScroll: true,
@@ -901,6 +1113,14 @@ function sparkClass(status: string): string {
                                 <Plus class="h-4 w-4" :stroke-width="2" />
                                 Добавить проверку
                             </Link>
+                            <button
+                                type="button"
+                                class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#FECACA] bg-white px-4 text-sm font-medium text-[#E11D25] transition hover:bg-[#FFF4F4]"
+                                @click="isDeleteModalOpen = true"
+                            >
+                                <Trash2 class="h-4 w-4" :stroke-width="2" />
+                                Удалить сайт
+                            </button>
                         </div>
                     </div>
 
@@ -934,7 +1154,7 @@ function sparkClass(status: string): string {
                     <article class="rounded-2xl border border-[#DDEBE3] bg-white p-4 shadow-[0_8px_22px_rgba(31,68,49,0.04)]">
                         <p class="text-2xl font-semibold" :class="statusTextClass(site.status)">{{ successRate }}%</p>
                         <p class="mt-2 text-sm font-medium text-[#26332D]">Успешность</p>
-                        <p class="mt-1 text-xs text-[#6A7A70]">по мониторингам</p>
+                        <p class="mt-1 text-xs text-[#6A7A70]">по активным проверкам</p>
                         <div class="mt-3 flex h-7 items-end gap-1">
                             <span v-for="(height, index) in sparkBars('rate')" :key="index" class="w-1.5 rounded-t-full" :class="sparkClass(site.status)" :style="{ height: `${height}px` }"></span>
                         </div>
@@ -948,9 +1168,9 @@ function sparkClass(status: string): string {
                         </div>
                     </article>
                     <article class="rounded-2xl border border-[#DDEBE3] bg-white p-4 shadow-[0_8px_22px_rgba(31,68,49,0.04)]">
-                        <p class="text-2xl font-semibold" :class="successfulMonitorsCount === site.monitors.length ? 'text-[#159653]' : 'text-[#E11D25]'">{{ successfulMonitorsCount }} из {{ site.monitors.length }}</p>
+                        <p class="text-2xl font-semibold" :class="successfulMonitorsCount === activeMonitors.length ? 'text-[#159653]' : 'text-[#E11D25]'">{{ successfulMonitorsCount }} из {{ activeMonitors.length }}</p>
                         <p class="mt-2 text-sm font-medium text-[#26332D]">Проверки</p>
-                        <p class="mt-1 text-xs text-[#6A7A70]">успешно</p>
+                        <p class="mt-1 text-xs text-[#6A7A70]">успешно среди активных</p>
                         <div class="mt-3 flex h-7 items-end gap-1">
                             <span v-for="(height, index) in sparkBars('checks')" :key="index" class="w-1.5 rounded-t-full" :class="sparkClass(site.status)" :style="{ height: `${height}px` }"></span>
                         </div>
@@ -974,9 +1194,28 @@ function sparkClass(status: string): string {
                 </section>
 
                 <section>
-                    <div class="mb-4">
-                        <h2 class="text-xl font-semibold text-[#17231C]">Проверки</h2>
-                        <p class="mt-1 text-sm text-[#6A7A70]">Базовые и дополнительные мониторинги этого сайта.</p>
+                    <div class="mb-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                            <h2 class="text-xl font-semibold text-[#17231C]">Проверки</h2>
+                            <p class="mt-1 text-sm text-[#6A7A70]">Все проверки сайта: базовые, платные, активные и на паузе.</p>
+                        </div>
+
+                        <div class="flex flex-wrap gap-2 text-xs font-medium">
+                            <span class="inline-flex items-center rounded-full border border-[#BFEBD0] bg-[#E9F8EF] px-3 py-1.5 text-[#159653]">
+                                Активные: {{ enabledCount }}
+                            </span>
+                            <span class="inline-flex items-center rounded-full border border-[#D7E4DC] bg-[#F1F7F3] px-3 py-1.5 text-[#6E8075]">
+                                На паузе: {{ inactiveCount }}
+                            </span>
+                            <span class="inline-flex items-center gap-1.5 rounded-full border border-[#E8D7A3] bg-[#FFF8E4] px-3 py-1.5 text-[#9A6A11]">
+                                <Crown class="h-3.5 w-3.5" :stroke-width="2" />
+                                Платные активные: {{ paidActiveCount }}
+                            </span>
+                            <span class="inline-flex items-center gap-1.5 rounded-full border border-[#E8D7A3] bg-[#FFFCF0] px-3 py-1.5 text-[#9A6A11]">
+                                <Crown class="h-3.5 w-3.5" :stroke-width="2" />
+                                Платные на паузе: {{ paidPausedCount }}
+                            </span>
+                        </div>
                     </div>
 
                     <div class="grid gap-4 xl:grid-cols-2">
@@ -986,20 +1225,33 @@ function sparkClass(status: string): string {
                             class="relative overflow-hidden rounded-3xl border p-4 shadow-[0_10px_28px_rgba(31,68,49,0.05)]"
                             :class="monitorCardClass(monitor)"
                         >
-                            <div :class="!monitor.is_available ? 'pointer-events-none select-none opacity-45 grayscale' : ''">
+                            <div>
                                 <div class="flex items-start justify-between gap-3">
                                     <div class="flex min-w-0 gap-3">
-                                        <span class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border" :class="statusIconBoxClass(monitorStatus(monitor))">
+                                        <span
+                                            class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border"
+                                            :class="monitor.is_paid_addon ? 'border-[#E8D7A3] bg-[#FFF8E4] text-[#9A6A11]' : statusIconBoxClass(monitorStatus(monitor))"
+                                        >
                                             <LoaderCircle v-if="isChecking(monitor)" class="h-5 w-5 animate-spin" :stroke-width="2.2" />
+                                            <Crown v-else-if="monitor.is_paid_addon" class="h-5 w-5" :stroke-width="2.2" />
                                             <component v-else :is="typeIcon(monitor.type)" class="h-5 w-5" :stroke-width="2.2" />
                                         </span>
                                         <div class="min-w-0">
                                             <h3 class="truncate text-base font-semibold text-[#17231C]">{{ typeLabel(monitor.type) }}</h3>
-                                            <span class="mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-medium" :class="statusClass(monitorStatus(monitor))">
-                                                <LoaderCircle v-if="isChecking(monitor)" class="mr-1.5 h-3.5 w-3.5 animate-spin" :stroke-width="2.2" />
-                                                <component v-else :is="statusIcon(monitorStatus(monitor))" class="mr-1.5 h-3.5 w-3.5" :stroke-width="2.2" />
-                                                {{ statusLabel(monitorStatus(monitor)) }}
-                                            </span>
+                                            <div class="mt-2 flex flex-wrap gap-2">
+                                                <span class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium" :class="monitorAccessClass(monitor)">
+                                                    <Crown v-if="monitor.is_paid_addon" class="h-3.5 w-3.5" :stroke-width="2" />
+                                                    {{ monitorAccessLabel(monitor) }}
+                                                </span>
+                                                <span class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium" :class="monitorActivityClass(monitor)">
+                                                    {{ monitorActivityLabel(monitor) }}
+                                                </span>
+                                                <span v-if="monitor.is_configured && monitor.is_available" class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium" :class="statusClass(monitorStatus(monitor))">
+                                                    <LoaderCircle v-if="isChecking(monitor)" class="mr-1.5 h-3.5 w-3.5 animate-spin" :stroke-width="2.2" />
+                                                    <component v-else :is="statusIcon(monitorStatus(monitor))" class="mr-1.5 h-3.5 w-3.5" :stroke-width="2.2" />
+                                                    {{ statusLabel(monitorStatus(monitor)) }}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -1020,11 +1272,23 @@ function sparkClass(status: string): string {
                                     <p v-if="monitor.next_check_at">Следующая: {{ formatDate(monitor.next_check_at) }}</p>
                                 </div>
 
-                                <div class="mt-4 flex flex-wrap gap-2">
+                                <div v-if="monitor.is_paid_addon && !monitor.is_available" class="mt-4">
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition"
+                                        :class="selectedPaidAddonTypes.includes(monitor.type) ? 'bg-[#E08600] text-white hover:bg-[#B7791F]' : 'border border-[#F6C66E] bg-white text-[#9A6A11] hover:bg-[#FFF8E4]'"
+                                        @click="togglePaidAddonSelection(monitor)"
+                                    >
+                                        <Crown class="h-4 w-4" :stroke-width="2" />
+                                        {{ selectedPaidAddonTypes.includes(monitor.type) ? 'Добавлено к тарифу' : `Добавить к тарифу +${addonPriceRub(monitor.type)} ₽/${addonUnitLabel(monitor.type)}` }}
+                                    </button>
+                                </div>
+
+                                <div v-else class="mt-4 flex flex-wrap gap-2">
                                     <button
                                         type="button"
                                         class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#2FA568] px-4 text-sm font-medium text-white transition hover:bg-[#278C58] disabled:cursor-not-allowed disabled:opacity-60"
-                                        :disabled="!monitor.is_enabled || isChecking(monitor)"
+                                        :disabled="!monitor.is_configured || !monitor.is_available || !monitor.is_enabled || isChecking(monitor)"
                                         @click="checkNow(monitor)"
                                     >
                                         <LoaderCircle v-if="isChecking(monitor)" class="h-4 w-4 animate-spin" :stroke-width="2" />
@@ -1052,159 +1316,161 @@ function sparkClass(status: string): string {
 
                                 <form
                                     v-if="expandedMonitorId === monitor.id"
-                                    class="mt-5 rounded-2xl border border-[#DDEBE3] bg-[#FBFDFC] p-4"
+                                    class="mt-5"
                                     @submit.prevent="saveMonitor(monitor)"
                                 >
-                                    <div class="grid gap-4 md:grid-cols-2">
-                                        <label class="block">
-                                            <span class="mb-2 block text-xs font-medium text-[#52645A]">Название</span>
-                                            <input v-model="monitorDrafts[monitor.id].name" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                        </label>
-                                        <label class="block">
-                                            <span class="mb-2 block text-xs font-medium text-[#52645A]">Таймаут, мс</span>
-                                            <input v-model.number="monitorDrafts[monitor.id].timeout_ms" type="number" min="1000" max="60000" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                        </label>
-                                        <label class="block md:col-span-2">
-                                            <span class="mb-2 block text-xs font-medium text-[#52645A]">Интервал: {{ formatInterval(monitorDrafts[monitor.id].interval_seconds) }}</span>
-                                            <input
-                                                :value="intervalMinutes(monitorDrafts[monitor.id].interval_seconds)"
-                                                type="range"
-                                                min="5"
-                                                max="1440"
-                                                step="1"
-                                                class="w-full accent-[#2FA568]"
-                                                @input="setDraftIntervalMinutes(monitorDrafts[monitor.id], Number(($event.target as HTMLInputElement).value))"
-                                            >
-                                        </label>
+                                    <div :class="settingsPanelClass(monitor)">
+                                        <template v-if="monitor.type === 'http'">
+                                            <div>
+                                                <label :for="`${monitor.id}-name`" class="mb-2 block text-sm font-semibold text-[#26332D]">Название</label>
+                                                <input :id="`${monitor.id}-name`" v-model="monitorDrafts[monitor.id].name" type="text" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div>
+                                                <label :for="`${monitor.id}-method`" class="mb-2 block text-sm font-semibold text-[#26332D]">Метод</label>
+                                                <select :id="`${monitor.id}-method`" v-model="monitorDrafts[monitor.id].method" :class="settingsInputClass(monitor)">
+                                                    <option value="GET">GET</option>
+                                                    <option value="HEAD">HEAD</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label :for="`${monitor.id}-status`" class="mb-2 block text-sm font-semibold text-[#26332D]">Ожидаемые коды</label>
+                                                <input :id="`${monitor.id}-status`" v-model="monitorDrafts[monitor.id].status_codes" type="text" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div>
+                                                <label :for="`${monitor.id}-time`" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                                <input :id="`${monitor.id}-time`" v-model.number="monitorDrafts[monitor.id].max_response_time_ms" min="1" type="number" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div class="md:col-span-2">
+                                                <div class="mb-3 flex items-center justify-between gap-3">
+                                                    <span class="text-sm font-semibold text-[#26332D]">Частота проверки</span>
+                                                    <span class="text-sm font-bold" :class="settingsAccentClass(monitor)">{{ intervalText(monitorDrafts[monitor.id].interval_seconds) }}</span>
+                                                </div>
+                                                <div class="flex flex-wrap gap-2">
+                                                    <button
+                                                        v-for="minutes in availableIntervalPresets"
+                                                        :key="`${monitor.id}-${minutes}`"
+                                                        type="button"
+                                                        class="rounded-full px-3 py-2 text-xs font-bold transition"
+                                                        :class="intervalPresetClass(monitor, minutes)"
+                                                        @click="setDraftIntervalMinutes(monitorDrafts[monitor.id], minutes)"
+                                                    >
+                                                        {{ intervalPresetLabel(minutes) }}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </template>
 
-                                        <template v-if="['http', 'api_endpoint', 'robots_txt', 'sitemap_xml'].includes(monitor.type)">
-                                            <label v-if="monitor.type === 'http' || monitor.type === 'api_endpoint'" class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Метод</span>
-                                                <select v-model="monitorDrafts[monitor.id].method" class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
+                                        <template v-else-if="monitor.type === 'ssl'">
+                                            <div>
+                                                <label :for="`${monitor.id}-port`" class="mb-2 block text-sm font-semibold text-[#26332D]">Порт</label>
+                                                <input :id="`${monitor.id}-port`" v-model.number="monitorDrafts[monitor.id].port" min="1" max="65535" type="number" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div>
+                                                <label :for="`${monitor.id}-days`" class="mb-2 block text-sm font-semibold text-[#26332D]">Дни предупреждений</label>
+                                                <input :id="`${monitor.id}-days`" v-model="monitorDrafts[monitor.id].warning_days" type="text" :class="settingsInputClass(monitor)">
+                                            </div>
+                                        </template>
+
+                                        <template v-else-if="monitor.type === 'domain'">
+                                            <div class="md:col-span-2">
+                                                <label :for="`${monitor.id}-days`" class="mb-2 block text-sm font-semibold text-[#26332D]">Дни предупреждений</label>
+                                                <input :id="`${monitor.id}-days`" v-model="monitorDrafts[monitor.id].warning_days" type="text" :class="settingsInputClass(monitor)">
+                                            </div>
+                                        </template>
+
+                                        <template v-else-if="monitor.type === 'dns'">
+                                            <div>
+                                                <label :for="`${monitor.id}-types`" class="mb-2 block text-sm font-semibold text-[#26332D]">Типы записей</label>
+                                                <input :id="`${monitor.id}-types`" v-model="monitorDrafts[monitor.id].record_types" type="text" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div>
+                                                <label :for="`${monitor.id}-min`" class="mb-2 block text-sm font-semibold text-[#26332D]">Минимум записей</label>
+                                                <input :id="`${monitor.id}-min`" v-model.number="monitorDrafts[monitor.id].min_records" min="0" type="number" :class="settingsInputClass(monitor)">
+                                            </div>
+                                        </template>
+
+                                        <template v-else-if="monitor.type === 'robots_txt'">
+                                            <div>
+                                                <label :for="`${monitor.id}-status`" class="mb-2 block text-sm font-semibold text-[#26332D]">Ожидаемые коды</label>
+                                                <input :id="`${monitor.id}-status`" v-model="monitorDrafts[monitor.id].status_codes" type="text" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div>
+                                                <label :for="`${monitor.id}-time`" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                                <input :id="`${monitor.id}-time`" v-model.number="monitorDrafts[monitor.id].max_response_time_ms" min="1" type="number" :class="settingsInputClass(monitor)">
+                                            </div>
+                                        </template>
+
+                                        <template v-else-if="monitor.type === 'sitemap_xml'">
+                                            <div>
+                                                <label :for="`${monitor.id}-status`" class="mb-2 block text-sm font-semibold text-[#26332D]">Ожидаемые коды</label>
+                                                <input :id="`${monitor.id}-status`" v-model="monitorDrafts[monitor.id].status_codes" type="text" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div>
+                                                <label :for="`${monitor.id}-time`" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                                <input :id="`${monitor.id}-time`" v-model.number="monitorDrafts[monitor.id].max_response_time_ms" min="1" type="number" :class="settingsInputClass(monitor)">
+                                            </div>
+                                        </template>
+
+                                        <template v-else-if="monitor.type === 'api_endpoint'">
+                                            <div>
+                                                <label :for="`${monitor.id}-method`" class="mb-2 block text-sm font-semibold text-[#26332D]">Метод</label>
+                                                <select :id="`${monitor.id}-method`" v-model="monitorDrafts[monitor.id].method" :class="settingsInputClass(monitor)">
                                                     <option value="GET">GET</option>
                                                     <option value="HEAD">HEAD</option>
                                                     <option value="POST">POST</option>
-                                                    <option v-if="monitor.type === 'api_endpoint'" value="PUT">PUT</option>
-                                                    <option v-if="monitor.type === 'api_endpoint'" value="PATCH">PATCH</option>
-                                                    <option v-if="monitor.type === 'api_endpoint'" value="DELETE">DELETE</option>
-                                                    <option v-if="monitor.type === 'api_endpoint'" value="OPTIONS">OPTIONS</option>
+                                                    <option value="PUT">PUT</option>
+                                                    <option value="PATCH">PATCH</option>
+                                                    <option value="DELETE">DELETE</option>
                                                 </select>
-                                            </label>
-                                            <label class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Ожидаемые коды</span>
-                                                <input v-model="monitorDrafts[monitor.id].status_codes" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
-                                            <label class="block md:col-span-2">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">URL</span>
-                                                <input v-model="monitorDrafts[monitor.id].url" type="url" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
-                                            <label class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Макс. время, мс</span>
-                                                <input v-model.number="monitorDrafts[monitor.id].max_response_time_ms" type="number" min="1" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
-                                            <label v-if="monitor.type === 'sitemap_xml'" class="flex items-center gap-3 rounded-xl border border-[#D4E3DA] bg-white px-3 py-2">
-                                                <input v-model="monitorDrafts[monitor.id].valid_xml" type="checkbox" class="h-4 w-4">
-                                                <span class="text-xs font-medium text-[#52645A]">Валидный XML</span>
-                                            </label>
-                                            <label v-if="monitor.type === 'robots_txt' || monitor.type === 'sitemap_xml'" class="flex items-center gap-3 rounded-xl border border-[#D4E3DA] bg-white px-3 py-2">
-                                                <input v-model="monitorDrafts[monitor.id].exists" type="checkbox" class="h-4 w-4">
-                                                <span class="text-xs font-medium text-[#52645A]">Файл существует</span>
-                                            </label>
-                                            <label v-if="monitor.type === 'api_endpoint'" class="block md:col-span-2">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Заголовки</span>
-                                                <textarea v-model="monitorDrafts[monitor.id].headers" rows="3" class="w-full rounded-xl border border-[#D4E3DA] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15"></textarea>
-                                            </label>
-                                            <label v-if="monitor.type === 'api_endpoint'" class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Body</span>
-                                                <textarea v-model="monitorDrafts[monitor.id].body" rows="3" class="w-full rounded-xl border border-[#D4E3DA] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15"></textarea>
-                                            </label>
-                                            <label v-if="monitor.type === 'api_endpoint'" class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Ответ содержит</span>
-                                                <input v-model="monitorDrafts[monitor.id].response_contains" type="text" class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
+                                            </div>
+                                            <div>
+                                                <label :for="`${monitor.id}-endpoint`" class="mb-2 block text-sm font-semibold text-[#26332D]">Endpoint</label>
+                                                <input :id="`${monitor.id}-endpoint`" v-model="monitorDrafts[monitor.id].url" type="text" placeholder="/api/health" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div>
+                                                <label :for="`${monitor.id}-status`" class="mb-2 block text-sm font-semibold text-[#26332D]">Ожидаемые коды</label>
+                                                <input :id="`${monitor.id}-status`" v-model="monitorDrafts[monitor.id].status_codes" type="text" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div>
+                                                <label :for="`${monitor.id}-time`" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                                <input :id="`${monitor.id}-time`" v-model.number="monitorDrafts[monitor.id].max_response_time_ms" min="1" type="number" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div class="md:col-span-2">
+                                                <label :for="`${monitor.id}-contains`" class="mb-2 block text-sm font-semibold text-[#26332D]">Ответ должен содержать</label>
+                                                <input :id="`${monitor.id}-contains`" v-model="monitorDrafts[monitor.id].response_contains" type="text" placeholder="опционально" :class="settingsInputClass(monitor)">
+                                            </div>
                                         </template>
 
-                                        <template v-if="monitor.type === 'ssl' || monitor.type === 'domain'">
-                                            <label class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Домен</span>
-                                                <input v-model="monitorDrafts[monitor.id].domain" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
-                                            <label v-if="monitor.type === 'ssl'" class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Порт</span>
-                                                <input v-model.number="monitorDrafts[monitor.id].port" type="number" min="1" max="65535" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
-                                            <label class="block md:col-span-2">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Дни предупреждений</span>
-                                                <input v-model="monitorDrafts[monitor.id].warning_days" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
-                                        </template>
-
-                                        <template v-if="monitor.type === 'dns'">
-                                            <label class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Домен</span>
-                                                <input v-model="monitorDrafts[monitor.id].domain" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
-                                            <label class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Типы записей</span>
-                                                <input v-model="monitorDrafts[monitor.id].record_types" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
-                                            <label class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">DNS-серверы</span>
-                                                <input v-model="monitorDrafts[monitor.id].nameservers" type="text" class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
-                                            <label class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Мин. записей</span>
-                                                <input v-model.number="monitorDrafts[monitor.id].min_records" type="number" min="0" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
-                                        </template>
-
-                                        <template v-if="monitor.type === 'tcp_port'">
-                                            <label class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Host</span>
-                                                <input v-model="monitorDrafts[monitor.id].host" type="text" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
-                                            <label class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Порт</span>
-                                                <input v-model.number="monitorDrafts[monitor.id].port" type="number" min="1" max="65535" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
-                                            <label class="block">
-                                                <span class="mb-2 block text-xs font-medium text-[#52645A]">Макс. время, мс</span>
-                                                <input v-model.number="monitorDrafts[monitor.id].max_response_time_ms" type="number" min="1" required class="h-10 w-full rounded-xl border border-[#D4E3DA] bg-white px-3 text-sm outline-none transition focus:border-[#24A869] focus:ring-2 focus:ring-[#24A869]/15">
-                                            </label>
-                                            <label class="flex items-center gap-3 rounded-xl border border-[#D4E3DA] bg-white px-3 py-2">
-                                                <input v-model="monitorDrafts[monitor.id].open" type="checkbox" class="h-4 w-4">
-                                                <span class="text-xs font-medium text-[#52645A]">Порт открыт</span>
-                                            </label>
+                                        <template v-else-if="monitor.type === 'tcp_port'">
+                                            <div>
+                                                <label :for="`${monitor.id}-port`" class="mb-2 block text-sm font-semibold text-[#26332D]">Порт</label>
+                                                <input :id="`${monitor.id}-port`" v-model.number="monitorDrafts[monitor.id].port" min="1" max="65535" type="number" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div>
+                                                <label :for="`${monitor.id}-time`" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                                <input :id="`${monitor.id}-time`" v-model.number="monitorDrafts[monitor.id].max_response_time_ms" min="1" type="number" :class="settingsInputClass(monitor)">
+                                            </div>
                                         </template>
                                     </div>
 
-                                    <div class="mt-4 flex items-center justify-between gap-3">
+                                    <div class="mt-4 flex items-center justify-between gap-3 border-t pt-4" :class="monitor.is_paid_addon ? 'border-[#EADFD0]' : 'border-[#DDEBE3]'">
                                         <button
                                             type="button"
-                                            class="inline-flex items-center gap-3 rounded-xl border border-[#D4E3DA] bg-white px-3 py-2 text-sm font-medium text-[#26332D]"
+                                            class="inline-flex items-center gap-3 rounded-2xl border border-[#DDEBE3] bg-white px-3 py-2 text-sm font-semibold text-[#26332D]"
                                             @click="monitorDrafts[monitor.id].is_enabled = !monitorDrafts[monitor.id].is_enabled"
                                         >
-                                            <span class="flex h-5 w-9 items-center rounded-full p-0.5 transition" :class="monitorDrafts[monitor.id].is_enabled ? 'justify-end bg-[#2FA568]' : 'justify-start bg-[#AAB6AF]'">
-                                                <span class="h-4 w-4 rounded-full bg-white shadow-sm"></span>
+                                            <span class="flex h-7 w-12 items-center rounded-full p-1 transition" :class="monitorDrafts[monitor.id].is_enabled ? (monitor.is_paid_addon ? 'justify-end bg-[#E08600]' : 'justify-end bg-[#2FA568]') : 'justify-start bg-[#CFE1D7]'">
+                                                <span class="h-5 w-5 rounded-full bg-white shadow-sm"></span>
                                             </span>
                                             {{ monitorDrafts[monitor.id].is_enabled ? 'Включен' : 'На паузе' }}
                                         </button>
-                                        <button type="submit" class="inline-flex h-10 items-center justify-center rounded-xl bg-[#2FA568] px-4 text-sm font-medium text-white transition hover:bg-[#278C58]">
+                                        <button type="submit" class="inline-flex h-11 items-center justify-center rounded-2xl px-5 text-sm font-bold text-white shadow-[0_14px_32px_rgba(47,165,104,0.18)] transition" :class="monitor.is_paid_addon ? 'bg-[#E08600] hover:bg-[#B7791F]' : 'bg-[#2FA568] hover:bg-[#248653]'">
                                             Сохранить
                                         </button>
                                     </div>
                                 </form>
                             </div>
 
-                            <div
-                                v-if="!monitor.is_available"
-                                class="absolute inset-0 flex items-center justify-center px-6 text-center"
-                                aria-hidden="true"
-                            >
-                                <p class="rounded-xl bg-white/90 px-5 py-3 text-sm font-medium text-[#52645A] shadow-sm ring-1 ring-[#DDEBE3]">
-                                    Доступно на другом тарифе
-                                </p>
-                            </div>
                         </article>
                     </div>
                 </section>
@@ -1309,33 +1575,71 @@ function sparkClass(status: string): string {
                             Создан: {{ formatDate(site.created_at) }}
                         </p>
                     </div>
+
                 </section>
 
-                <section class="rounded-3xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
-                    <h2 class="text-lg font-semibold text-[#17231C]">Быстрые действия</h2>
-                    <div class="mt-4 grid gap-2">
-                        <button type="button" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#2FA568] px-4 text-sm font-medium text-white transition hover:bg-[#278C58]" :disabled="isSiteChecking" @click="checkSiteNow">
-                            <LoaderCircle v-if="isSiteChecking" class="h-4 w-4 animate-spin" :stroke-width="2" />
-                            <RotateCw v-else class="h-4 w-4" :stroke-width="2" />
-                            Проверить сайт
-                        </button>
-                        <Link :href="`/sites/${site.id}/monitors/create`" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#D4E3DA] bg-white px-4 text-sm font-medium text-[#26332D] transition hover:border-[#24A869] hover:text-[#1E9B5D]">
-                            <Plus class="h-4 w-4" :stroke-width="2" />
-                            Добавить проверку
-                        </Link>
-                        <button type="button" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#D4E3DA] bg-white px-4 text-sm font-medium text-[#26332D] transition hover:border-[#24A869] hover:text-[#1E9B5D]">
-                            <Bell class="h-4 w-4" :stroke-width="2" />
-                            Уведомления
-                        </button>
-                        <button type="button" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#D4E3DA] bg-white px-4 text-sm font-medium text-[#26332D] transition hover:border-[#24A869] hover:text-[#1E9B5D]">
-                            <FileText class="h-4 w-4" :stroke-width="2" />
-                            Создать отчет
-                        </button>
-                        <button type="button" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#FECACA] bg-white px-4 text-sm font-medium text-[#E11D25] transition hover:bg-[#FFF4F4]" @click="isDeleteModalOpen = true">
-                            <Trash2 class="h-4 w-4" :stroke-width="2" />
-                            Удалить сайт
-                        </button>
+                <section v-if="selectedPaidMonitors.length" class="rounded-3xl border border-[#F6C66E] bg-white p-4 shadow-[0_10px_35px_rgba(38,51,45,0.08)]">
+                    <h2 class="text-lg font-bold text-[#173B2A]">Итого</h2>
+                    <div class="mt-4 rounded-2xl bg-[#FFFCF4] p-3">
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#B7791F]">Сейчас к оплате</p>
+                        <p class="mt-1 text-xl font-bold text-[#173B2A]">{{ money(checkoutAmountRub) }}</p>
+                        <p class="mt-1 text-xs font-medium leading-5 text-[#6A7A70]">
+                            Оплачивается только стоимость новых платных проверок.
+                        </p>
                     </div>
+
+                    <div class="mt-3 rounded-2xl bg-[#F6FBF8] p-3">
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#6A7A70]">Сайт</p>
+                        <p class="mt-1 truncate text-base font-bold text-[#173B2A]">{{ site.host }}</p>
+                        <p class="mt-0.5 truncate text-xs font-medium text-[#6A7A70]">{{ site.name }}</p>
+                    </div>
+
+                    <div class="mt-4 space-y-2">
+                        <div class="flex items-center justify-between gap-3 text-xs">
+                            <span class="font-medium text-[#6A7A70]">Платные проверки</span>
+                            <span class="font-bold text-[#173B2A]">{{ selectedPaidMonitors.length }}</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 text-xs">
+                            <span class="font-medium text-[#6A7A70]">Текущий тариф</span>
+                            <span class="font-bold text-[#173B2A]">{{ displayPlan.name }}</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 rounded-2xl border border-[#F6C66E] bg-[#FFFCF4] p-3">
+                        <p class="text-xs font-bold text-[#173B2A]">За что платит клиент</p>
+                        <ul class="mt-2 space-y-2 text-xs font-medium text-[#6A7A70]">
+                            <li v-for="monitor in selectedPaidMonitors" :key="monitor.type" class="flex items-start justify-between gap-2">
+                                <span class="min-w-0 truncate">{{ typeLabel(monitor.type) }}</span>
+                                <span class="flex shrink-0 items-center gap-1.5 font-bold text-[#E08600]">
+                                    +{{ addonPriceRub(monitor.type) }} ₽/мес
+                                    <button type="button" class="grid h-5 w-5 place-items-center rounded-full bg-white text-[#9A6A11] ring-1 ring-[#F6C66E]/60 hover:bg-[#FFF8E4]" @click="removePaidAddonSelection(monitor.type)">
+                                        <X class="h-3 w-3" :stroke-width="2" />
+                                    </button>
+                                </span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="mt-4 rounded-2xl bg-[#173B2A] p-3 text-white">
+                        <div class="flex items-end justify-between gap-2">
+                            <span class="text-xs font-medium text-white/75">Сейчас</span>
+                            <span class="text-lg font-bold">{{ money(checkoutAmountRub) }}</span>
+                        </div>
+                        <div class="mt-2 flex items-center justify-between gap-2 border-t border-white/10 pt-2">
+                            <span class="text-xs font-medium text-white/75">Дальше</span>
+                            <span class="text-sm font-bold">{{ money(nextMonthlyRub) }}</span>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-[#2FA568] px-4 py-2 text-center text-sm font-bold leading-5 text-white shadow-[0_14px_32px_rgba(47,165,104,0.22)] transition hover:bg-[#248653] disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="paymentProcessing"
+                        @click="checkoutPaidAddons"
+                    >
+                        <span v-if="paymentProcessing">Переходим к оплате...</span>
+                        <span v-else>Оплатить {{ checkoutAmountRub }} ₽ и добавить к тарифу</span>
+                    </button>
                 </section>
             </aside>
         </div>

@@ -137,16 +137,6 @@ function limitLabel(limit: number | null): string {
                             <div class="h-full rounded-full bg-[#2FA568]" :style="{ width: `${usagePercent(sitesCurrent, sitesLimit)}%` }" />
                         </div>
                     </div>
-
-                    <div>
-                        <div class="flex items-center justify-between gap-3 text-sm">
-                            <span class="font-medium text-[#6A7A70]">Мониторы</span>
-                            <span class="font-medium text-[#26332D]">{{ monitorsCurrent }} / {{ limitLabel(monitorsLimit) }}</span>
-                        </div>
-                        <div class="mt-2 h-2 overflow-hidden rounded-full bg-[#E2ECE6]">
-                            <div class="h-full rounded-full bg-[#62C98F]" :style="{ width: `${usagePercent(monitorsCurrent, monitorsLimit)}%` }" />
-                        </div>
-                    </div>
                 </div>
 
                 <Link
