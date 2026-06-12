@@ -28,6 +28,7 @@ defineProps<{
 const navigation: NavigationItem[] = [
     { key: 'users', label: 'Пользователи', href: '/admin/users' },
     { key: 'plans', label: 'Тарифы', href: '/admin/plans' },
+    { key: 'articles', label: 'Статьи', href: '/admin/articles' },
     { key: 'dead_letters', label: 'Dead letters', href: '/admin/dead-letters' },
     { key: 'organizations', label: 'Организации' },
     { key: 'monitors', label: 'Мониторы' },

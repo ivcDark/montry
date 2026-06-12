@@ -25,7 +25,7 @@ final readonly class StartIntendedCheckout
         $planCode = $this->planIntent->get($request);
 
         if ($planCode === null) {
-            return redirect()->intended(route('dashboard.index', absolute: false));
+            return redirect()->intended(route('sites.index', absolute: false));
         }
 
         $plan = Plan::query()
@@ -36,7 +36,7 @@ final readonly class StartIntendedCheckout
         if ($plan === null || $plan->price_cents === 0) {
             $this->planIntent->clear($request);
 
-            return to_route('dashboard.index');
+            return to_route('sites.index');
         }
 
         $organization = $this->getCurrentOrganization->handle($user);

@@ -25,7 +25,7 @@ const navItems = [
     { label: 'Возможности', href: '/#features' },
     { label: 'Проверки', href: '/#checks' },
     { label: 'Тарифы', href: '/#pricing' },
-    { label: 'Новости', href: '/#news' },
+    { label: 'Статьи', href: '/articles' },
     { label: 'FAQ', href: '/#faq' },
     { label: 'Связаться', href: '/#feedback' },
 ]

@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Articles\Infrastructure\Persistence\Models\Article;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -31,7 +32,23 @@ Route::get('/', function () {
         ])
         ->values();
 
+    $articles = Article::query()
+        ->published()
+        ->orderBy('sort_order')
+        ->orderByDesc('published_at')
+        ->orderByDesc('created_at')
+        ->limit(3)
+        ->get()
+        ->map(fn (Article $article): array => [
+            'title' => $article->title,
+            'slug' => $article->slug,
+            'excerpt' => $article->excerpt,
+            'published_at' => $article->published_at?->toIso8601String(),
+        ])
+        ->values();
+
     return Inertia::render('Welcome', [
         'plans' => $plans,
+        'articles' => $articles,
     ]);
 })->name('home');

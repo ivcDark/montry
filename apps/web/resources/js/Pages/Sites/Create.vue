@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3'
 import FlashToast from '@/Components/FlashToast.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 
@@ -65,11 +65,13 @@ const props = withDefaults(defineProps<{
     currentPlan?: CurrentPlan | null
     usage?: Usage | null
     addonCatalog?: AddonCatalogItem[]
+    currentAddons?: Record<string, { quantity: number, unit_price_cents: number, currency: string }>
     entitlements?: Record<string, any> | null
 }>(), {
     currentPlan: null,
     usage: null,
     addonCatalog: () => [],
+    currentAddons: () => ({}),
     entitlements: null,
 })
 
@@ -85,6 +87,7 @@ const sitemapStatusCodesText = ref('200')
 const apiStatusCodesText = ref('200')
 const apiResponseContainsText = ref('')
 const openedAdvanced = ref<MonitorType | null>('http')
+const paymentProcessing = ref(false)
 
 const intervalPresets = [5, 10, 15, 30, 60, 360, 720, 1440]
 const availableIntervalPresets = computed(() => intervalPresets.filter((minutes) => minutes >= minimumIntervalMinutes))
@@ -141,7 +144,7 @@ const form = useForm({
             registered: true,
         },
         dns: {
-            is_enabled: false,
+            is_enabled: true,
             name: 'DNS records',
             interval_seconds: 86400,
             timeout_ms: 10000,
@@ -149,7 +152,7 @@ const form = useForm({
             resolves: true,
         },
         robots_txt: {
-            is_enabled: false,
+            is_enabled: true,
             name: 'Robots.txt',
             interval_seconds: 86400,
             timeout_ms: 10000,
@@ -305,11 +308,34 @@ const paidAddonCards = computed<ToggleCard[]>(() => [
 ])
 
 const selectedPaidAddons = computed(() => paidAddonCards.value.filter((card) => card.enabled))
+const hasPaidAddons = computed(() => selectedPaidAddons.value.length > 0)
 const addonTotalRub = computed(() => selectedPaidAddons.value.reduce((sum, card) => sum + (card.priceRub ?? 0), 0))
-const totalMonthlyRub = computed(() => displayPlan.value.priceRub + addonTotalRub.value)
+const currentAddonMonthlyRub = computed(() => Object.values(props.currentAddons).reduce((sum, addon) => {
+    return sum + Math.round((addon.unit_price_cents * addon.quantity) / 100)
+}, 0))
+const currentMonthlyRub = computed(() => displayPlan.value.priceRub + currentAddonMonthlyRub.value)
+const nextMonthlyRub = computed(() => currentMonthlyRub.value + addonTotalRub.value)
+const checkoutAmountRub = computed(() => {
+    if (props.currentPlan?.code === planCode.value) {
+        return addonTotalRub.value
+    }
+
+    return nextMonthlyRub.value
+})
 const enabledBaseCount = computed(() => baseCheckCards.value.filter((card) => card.enabled).length)
 const activeMonitorCount = computed(() => enabledBaseCount.value + selectedPaidAddons.value.length)
 const monitorCountAfterCreate = computed(() => (props.usage?.monitors ?? 0) + baseCheckCards.value.length + selectedPaidAddons.value.length)
+const selectedAddonQuantities = computed<Record<string, number>>(() => {
+    const quantities = Object.fromEntries(
+        Object.entries(props.currentAddons).map(([code, addon]) => [code, addon.quantity]),
+    ) as Record<string, number>
+
+    for (const addon of selectedPaidAddons.value) {
+        quantities[addon.type] = (quantities[addon.type] ?? 0) + 1
+    }
+
+    return quantities
+})
 
 function typeLabel(type: string): string {
     return props.monitorTypes.find((option) => option.value === type)?.label
@@ -583,6 +609,22 @@ function requestPayload() {
 }
 
 function submit(): void {
+    if (hasPaidAddons.value) {
+        paymentProcessing.value = true
+
+        router.post('/billing/checkout', {
+            plan_code: planCode.value,
+            addons: selectedAddonQuantities.value,
+        }, {
+            preserveScroll: true,
+            onFinish: () => {
+                paymentProcessing.value = false
+            },
+        })
+
+        return
+    }
+
     form
         .transform(() => requestPayload())
         .post('/sites', {
@@ -610,49 +652,20 @@ function submit(): void {
             </Link>
         </template>
 
-        <form class="mx-auto max-w-7xl px-5 py-8 sm:px-8" @submit.prevent="submit">
-            <section class="overflow-hidden rounded-[32px] border border-[#DDEBE3] bg-white shadow-[0_18px_60px_rgba(38,51,45,0.08)]">
-                <div class="grid gap-0 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
-                    <div class="border-b border-[#DDEBE3] p-6 sm:p-8 lg:border-b-0 lg:border-r">
-                        <p class="inline-flex rounded-full bg-[#E9F8EF] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#1E9B5D]">
+        <form class="mx-auto max-w-7xl px-5 py-6 sm:px-8" @submit.prevent="submit">
+            <section class="rounded-[24px] border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_35px_rgba(38,51,45,0.06)] sm:p-6">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <p class="inline-flex rounded-full bg-[#E9F8EF] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1E9B5D]">
                             Новый мониторинг
                         </p>
-                        <h1 class="mt-5 max-w-3xl text-3xl font-bold tracking-[-0.03em] text-[#173B2A] sm:text-4xl">
-                            Добавьте сайт и выберите проверки перед созданием
+                        <h1 class="mt-3 max-w-3xl text-2xl font-bold tracking-[-0.02em] text-[#173B2A] sm:text-3xl">
+                            Добавьте сайт и выберите проверки
                         </h1>
-                        <p class="mt-4 max-w-2xl text-base leading-7 text-[#6A7A70]">
-                            Montry создаст базовый набор мониторингов для сайта. Платные проверки можно подключить кликом — справа сразу появится итоговая сумма.
-                        </p>
                     </div>
-
-                    <aside class="bg-[#F6FBF8] p-6 sm:p-8">
-                        <div class="rounded-3xl border border-[#CFE1D7] bg-white p-5">
-                            <div class="flex items-start justify-between gap-4">
-                                <div>
-                                    <p class="text-sm font-medium text-[#6A7A70]">Текущий тариф</p>
-                                    <h2 class="mt-1 text-2xl font-bold text-[#173B2A]">{{ displayPlan.name }}</h2>
-                                </div>
-                                <span class="rounded-full bg-[#E9F8EF] px-3 py-1 text-sm font-semibold text-[#1E9B5D]">
-                                    {{ money(displayPlan.priceRub) }}
-                                </span>
-                            </div>
-
-                            <div class="mt-5 grid grid-cols-2 gap-3">
-                                <div class="rounded-2xl bg-[#F3F8F5] p-4">
-                                    <p class="text-xs font-semibold text-[#6A7A70]">Сайты после добавления</p>
-                                    <p class="mt-2 text-2xl font-bold text-[#173B2A]">{{ sitesAfterCreate }} / {{ siteLimit }}</p>
-                                </div>
-                                <div class="rounded-2xl bg-[#F3F8F5] p-4">
-                                    <p class="text-xs font-semibold text-[#6A7A70]">История</p>
-                                    <p class="mt-2 text-2xl font-bold text-[#173B2A]">{{ displayPlan.historyDays }} дн.</p>
-                                </div>
-                            </div>
-
-                            <p class="mt-4 text-sm leading-6 text-[#6A7A70]">
-                                <span v-if="isSiteLimitReached" class="font-semibold text-[#B45309]">Лимит сайтов будет превышен. Докупите пакет +5 сайтов или перейдите на тариф выше.</span><span v-else>После создания останется {{ sitesLeftAfterCreate }} сайтов в текущем тарифе.</span> Минимальный интервал проверок: {{ displayPlan.intervalText }}.
-                            </p>
-                        </div>
-                    </aside>
+                    <p class="max-w-xl text-sm leading-6 text-[#6A7A70]">
+                        Базовые проверки входят в тариф. Платные проверки можно подключить кликом — справа появится итоговая сумма и переход к оплате.
+                    </p>
                 </div>
             </section>
 
@@ -749,8 +762,83 @@ function submit(): void {
                                 <div class="mt-4 flex items-center justify-between gap-3 border-t border-[#DDEBE3] pt-4">
                                     <p class="min-w-0 truncate text-xs font-semibold text-[#6A7A70]">{{ card.summary }}</p>
                                     <button type="button" class="shrink-0 text-xs font-bold text-[#1E9B5D] hover:text-[#173B2A]" @click="openAdvanced(card.type)">
-                                        Настроить
+                                        {{ openedAdvanced === card.type ? 'Скрыть настройки' : 'Открыть настройки' }}
                                     </button>
+                                </div>
+
+                                <div v-if="openedAdvanced === card.type" class="mt-4 grid gap-4 border-t border-[#DDEBE3] pt-4 md:grid-cols-2">
+                                    <template v-if="card.type === 'http'">
+                                        <div>
+                                            <label for="http-name" class="mb-2 block text-sm font-semibold text-[#26332D]">Название</label>
+                                            <input id="http-name" v-model="form.monitors.http.name" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                        </div>
+                                        <div>
+                                            <label for="http-method" class="mb-2 block text-sm font-semibold text-[#26332D]">Метод</label>
+                                            <select id="http-method" v-model="form.monitors.http.method" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                                <option value="GET">GET</option>
+                                                <option value="HEAD">HEAD</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label for="http-status" class="mb-2 block text-sm font-semibold text-[#26332D]">Ожидаемые коды</label>
+                                            <input id="http-status" v-model="statusCodesText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                        </div>
+                                        <div>
+                                            <label for="http-time" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                            <input id="http-time" v-model.number="form.monitors.http.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <div class="mb-3 flex items-center justify-between gap-3">
+                                                <span class="text-sm font-semibold text-[#26332D]">Частота проверки</span>
+                                                <span class="text-sm font-bold text-[#1E9B5D]">{{ intervalText(form.monitors.http.interval_seconds) }}</span>
+                                            </div>
+                                            <div class="flex flex-wrap gap-2">
+                                                <button v-for="minutes in availableIntervalPresets" :key="`http-${minutes}`" type="button" class="rounded-full px-3 py-2 text-xs font-bold transition" :class="intervalMinutes(form.monitors.http.interval_seconds) === minutes ? 'bg-[#2FA568] text-white' : 'bg-white text-[#52645A] ring-1 ring-[#DDEBE3] hover:text-[#173B2A]'" @click="setIntervalMinutes(form.monitors.http, minutes)">
+                                                    {{ minutes === 60 ? '1 час' : minutes === 1440 ? '1 день' : minutes < 60 ? `${minutes} мин` : `${minutes / 60} ч` }}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <template v-else-if="card.type === 'ssl'">
+                                        <div>
+                                            <label for="ssl-port" class="mb-2 block text-sm font-semibold text-[#26332D]">Порт</label>
+                                            <input id="ssl-port" v-model.number="form.monitors.ssl.port" min="1" max="65535" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                        </div>
+                                        <div>
+                                            <label for="ssl-days" class="mb-2 block text-sm font-semibold text-[#26332D]">Дни предупреждений</label>
+                                            <input id="ssl-days" v-model="sslWarningDaysText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                        </div>
+                                    </template>
+
+                                    <template v-else-if="card.type === 'domain'">
+                                        <div class="md:col-span-2">
+                                            <label for="domain-days" class="mb-2 block text-sm font-semibold text-[#26332D]">Дни предупреждений</label>
+                                            <input id="domain-days" v-model="domainWarningDaysText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                        </div>
+                                    </template>
+
+                                    <template v-else-if="card.type === 'dns'">
+                                        <div>
+                                            <label for="dns-types" class="mb-2 block text-sm font-semibold text-[#26332D]">Типы записей</label>
+                                            <input id="dns-types" v-model="dnsRecordTypesText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                        </div>
+                                        <div>
+                                            <label for="dns-min" class="mb-2 block text-sm font-semibold text-[#26332D]">Минимум записей</label>
+                                            <input id="dns-min" v-model.number="form.monitors.dns.min_records" min="0" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                        </div>
+                                    </template>
+
+                                    <template v-else-if="card.type === 'robots_txt'">
+                                        <div>
+                                            <label for="robots-status" class="mb-2 block text-sm font-semibold text-[#26332D]">Ожидаемые коды</label>
+                                            <input id="robots-status" v-model="robotsStatusCodesText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                        </div>
+                                        <div>
+                                            <label for="robots-time" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                            <input id="robots-time" v-model.number="form.monitors.robots_txt.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                        </div>
+                                    </template>
                                 </div>
                             </article>
                         </div>
@@ -795,14 +883,68 @@ function submit(): void {
                                 <div class="mt-4 flex items-center justify-between gap-3 border-t border-[#EADFD0] pt-4">
                                     <p class="min-w-0 truncate text-xs font-semibold text-[#6A7A70]">{{ card.summary }}</p>
                                     <button type="button" class="shrink-0 text-xs font-bold text-[#E08600] hover:text-[#173B2A]" @click="openAdvanced(card.type)">
-                                        Настроить
+                                        {{ openedAdvanced === card.type ? 'Скрыть настройки' : 'Открыть настройки' }}
                                     </button>
+                                </div>
+
+                                <div v-if="openedAdvanced === card.type" class="mt-4 grid gap-4 border-t border-[#EADFD0] pt-4 md:grid-cols-2">
+                                    <template v-if="card.type === 'sitemap_xml'">
+                                        <div>
+                                            <label for="sitemap-status" class="mb-2 block text-sm font-semibold text-[#26332D]">Ожидаемые коды</label>
+                                            <input id="sitemap-status" v-model="sitemapStatusCodesText" type="text" class="h-11 w-full rounded-2xl border border-[#F6C66E]/70 bg-white px-4 text-sm outline-none focus:border-[#E08600] focus:ring-4 focus:ring-[#E08600]/15">
+                                        </div>
+                                        <div>
+                                            <label for="sitemap-time" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                            <input id="sitemap-time" v-model.number="form.monitors.sitemap_xml.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#F6C66E]/70 bg-white px-4 text-sm outline-none focus:border-[#E08600] focus:ring-4 focus:ring-[#E08600]/15">
+                                        </div>
+                                    </template>
+
+                                    <template v-else-if="card.type === 'api_endpoint'">
+                                        <div>
+                                            <label for="api-method" class="mb-2 block text-sm font-semibold text-[#26332D]">Метод</label>
+                                            <select id="api-method" v-model="form.monitors.api_endpoint.method" class="h-11 w-full rounded-2xl border border-[#F6C66E]/70 bg-white px-4 text-sm outline-none focus:border-[#E08600] focus:ring-4 focus:ring-[#E08600]/15">
+                                                <option value="GET">GET</option>
+                                                <option value="HEAD">HEAD</option>
+                                                <option value="POST">POST</option>
+                                                <option value="PUT">PUT</option>
+                                                <option value="PATCH">PATCH</option>
+                                                <option value="DELETE">DELETE</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label for="api-path" class="mb-2 block text-sm font-semibold text-[#26332D]">Endpoint</label>
+                                            <input id="api-path" v-model="form.monitors.api_endpoint.path" type="text" placeholder="/api/health" class="h-11 w-full rounded-2xl border border-[#F6C66E]/70 bg-white px-4 text-sm outline-none focus:border-[#E08600] focus:ring-4 focus:ring-[#E08600]/15">
+                                        </div>
+                                        <div>
+                                            <label for="api-status" class="mb-2 block text-sm font-semibold text-[#26332D]">Ожидаемые коды</label>
+                                            <input id="api-status" v-model="apiStatusCodesText" type="text" class="h-11 w-full rounded-2xl border border-[#F6C66E]/70 bg-white px-4 text-sm outline-none focus:border-[#E08600] focus:ring-4 focus:ring-[#E08600]/15">
+                                        </div>
+                                        <div>
+                                            <label for="api-time" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                            <input id="api-time" v-model.number="form.monitors.api_endpoint.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#F6C66E]/70 bg-white px-4 text-sm outline-none focus:border-[#E08600] focus:ring-4 focus:ring-[#E08600]/15">
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <label for="api-contains" class="mb-2 block text-sm font-semibold text-[#26332D]">Ответ должен содержать</label>
+                                            <input id="api-contains" v-model="apiResponseContainsText" type="text" placeholder="опционально" class="h-11 w-full rounded-2xl border border-[#F6C66E]/70 bg-white px-4 text-sm outline-none focus:border-[#E08600] focus:ring-4 focus:ring-[#E08600]/15">
+                                        </div>
+                                    </template>
+
+                                    <template v-else-if="card.type === 'tcp_port'">
+                                        <div>
+                                            <label for="tcp-port" class="mb-2 block text-sm font-semibold text-[#26332D]">Порт</label>
+                                            <input id="tcp-port" v-model.number="form.monitors.tcp_port.port" min="1" max="65535" type="number" class="h-11 w-full rounded-2xl border border-[#F6C66E]/70 bg-white px-4 text-sm outline-none focus:border-[#E08600] focus:ring-4 focus:ring-[#E08600]/15">
+                                        </div>
+                                        <div>
+                                            <label for="tcp-time" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
+                                            <input id="tcp-time" v-model.number="form.monitors.tcp_port.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#F6C66E]/70 bg-white px-4 text-sm outline-none focus:border-[#E08600] focus:ring-4 focus:ring-[#E08600]/15">
+                                        </div>
+                                    </template>
                                 </div>
                             </article>
                         </div>
                     </section>
 
-                    <section class="rounded-[28px] border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_35px_rgba(38,51,45,0.06)] sm:p-6">
+                    <section v-if="false" class="rounded-[28px] border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_35px_rgba(38,51,45,0.06)] sm:p-6">
                         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                                 <h2 class="text-2xl font-bold text-[#173B2A]">Тонкие настройки</h2>
@@ -987,8 +1129,64 @@ function submit(): void {
                 </div>
 
                 <aside class="space-y-4 xl:sticky xl:top-28 xl:self-start">
-                    <section class="rounded-[28px] border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_35px_rgba(38,51,45,0.08)]">
+                    <section v-if="!hasPaidAddons" class="rounded-[28px] border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_35px_rgba(38,51,45,0.08)]">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <p class="text-sm font-medium text-[#6A7A70]">Текущий тариф</p>
+                                <h2 class="mt-1 text-2xl font-bold text-[#173B2A]">{{ displayPlan.name }}</h2>
+                            </div>
+                            <span class="rounded-full bg-[#E9F8EF] px-3 py-1 text-sm font-semibold text-[#1E9B5D]">
+                                {{ money(displayPlan.priceRub) }}
+                            </span>
+                        </div>
+
+                        <div class="mt-5 grid grid-cols-2 gap-3">
+                            <div class="rounded-3xl bg-[#F6FBF8] p-4">
+                                <p class="text-xs font-semibold text-[#6A7A70]">Сайты после добавления</p>
+                                <p class="mt-2 text-2xl font-bold text-[#173B2A]">{{ sitesAfterCreate }} / {{ siteLimit }}</p>
+                            </div>
+                            <div class="rounded-3xl bg-[#F6FBF8] p-4">
+                                <p class="text-xs font-semibold text-[#6A7A70]">История</p>
+                                <p class="mt-2 text-2xl font-bold text-[#173B2A]">{{ displayPlan.historyDays }} дн.</p>
+                            </div>
+                        </div>
+
+                        <p class="mt-4 text-sm leading-6 text-[#6A7A70]">
+                            <span v-if="isSiteLimitReached" class="font-semibold text-[#B45309]">Лимит сайтов будет превышен. Докупите пакет +5 сайтов или перейдите на тариф выше.</span><span v-else>После создания останется {{ sitesLeftAfterCreate }} сайтов в текущем тарифе.</span> Минимальный интервал проверок: {{ displayPlan.intervalText }}.
+                        </p>
+
+                        <div v-if="form.errors.monitors" class="mt-5 rounded-3xl border border-[#FECACA] bg-[#FEECEC] px-4 py-3 text-sm font-semibold text-[#EF4444]">
+                            {{ form.errors.monitors }}
+                        </div>
+
+                        <button
+                            type="submit"
+                            class="mt-5 inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[#2FA568] px-5 text-sm font-bold text-white shadow-[0_14px_32px_rgba(47,165,104,0.22)] transition hover:bg-[#248653] disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="form.processing || paymentProcessing"
+                        >
+                            <span v-if="form.processing || paymentProcessing">Создаём сайт...</span>
+                            <span v-else>Создать сайт</span>
+                        </button>
+
+                        <Link
+                            href="/sites"
+                            class="mt-3 inline-flex h-12 w-full items-center justify-center rounded-2xl border border-[#DDEBE3] bg-white px-5 text-sm font-semibold text-[#52645A] transition hover:border-[#B8D0C2] hover:bg-[#F6FBF8] hover:text-[#173B2A]"
+                        >
+                            Отмена
+                        </Link>
+                    </section>
+
+                    <section v-else class="rounded-[28px] border border-[#F6C66E] bg-white p-5 shadow-[0_10px_35px_rgba(38,51,45,0.08)]">
                         <h2 class="text-xl font-bold text-[#173B2A]">Итого</h2>
+                        <div class="mt-5 rounded-3xl bg-[#FFFCF4] p-4">
+                            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[#B7791F]">Сейчас к оплате</p>
+                            <p class="mt-2 text-2xl font-bold text-[#173B2A]">{{ money(checkoutAmountRub) }}</p>
+                            <p class="mt-1 text-sm font-medium text-[#6A7A70]">
+                                <span v-if="props.currentPlan?.code === planCode">Оплачивается только стоимость новых платных проверок.</span>
+                                <span v-else>Оплачивается тариф {{ displayPlan.name }} и выбранные платные проверки.</span>
+                            </p>
+                        </div>
+
                         <div class="mt-5 rounded-3xl bg-[#F6FBF8] p-4">
                             <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[#6A7A70]">Сайт</p>
                             <p class="mt-2 truncate text-lg font-bold text-[#173B2A]">{{ normalizedSite?.host ?? 'Не указан' }}</p>
@@ -1001,7 +1199,7 @@ function submit(): void {
                                 <span class="font-bold text-[#173B2A]">{{ enabledBaseCount }}</span>
                             </div>
                             <div class="flex items-center justify-between gap-3 text-sm">
-                                <span class="font-medium text-[#6A7A70]">Дополнительные проверки</span>
+                                <span class="font-medium text-[#6A7A70]">Платные проверки</span>
                                 <span class="font-bold text-[#173B2A]">{{ selectedPaidAddons.length }}</span>
                             </div>
                             <div class="flex items-center justify-between gap-3 text-sm">
@@ -1014,31 +1212,29 @@ function submit(): void {
                             </div>
                         </div>
 
-                        <div class="mt-5 border-t border-[#DDEBE3] pt-5">
-                            <div class="flex items-center justify-between gap-3 text-sm">
-                                <span class="font-medium text-[#6A7A70]">Тариф {{ displayPlan.name }}</span>
-                                <span class="font-bold text-[#173B2A]">{{ money(displayPlan.priceRub) }}</span>
-                            </div>
-                            <div class="mt-3 flex items-center justify-between gap-3 text-sm">
-                                <span class="font-medium text-[#6A7A70]">Доп. проверки</span>
-                                <span class="font-bold text-[#173B2A]">+{{ money(addonTotalRub) }}</span>
-                            </div>
-                            <div class="mt-5 rounded-3xl bg-[#173B2A] p-4 text-white">
-                                <div class="flex items-end justify-between gap-3">
-                                    <span class="text-sm font-medium text-white/75">Итог в месяц</span>
-                                    <span class="text-2xl font-bold">{{ money(totalMonthlyRub) }}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div v-if="selectedPaidAddons.length" class="mt-5 rounded-3xl border border-[#F6C66E] bg-[#FFFCF4] p-4">
-                            <p class="text-sm font-bold text-[#173B2A]">Выбрано к докупке</p>
+                        <div class="mt-5 rounded-3xl border border-[#F6C66E] bg-[#FFFCF4] p-4">
+                            <p class="text-sm font-bold text-[#173B2A]">За что платит клиент</p>
                             <ul class="mt-3 space-y-2 text-sm font-medium text-[#6A7A70]">
+                                <li v-if="props.currentPlan?.code !== planCode" class="flex justify-between gap-3">
+                                    <span>Тариф {{ displayPlan.name }}</span>
+                                    <span class="font-bold text-[#173B2A]">{{ displayPlan.priceRub }} ₽/мес</span>
+                                </li>
                                 <li v-for="addon in selectedPaidAddons" :key="addon.type" class="flex justify-between gap-3">
                                     <span>{{ addon.title }}</span>
-                                    <span class="font-bold text-[#E08600]">+{{ addon.priceRub }} ₽</span>
+                                    <span class="font-bold text-[#E08600]">+{{ addon.priceRub }} ₽/мес</span>
                                 </li>
                             </ul>
+                        </div>
+
+                        <div class="mt-5 rounded-3xl bg-[#173B2A] p-4 text-white">
+                            <div class="flex items-end justify-between gap-3">
+                                <span class="text-sm font-medium text-white/75">Будет списано сейчас</span>
+                                <span class="text-2xl font-bold">{{ money(checkoutAmountRub) }}</span>
+                            </div>
+                            <div class="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
+                                <span class="text-sm font-medium text-white/75">Со следующего месяца</span>
+                                <span class="text-lg font-bold">{{ money(nextMonthlyRub) }}</span>
+                            </div>
                         </div>
 
                         <div v-if="form.errors.monitors" class="mt-5 rounded-3xl border border-[#FECACA] bg-[#FEECEC] px-4 py-3 text-sm font-semibold text-[#EF4444]">
@@ -1048,10 +1244,10 @@ function submit(): void {
                         <button
                             type="submit"
                             class="mt-5 inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[#2FA568] px-5 text-sm font-bold text-white shadow-[0_14px_32px_rgba(47,165,104,0.22)] transition hover:bg-[#248653] disabled:cursor-not-allowed disabled:opacity-60"
-                            :disabled="form.processing"
+                            :disabled="form.processing || paymentProcessing"
                         >
-                            <span v-if="form.processing">Создаём сайт...</span>
-                            <span v-else>Создать сайт</span>
+                            <span v-if="form.processing || paymentProcessing">Переходим к оплате...</span>
+                            <span v-else>Оплатить {{ checkoutAmountRub }} ₽ и добавить сайт</span>
                         </button>
 
                         <Link

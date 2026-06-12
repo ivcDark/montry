@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Admin\Infrastructure\Http\Middleware\EnsureAdmin;
+use App\Modules\Admin\Presentation\Http\Controllers\AdminArticleController;
 use App\Modules\Admin\Presentation\Http\Controllers\AdminPlanController;
 use App\Modules\Admin\Presentation\Http\Controllers\AdminUserController;
 use Illuminate\Support\Facades\Route;
@@ -23,6 +24,18 @@ Route::middleware(['auth', EnsureAdmin::class])
 
         Route::delete('/plans/{plan}', [AdminPlanController::class, 'destroy'])
             ->name('plans.destroy');
+
+        Route::get('/articles', [AdminArticleController::class, 'index'])
+            ->name('articles.index');
+
+        Route::post('/articles', [AdminArticleController::class, 'store'])
+            ->name('articles.store');
+
+        Route::patch('/articles/{article}', [AdminArticleController::class, 'update'])
+            ->name('articles.update');
+
+        Route::patch('/articles/{article}/toggle', [AdminArticleController::class, 'toggle'])
+            ->name('articles.toggle');
 
         Route::get('/users', [AdminUserController::class, 'index'])
             ->name('users.index');

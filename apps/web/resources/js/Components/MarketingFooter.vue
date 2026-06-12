@@ -46,7 +46,7 @@ const user = page.props.auth.user
                     <div class="mt-4 grid gap-3 text-white/70">
                         <Link href="/offers" class="transition hover:text-white">Публичная оферта</Link>
                         <a href="/#faq" class="transition hover:text-white">FAQ</a>
-                        <a href="/#news" class="transition hover:text-white">Новости</a>
+                        <Link href="/articles" class="transition hover:text-white">Статьи</Link>
                         <a href="/#feedback" class="transition hover:text-white">Связаться</a>
                     </div>
                 </div>

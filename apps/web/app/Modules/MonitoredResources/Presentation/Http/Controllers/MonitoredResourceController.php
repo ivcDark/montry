@@ -71,6 +71,13 @@ final class MonitoredResourceController extends Controller
                 ->values()
                 ->all(),
             'currentPlan' => $currentPlan ? $this->planPayload($currentPlan) : null,
+            'currentAddons' => $currentSubscription?->items
+                ? $currentSubscription->items->mapWithKeys(fn ($item): array => [$item->code => [
+                    'quantity' => $item->quantity,
+                    'unit_price_cents' => $item->unit_price_cents,
+                    'currency' => $item->currency,
+                ]])->all()
+                : [],
             'addonCatalog' => $addonCatalog->payload(),
             'entitlements' => $limits->usageSummary((int) $organization->id),
             'usage' => [
@@ -136,6 +143,8 @@ final class MonitoredResourceController extends Controller
         Request $request,
         MonitoredResource $site,
         GetCurrentOrganization $getCurrentOrganization,
+        CheckTypeRegistry $checkTypes,
+        BillingAddonCatalog $addonCatalog,
         LimitChecker $limits,
     ): Response {
         $organization = $getCurrentOrganization->handle($request->user());
@@ -158,11 +167,84 @@ final class MonitoredResourceController extends Controller
             throw new NotFoundHttpException;
         }
 
+        $currentSubscription = $this->currentSubscription((int) $organization->id);
+        $currentPlan = $currentSubscription?->plan ?? Plan::query()
+            ->with('limits')
+            ->where('code', 'free')
+            ->first();
+        $paidMonitorTypes = BillingAddonCatalog::PAID_MONITOR_TYPES;
+        $monitorPayloads = $site->monitors
+            ->map(fn (Monitor $monitor) => [
+                'id' => $monitor->id,
+                'name' => $monitor->name,
+                'type' => $monitor->type,
+                'status' => $monitor->status,
+                'is_enabled' => $monitor->is_enabled,
+                'is_available' => $limits->isMonitorTypeAvailable((int) $organization->id, $monitor->type),
+                'is_paid_addon' => in_array($monitor->type, $paidMonitorTypes, true),
+                'is_configured' => true,
+                'interval_seconds' => $monitor->interval_seconds,
+                'timeout_ms' => $monitor->timeout_ms,
+                'settings' => $monitor->settings,
+                'expected' => $monitor->expected,
+                'last_check_at' => $monitor->last_check_at?->toISOString(),
+                'next_check_at' => $monitor->next_check_at?->toISOString(),
+                'check_in_progress_until' => $monitor->check_in_progress_until?->toISOString(),
+                'is_checking' => $monitor->check_in_progress_until?->isFuture() ?? false,
+                'last_success_at' => $monitor->last_success_at?->toISOString(),
+                'last_failure_at' => $monitor->last_failure_at?->toISOString(),
+                'latest_result' => $monitor->latestCheckResult
+                    ? [
+                        'status' => $monitor->latestCheckResult->status,
+                        'checked_at' => $monitor->latestCheckResult->checked_at?->toISOString(),
+                        'response_time_ms' => $monitor->latestCheckResult->response_time_ms,
+                        'status_code' => $monitor->latestCheckResult->status_code,
+                        'error_code' => $monitor->latestCheckResult->error_code,
+                        'error_message' => $monitor->latestCheckResult->error_message,
+                        'normalized_result' => $monitor->latestCheckResult->normalized_result ?? [],
+                    ]
+                    : null,
+            ]);
+
+        $configuredTypes = $monitorPayloads->pluck('type')->all();
+        $placeholderPayloads = collect($checkTypes->all())
+            ->reject(fn ($definition): bool => in_array($definition->type(), $configuredTypes, true))
+            ->map(fn ($definition) => [
+                'id' => 'placeholder-'.$definition->type(),
+                'name' => $definition->label(),
+                'type' => $definition->type(),
+                'status' => 'paused',
+                'is_enabled' => false,
+                'is_available' => $limits->isMonitorTypeAvailable((int) $organization->id, $definition->type()),
+                'is_paid_addon' => in_array($definition->type(), $paidMonitorTypes, true),
+                'is_configured' => false,
+                'interval_seconds' => null,
+                'timeout_ms' => null,
+                'settings' => $definition->defaultSettings(),
+                'expected' => $definition->defaultExpected(),
+                'last_check_at' => null,
+                'next_check_at' => null,
+                'check_in_progress_until' => null,
+                'is_checking' => false,
+                'last_success_at' => null,
+                'last_failure_at' => null,
+                'latest_result' => null,
+            ]);
+
         return Inertia::render('Sites/Show', [
             'organization' => [
                 'id' => $organization->id,
                 'name' => $organization->name,
             ],
+            'currentPlan' => $currentPlan ? $this->planPayload($currentPlan) : null,
+            'currentAddons' => $currentSubscription?->items
+                ? $currentSubscription->items->mapWithKeys(fn ($item): array => [$item->code => [
+                    'quantity' => $item->quantity,
+                    'unit_price_cents' => $item->unit_price_cents,
+                    'currency' => $item->currency,
+                ]])->all()
+                : [],
+            'addonCatalog' => $addonCatalog->payload(),
             'site' => [
                 'id' => $site->id,
                 'name' => $site->name,
@@ -182,43 +264,16 @@ final class MonitoredResourceController extends Controller
                         'name' => $site->project->name,
                     ]
                     : null,
-                'monitors' => $site->monitors
-                    ->sortBy(fn (Monitor $monitor): string => sprintf(
+                'monitors' => $monitorPayloads
+                    ->concat($placeholderPayloads)
+                    ->sortBy(fn (array $monitor): string => sprintf(
                         '%d-%d-%s',
-                        (! $monitor->is_enabled || $monitor->status === 'paused') ? 1 : 0,
-                        $this->monitorTypeOrder($monitor->type),
-                        $monitor->name,
+                        (! $monitor['is_enabled'] || $monitor['status'] === 'paused') ? 1 : 0,
+                        $this->monitorTypeOrder($monitor['type']),
+                        $monitor['name'],
                     ))
                     ->values()
-                    ->map(fn (Monitor $monitor) => [
-                        'id' => $monitor->id,
-                        'name' => $monitor->name,
-                        'type' => $monitor->type,
-                        'status' => $monitor->status,
-                        'is_enabled' => $monitor->is_enabled,
-                        'is_available' => $limits->isMonitorTypeAvailable((int) $organization->id, $monitor->type),
-                        'interval_seconds' => $monitor->interval_seconds,
-                        'timeout_ms' => $monitor->timeout_ms,
-                        'settings' => $monitor->settings,
-                        'expected' => $monitor->expected,
-                        'last_check_at' => $monitor->last_check_at?->toISOString(),
-                        'next_check_at' => $monitor->next_check_at?->toISOString(),
-                        'check_in_progress_until' => $monitor->check_in_progress_until?->toISOString(),
-                        'is_checking' => $monitor->check_in_progress_until?->isFuture() ?? false,
-                        'last_success_at' => $monitor->last_success_at?->toISOString(),
-                        'last_failure_at' => $monitor->last_failure_at?->toISOString(),
-                        'latest_result' => $monitor->latestCheckResult
-                            ? [
-                                'status' => $monitor->latestCheckResult->status,
-                                'checked_at' => $monitor->latestCheckResult->checked_at?->toISOString(),
-                                'response_time_ms' => $monitor->latestCheckResult->response_time_ms,
-                                'status_code' => $monitor->latestCheckResult->status_code,
-                                'error_code' => $monitor->latestCheckResult->error_code,
-                                'error_message' => $monitor->latestCheckResult->error_message,
-                                'normalized_result' => $monitor->latestCheckResult->normalized_result ?? [],
-                            ]
-                            : null,
-                    ]),
+                    ->all(),
                 'recent_checks' => $this->recentChecks($site),
                 'incidents' => $this->incidents($site),
             ],
@@ -290,7 +345,7 @@ final class MonitoredResourceController extends Controller
     private function currentSubscription(int $organizationId): ?Subscription
     {
         return Subscription::query()
-            ->with('plan.limits')
+            ->with(['plan.limits', 'items'])
             ->where('organization_id', $organizationId)
             ->where('status', 'active')
             ->where('starts_at', '<=', now())
