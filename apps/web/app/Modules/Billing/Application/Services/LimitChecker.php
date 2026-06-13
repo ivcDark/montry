@@ -326,7 +326,7 @@ final readonly class LimitChecker
                 'limit' => $siteLimit,
                 'extra_packs' => $this->addonQuantity($organizationId, BillingAddonCatalog::EXTRA_SITES_PACK),
             ],
-            'paid_checks' => collect(BillingAddonCatalog::PAID_MONITOR_TYPES)
+            'paid_checks' => collect($this->addons->paidMonitorTypes())
                 ->mapWithKeys(fn (string $type): array => [$type => [
                     'used' => $this->paidCheckUsage($organizationId, $type),
                     'limit' => $this->paidCheckLimit($organizationId, $type),

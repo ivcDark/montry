@@ -13,6 +13,16 @@ type Plan = {
     limits: Record<string, any>
 }
 
+type MonitorTypeOption = {
+    value: string
+    code?: string
+    label: string
+    name?: string
+    short_label?: string
+    is_paid?: boolean
+    sort_order?: number
+}
+
 type AddonCatalogItem = {
     code: string
     name: string
@@ -43,6 +53,7 @@ const props = defineProps<{
     addonCatalog?: AddonCatalogItem[]
     currentAddons?: Record<string, { quantity: number, unit_price_cents: number, currency: string }>
     entitlements?: Record<string, any>
+    monitorTypes: MonitorTypeOption[]
 }>()
 
 const currentPlanCode = computed(() => props.currentSubscription?.plan.code ?? 'free')
@@ -87,11 +98,42 @@ function planLimit(plan: Plan, key: string, valueKey: string, fallback: string |
     return plan.limits[key]?.[valueKey] ?? fallback
 }
 
+function monitorTypeLabel(code: string): string {
+    const option = props.monitorTypes.find((type) => (type.code ?? type.value) === code)
+
+    return option?.short_label
+        ?? option?.name
+        ?? option?.label
+        ?? code.toUpperCase()
+}
+
+function monitorTypeCodes(plan: Plan): string[] {
+    const allowed = plan.limits.allowed_monitor_types?.types ?? []
+
+    if (allowed.includes('*')) {
+        return props.monitorTypes
+            .map((type) => type.code ?? type.value)
+            .filter(Boolean)
+    }
+
+    return allowed
+}
+
+function monitorTypeList(plan: Plan, predicate?: (type: MonitorTypeOption) => boolean): string {
+    const labels = monitorTypeCodes(plan)
+        .map((code) => props.monitorTypes.find((type) => (type.code ?? type.value) === code) ?? { value: code, label: monitorTypeLabel(code) })
+        .filter((type) => predicate ? predicate(type as MonitorTypeOption) : true)
+        .sort((a, b) => ((a as MonitorTypeOption).sort_order ?? 1000) - ((b as MonitorTypeOption).sort_order ?? 1000))
+        .map((type) => monitorTypeLabel((type as MonitorTypeOption).code ?? (type as MonitorTypeOption).value))
+
+    return labels.length ? labels.join(', ') : '—'
+}
+
 function limitText(plan: Plan): string[] {
     const limits = plan.limits
     return [
         `Сайты: до ${limits.max_sites?.limit ?? 'без лимита'}`,
-        'Базовые проверки включены',
+        `Базовые проверки: ${monitorTypeList(plan, (type) => !type.is_paid)}`,
         'Платные проверки подключаются отдельно',
         `История: ${limits.history_retention_days?.days ?? 0} дней`,
         `Интервал: от ${Math.round((limits.minimum_check_interval_seconds?.seconds ?? 300) / 60)} мин`,
@@ -125,13 +167,13 @@ function comparisonValue(plan: Plan, key: string): string {
     }
 
     if (key === 'checks') {
-        return 'HTTP, SSL, домен, DNS, Robots.txt'
+        return monitorTypeList(plan, (type) => !type.is_paid)
     }
 
     if (key === 'types') {
         return limits.allowed_monitor_types?.types?.includes('*')
             ? 'Все'
-            : (limits.allowed_monitor_types?.types ?? []).join(', ').toUpperCase()
+            : monitorTypeList(plan)
     }
 
     if (key === 'history') {

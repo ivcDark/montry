@@ -2,7 +2,7 @@
 
 namespace App\Modules\Monitoring\Presentation\Http\Requests;
 
-use App\Modules\Monitoring\Application\Services\CheckTypeRegistry;
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,7 +15,7 @@ final class SaveMonitorRequest extends FormRequest
 
     public function rules(): array
     {
-        $types = array_keys(app(CheckTypeRegistry::class)->all());
+        $types = app(MonitorTypeCatalog::class)->allCodes();
 
         return [
             'type' => ['required', 'string', Rule::in($types)],

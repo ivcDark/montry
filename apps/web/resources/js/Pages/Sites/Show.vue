@@ -49,6 +49,20 @@ type AddonCatalogItem = {
     kind?: string
 }
 
+type MonitorTypeOption = {
+    value: string
+    code?: string
+    label: string
+    name?: string
+    short_label?: string
+    description?: string
+    is_paid?: boolean
+    unit_price_cents?: number
+    currency?: string
+    unit_label?: string | null
+    sort_order?: number
+}
+
 type CurrentPlan = {
     code: string
     name: string
@@ -186,6 +200,7 @@ const props = defineProps<{
     site: Site
     currentPlan: CurrentPlan | null
     addonCatalog: AddonCatalogItem[]
+    monitorTypes: MonitorTypeOption[]
     currentAddons: Record<string, { quantity: number, unit_price_cents: number, currency: string }>
 }>()
 
@@ -447,30 +462,20 @@ function monitorStatus(monitor: Monitor): string {
     return 'unknown'
 }
 
+function monitorTypeOption(type: string): MonitorTypeOption | undefined {
+    return props.monitorTypes.find((option) => (option.code ?? option.value) === type)
+}
+
 function typeLabel(type: string): string {
-    return {
-        http: 'Доступность сайта',
-        ssl: 'SSL',
-        domain: 'Домен',
-        dns: 'DNS',
-        robots_txt: 'Robots.txt',
-        sitemap_xml: 'Sitemap.xml',
-        tcp_port: 'TCP-порт',
-        api_endpoint: 'API endpoint',
-    }[type] ?? type.toUpperCase()
+    return monitorTypeOption(type)?.name
+        ?? monitorTypeOption(type)?.label
+        ?? type.toUpperCase()
 }
 
 function shortTypeLabel(type: string): string {
-    return {
-        http: 'HTTP',
-        ssl: 'SSL',
-        domain: 'Domain',
-        dns: 'DNS',
-        robots_txt: 'Robots',
-        sitemap_xml: 'Sitemap',
-        tcp_port: 'TCP',
-        api_endpoint: 'API',
-    }[type] ?? type.toUpperCase()
+    return monitorTypeOption(type)?.short_label
+        ?? monitorTypeOption(type)?.label
+        ?? type.toUpperCase()
 }
 
 function typeIcon(type: string): typeof Globe2 {
@@ -483,25 +488,18 @@ function typeIcon(type: string): typeof Globe2 {
 
 function addonPriceRub(type: string): number {
     const item = props.addonCatalog.find((addon) => addon.code === type)
+        ?? monitorTypeOption(type)
 
-    if (item) {
-        return Math.round(item.unit_price_cents / 100)
-    }
-
-    const fallbackPrices: Record<string, number> = {
-        sitemap_xml: 20,
-        api_endpoint: 30,
-        tcp_port: 20,
-    }
-
-    return fallbackPrices[type] ?? 0
+    return Math.round((item?.unit_price_cents ?? 0) / 100)
 }
 
 function addonUnitLabel(type: string): string {
-    if (type === 'api_endpoint') return 'endpoint'
-    if (type === 'tcp_port') return 'порт'
+    const unitLabel = props.addonCatalog.find((addon) => addon.code === type)?.unit_label
+        ?? monitorTypeOption(type)?.unit_label
 
-    return 'мес'
+    if (unitLabel) return unitLabel
+
+    return '1 проверка'
 }
 
 function money(value: number): string {

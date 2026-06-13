@@ -10,6 +10,7 @@ use App\Modules\Sites\Actions\ToggleMonitorAction;
 use App\Modules\Sites\Actions\UpdateMonitorAction;
 use App\Modules\Sites\DTO\CreateMonitorData;
 use App\Modules\Sites\DTO\UpdateMonitorData;
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use App\Modules\Sites\Enums\MonitorType;
 use App\Modules\Sites\Http\Requests\SaveMonitorRequest;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
@@ -32,7 +33,8 @@ final class SiteMonitorController extends Controller
 
     public function create(
         Request $request,
-        MonitoredResource $site
+        MonitoredResource $site,
+        MonitorTypeCatalog $monitorTypes
     ): Response
     {
         $organization = $this->getCurrentOrganization->handle($request->user());
@@ -56,12 +58,7 @@ final class SiteMonitorController extends Controller
                 'port' => $site->port,
                 'path' => $site->path,
             ],
-            'monitorTypes' => collect(MonitorType::cases())
-                ->map(fn (MonitorType $type) => [
-                    'value' => $type->value,
-                    'label' => $type->label(),
-                ])
-                ->values(),
+            'monitorTypes' => $monitorTypes->payload(),
         ]);
     }
 
@@ -94,7 +91,8 @@ final class SiteMonitorController extends Controller
     public function edit(
         Request $request,
         MonitoredResource $site,
-        Monitor $siteMonitor
+        Monitor $siteMonitor,
+        MonitorTypeCatalog $monitorTypes
     ): Response
     {
         $organization = $this->getCurrentOrganization->handle($request->user());
@@ -127,7 +125,7 @@ final class SiteMonitorController extends Controller
                 'timeout_ms' => $siteMonitor->timeout_ms,
                 'settings' => $siteMonitor->settings ?? [],
             ],
-            'monitorTypes' => $this->monitorTypes(),
+            'monitorTypes' => $monitorTypes->payload(),
         ]);
     }
 
@@ -192,14 +190,4 @@ final class SiteMonitorController extends Controller
         return to_route('sites.show', $site);
     }
 
-    private function monitorTypes(): array
-    {
-        return collect(MonitorType::cases())
-            ->map(fn (MonitorType $type) => [
-                'value' => $type->value,
-                'label' => $type->label(),
-            ])
-            ->values()
-            ->all();
-    }
 }

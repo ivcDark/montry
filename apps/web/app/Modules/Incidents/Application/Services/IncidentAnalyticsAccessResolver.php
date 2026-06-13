@@ -5,6 +5,7 @@ namespace App\Modules\Incidents\Application\Services;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Incidents\Application\DTO\IncidentAnalyticsAccess;
 use App\Modules\Incidents\Application\DTO\IncidentAnalyticsFilters;
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use Carbon\CarbonImmutable;
 use Illuminate\Validation\ValidationException;
 
@@ -33,7 +34,7 @@ final class IncidentAnalyticsAccessResolver
         $access = $this->resolve($organizationId);
         $type = (string) ($input['type'] ?? 'all');
 
-        if (! in_array($type, ['all', 'http', 'ssl', 'domain'], true)) {
+        if ($type !== 'all' && ! in_array($type, app(MonitorTypeCatalog::class)->allCodes(), true)) {
             throw ValidationException::withMessages(['type' => 'Unknown incident type filter.']);
         }
 

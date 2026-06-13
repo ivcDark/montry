@@ -2,6 +2,7 @@
 
 namespace App\Modules\Sites\Http\Requests;
 
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use App\Modules\Sites\Enums\MonitorType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -16,7 +17,7 @@ final class SaveMonitorRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'type' => ['required', Rule::enum(MonitorType::class)],
+            'type' => ['required', 'string', Rule::in(app(MonitorTypeCatalog::class)->allCodes())],
             'name' => ['required', 'string', 'max:255'],
             'is_enabled' => ['required', 'boolean'],
             'interval_seconds' => ['required', 'integer', 'min:30', 'max:86400'],

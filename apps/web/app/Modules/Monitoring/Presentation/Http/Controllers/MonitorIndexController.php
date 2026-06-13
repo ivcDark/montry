@@ -3,6 +3,7 @@
 namespace App\Modules\Monitoring\Presentation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Sites\Actions\GetCurrentOrganization;
 use Illuminate\Http\Request;
@@ -11,7 +12,11 @@ use Inertia\Response;
 
 final class MonitorIndexController extends Controller
 {
-    public function __invoke(Request $request, GetCurrentOrganization $getCurrentOrganization): Response
+    public function __invoke(
+        Request $request,
+        GetCurrentOrganization $getCurrentOrganization,
+        MonitorTypeCatalog $monitorTypes,
+    ): Response
     {
         $organization = $getCurrentOrganization->handle($request->user());
 
@@ -89,6 +94,7 @@ final class MonitorIndexController extends Controller
                 'name' => $organization->name,
             ],
             'monitors' => $monitors,
+            'monitorTypes' => $monitorTypes->payload(),
         ]);
     }
 }

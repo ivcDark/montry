@@ -6,6 +6,7 @@ use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Incidents\Application\Mail\WeeklyIncidentDigestMail;
 use App\Modules\Incidents\Infrastructure\Persistence\Models\IncidentWeeklyDigestLog;
 use App\Modules\Incidents\Infrastructure\Persistence\Models\IncidentWeeklyDigestPreference;
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,10 @@ use Throwable;
 
 final class SendWeeklyIncidentDigests
 {
+    public function __construct(private readonly MonitorTypeCatalog $monitorTypes)
+    {
+    }
+
     public function handle(?CarbonImmutable $now = null): int
     {
         $now = ($now ?? CarbonImmutable::now('Europe/Moscow'))->setTimezone('Europe/Moscow');
@@ -150,12 +155,7 @@ final class SendWeeklyIncidentDigests
 
     private function typeLabel(string $type): string
     {
-        return match ($type) {
-            'http' => 'HTTP',
-            'ssl' => 'SSL',
-            'domain' => 'Domain',
-            default => mb_strtoupper($type),
-        };
+        return $this->monitorTypes->label($type);
     }
 
     private function duration(int $seconds): string

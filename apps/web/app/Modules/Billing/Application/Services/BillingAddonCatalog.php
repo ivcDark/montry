@@ -2,33 +2,22 @@
 
 namespace App\Modules\Billing\Application\Services;
 
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
+
 final class BillingAddonCatalog
 {
     public const EXTRA_SITES_PACK = 'extra_sites_pack';
-    public const SITEMAP_XML = 'sitemap_xml';
-    public const API_ENDPOINT = 'api_endpoint';
-    public const TCP_PORT = 'tcp_port';
 
-    public const BASE_MONITOR_TYPES = [
-        'http',
-        'ssl',
-        'domain',
-        'dns',
-        'robots_txt',
-    ];
-
-    public const PAID_MONITOR_TYPES = [
-        self::SITEMAP_XML,
-        self::API_ENDPOINT,
-        self::TCP_PORT,
-    ];
+    public function __construct(
+        private readonly MonitorTypeCatalog $monitorTypes,
+    ) {}
 
     /**
      * @return array<string, array<string, mixed>>
      */
     public function all(): array
     {
-        return [
+        $addons = [
             self::EXTRA_SITES_PACK => [
                 'code' => self::EXTRA_SITES_PACK,
                 'name' => 'Дополнительные сайты',
@@ -40,44 +29,17 @@ final class BillingAddonCatalog
                 'kind' => 'site_pack',
                 'sites_per_unit' => 5,
                 'is_recurring' => true,
-            ],
-            self::SITEMAP_XML => [
-                'code' => self::SITEMAP_XML,
-                'name' => 'Sitemap.xml',
-                'description' => 'Проверка наличия и валидности XML-карты сайта.',
-                'unit' => 'проверка',
-                'unit_label' => '1 проверка',
-                'unit_price_cents' => 2000,
-                'currency' => 'RUB',
-                'kind' => 'paid_check',
-                'monitor_type' => self::SITEMAP_XML,
-                'is_recurring' => true,
-            ],
-            self::API_ENDPOINT => [
-                'code' => self::API_ENDPOINT,
-                'name' => 'API endpoint',
-                'description' => 'Проверка healthcheck, webhook или любого API URL.',
-                'unit' => 'endpoint',
-                'unit_label' => '1 endpoint',
-                'unit_price_cents' => 3000,
-                'currency' => 'RUB',
-                'kind' => 'paid_check',
-                'monitor_type' => self::API_ENDPOINT,
-                'is_recurring' => true,
-            ],
-            self::TCP_PORT => [
-                'code' => self::TCP_PORT,
-                'name' => 'TCP-порт',
-                'description' => 'Проверка открытого TCP-порта.',
-                'unit' => 'порт',
-                'unit_label' => '1 порт',
-                'unit_price_cents' => 2000,
-                'currency' => 'RUB',
-                'kind' => 'paid_check',
-                'monitor_type' => self::TCP_PORT,
-                'is_recurring' => true,
+                'sort_order' => 0,
             ],
         ];
+
+        foreach ($this->monitorTypes->paidAddonPayload() as $addon) {
+            $addons[$addon['code']] = $addon;
+        }
+
+        uasort($addons, fn (array $left, array $right): int => ($left['sort_order'] ?? 0) <=> ($right['sort_order'] ?? 0));
+
+        return $addons;
     }
 
     /**
@@ -102,12 +64,31 @@ final class BillingAddonCatalog
 
     public function isPaidMonitorType(string $type): bool
     {
-        return in_array($type, self::PAID_MONITOR_TYPES, true);
+        return $this->monitorTypes->isPaid($type);
     }
 
     public function isBaseMonitorType(string $type): bool
     {
-        return in_array($type, self::BASE_MONITOR_TYPES, true);
+        return $this->monitorTypes->isBase($type);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function paidMonitorTypes(): array
+    {
+        return $this->monitorTypes->paidCodes();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function baseMonitorTypes(): array
+    {
+        return array_values(array_filter(
+            $this->monitorTypes->allCodes(),
+            fn (string $code): bool => $this->monitorTypes->isBase($code),
+        ));
     }
 
     /**

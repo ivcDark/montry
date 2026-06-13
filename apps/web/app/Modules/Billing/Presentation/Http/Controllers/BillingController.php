@@ -15,6 +15,7 @@ use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Billing\Presentation\Http\Requests\ScheduleDowngradeRequest;
 use App\Modules\Billing\Presentation\Http\Requests\StartCheckoutRequest;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
 use App\Modules\Observability\Application\Services\AuditLogger;
@@ -28,7 +29,13 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class BillingController extends Controller
 {
-    public function index(Request $request, GetCurrentOrganization $getCurrentOrganization, BillingAddonCatalog $addonCatalog, LimitChecker $limits): Response
+    public function index(
+        Request $request,
+        GetCurrentOrganization $getCurrentOrganization,
+        BillingAddonCatalog $addonCatalog,
+        LimitChecker $limits,
+        MonitorTypeCatalog $monitorTypes,
+    ): Response
     {
         $organization = $getCurrentOrganization->handle($request->user());
 
@@ -69,6 +76,7 @@ final class BillingController extends Controller
                 ]])->all()
                 : [],
             'entitlements' => $limits->usageSummary((int) $organization->id),
+            'monitorTypes' => $monitorTypes->payload(),
             'usage' => [
                 'sites' => MonitoredResource::query()
                     ->where('organization_id', $organization->id)

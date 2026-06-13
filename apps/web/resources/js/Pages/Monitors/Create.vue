@@ -20,7 +20,13 @@ type Site = {
 
 type MonitorTypeOption = {
     value: string
+    code?: string
     label: string
+    name?: string
+    short_label?: string
+    description?: string
+    default_interval_seconds?: number | null
+    default_timeout_ms?: number | null
 }
 
 const props = defineProps<{
@@ -37,9 +43,10 @@ const headersText = ref('')
 const intervalPresets = [5, 10, 15, 30, 60, 360, 720, 1440]
 
 const rootUrl = computed(() => siteRootUrl(props.site.url))
+const initialType = props.monitorTypes[0]?.code ?? props.monitorTypes[0]?.value ?? 'http'
 
 const form = useForm({
-    type: 'http',
+    type: initialType,
     name: 'HTTP check',
     is_enabled: true,
     interval_seconds: 300,
@@ -72,7 +79,7 @@ const form = useForm({
     },
 })
 
-const selectedType = computed(() => props.monitorTypes.find((type) => type.value === form.type))
+const selectedType = computed(() => props.monitorTypes.find((type) => (type.code ?? type.value) === form.type))
 
 const typeHints: Record<string, { title: string, description: string, result: string }> = {
     http: {
@@ -117,10 +124,22 @@ const typeHints: Record<string, { title: string, description: string, result: st
     },
 }
 
-const activeHint = computed(() => typeHints[form.type] ?? {
-    title: selectedType.value?.label ?? 'Мониторинг',
-    description: 'Настройте параметры проверки для выбранного типа.',
-    result: 'Проверка будет создана после сохранения.',
+const activeHint = computed(() => {
+    const hint = typeHints[form.type]
+
+    if (hint) {
+        return {
+            ...hint,
+            title: selectedType.value?.name ?? selectedType.value?.label ?? hint.title,
+            description: selectedType.value?.description ?? hint.description,
+        }
+    }
+
+    return {
+        title: selectedType.value?.name ?? selectedType.value?.label ?? 'Мониторинг',
+        description: selectedType.value?.description ?? 'Настройте параметры проверки для выбранного типа.',
+        result: 'Проверка будет создана после сохранения.',
+    }
 })
 
 function selectType(type: string): void {
@@ -448,17 +467,17 @@ function submit(): void {
                     <div class="mt-5 grid gap-3">
                         <button
                             v-for="type in monitorTypes"
-                            :key="type.value"
+                            :key="type.code ?? type.value"
                             type="button"
                             class="rounded-2xl border p-4 text-left transition"
-                            :class="form.type === type.value
+                            :class="form.type === (type.code ?? type.value)
                                 ? 'border-[#0F6BFF] bg-[#EAF2FF] text-[#0F6BFF]'
                                 : 'border-[#E5E7EB] bg-white text-[#111827] hover:border-[#0F6BFF]'"
-                            @click="selectType(type.value)"
+                            @click="selectType(type.code ?? type.value)"
                         >
-                            <span class="block text-sm font-extrabold">{{ type.label }}</span>
+                            <span class="block text-sm font-extrabold">{{ type.short_label ?? type.name ?? type.label }}</span>
                             <span class="mt-1 block text-xs font-semibold text-[#667085]">
-                                {{ typeHints[type.value]?.description ?? 'Пользовательский тип мониторинга' }}
+                                {{ type.description ?? typeHints[type.code ?? type.value]?.description ?? 'Пользовательский тип мониторинга' }}
                             </span>
                         </button>
                     </div>

@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Presentation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use App\Modules\Observability\Application\Services\AuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -173,7 +174,7 @@ final class AdminPlanController extends Controller
         $limits = [
             'max_sites' => ['limit' => $this->nullableInteger($validated['max_sites'] ?? null)],
             'max_monitors' => ['limit' => $this->nullableInteger($validated['max_monitors'] ?? null)],
-            'allowed_monitor_types' => ['types' => $this->csvList((string) ($validated['allowed_monitor_types'] ?? ''), ['http', 'ssl', 'domain'])],
+            'allowed_monitor_types' => ['types' => $this->csvList((string) ($validated['allowed_monitor_types'] ?? ''), app(MonitorTypeCatalog::class)->allCodes())],
             'history_retention_days' => ['days' => $this->nullableInteger($validated['history_retention_days'] ?? null) ?? 0],
             'minimum_check_interval_seconds' => ['seconds' => $this->nullableInteger($validated['minimum_check_interval_seconds'] ?? null) ?? 300],
             'notification_channels' => ['channels' => $this->csvList((string) ($validated['notification_channels'] ?? ''), ['email'])],

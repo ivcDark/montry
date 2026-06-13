@@ -8,6 +8,7 @@ use App\Modules\Incidents\Application\Services\IncidentAnalyticsAccessResolver;
 use App\Modules\Incidents\Application\Services\IncidentAnalyticsCache;
 use App\Modules\Incidents\Infrastructure\Persistence\Models\Incident;
 use App\Modules\Incidents\Infrastructure\Persistence\Models\IncidentWeeklyDigestPreference;
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use App\Modules\Sites\Actions\GetCurrentOrganization;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ final class IncidentController extends Controller
         IncidentAnalyticsAccessResolver $accessResolver,
         IncidentAnalyticsQuery $analyticsQuery,
         IncidentAnalyticsCache $analyticsCache,
+        MonitorTypeCatalog $monitorTypes,
     ): Response
     {
         $organization = $getCurrentOrganization->handle($request->user());
@@ -135,6 +137,7 @@ final class IncidentController extends Controller
             'activeIncidents' => $activeIncidents,
             'resolvedIncidents' => $resolvedIncidents,
             'warnings' => $warnings,
+            'monitorTypes' => $monitorTypes->payload(),
         ]);
     }
 
@@ -157,7 +160,7 @@ final class IncidentController extends Controller
             });
         }
 
-        if (in_array($type, ['http', 'ssl', 'domain'], true)) {
+        if ($type !== 'all') {
             $query->whereHas('monitor', function (Builder $query) use ($type): void {
                 $query->where('type', $type);
             });

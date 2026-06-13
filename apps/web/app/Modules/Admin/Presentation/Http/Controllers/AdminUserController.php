@@ -9,6 +9,7 @@ use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Observability\Application\Services\AuditLogger;
 use Illuminate\Http\RedirectResponse;
@@ -41,7 +42,7 @@ final class AdminUserController extends Controller
         ]);
     }
 
-    public function show(Request $request, User $user): Response
+    public function show(Request $request, User $user, MonitorTypeCatalog $monitorTypes): Response
     {
         $user->load([
             'organizations' => fn ($query) => $query
@@ -188,6 +189,7 @@ final class AdminUserController extends Controller
                 ])
                 ->values(),
             'plans' => $plans,
+            'monitorTypes' => $monitorTypes->payload(),
         ]);
     }
 

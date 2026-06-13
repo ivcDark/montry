@@ -12,7 +12,7 @@ use App\Modules\MonitoredResources\Application\Handlers\ListMonitoredResourcesHa
 use App\Modules\MonitoredResources\Application\Queries\ListMonitoredResourcesQuery;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\MonitoredResources\Presentation\Http\Requests\StoreMonitoredResourceRequest;
-use App\Modules\Monitoring\Application\Services\CheckTypeRegistry;
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\CheckResult;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
@@ -34,19 +34,21 @@ final class MonitoredResourceController extends Controller
         Request $request,
         GetCurrentOrganization $getCurrentOrganization,
         ListMonitoredResourcesHandler $listMonitoredResources,
+        MonitorTypeCatalog $monitorTypes,
     ): Response {
         $organization = $getCurrentOrganization->handle($request->user());
 
         return Inertia::render('Sites/Index', [
             'organization' => ['id' => $organization->id, 'name' => $organization->name],
             'sites' => $listMonitoredResources->handle(new ListMonitoredResourcesQuery($organization->id)),
+            'monitorTypes' => $monitorTypes->payload(),
         ]);
     }
 
     public function create(
         Request $request,
         GetCurrentOrganization $getCurrentOrganization,
-        CheckTypeRegistry $checkTypes,
+        MonitorTypeCatalog $monitorTypes,
         BillingAddonCatalog $addonCatalog,
         LimitChecker $limits,
     ): Response {
@@ -63,13 +65,7 @@ final class MonitoredResourceController extends Controller
                 'id' => $organization->id,
                 'name' => $organization->name,
             ],
-            'monitorTypes' => collect($checkTypes->all())
-                ->map(fn ($definition) => [
-                    'value' => $definition->type(),
-                    'label' => $definition->label(),
-                ])
-                ->values()
-                ->all(),
+            'monitorTypes' => $monitorTypes->payload(),
             'currentPlan' => $currentPlan ? $this->planPayload($currentPlan) : null,
             'currentAddons' => $currentSubscription?->items
                 ? $currentSubscription->items->mapWithKeys(fn ($item): array => [$item->code => [
@@ -122,7 +118,7 @@ final class MonitoredResourceController extends Controller
                     'url' => $siteData->url,
                     'host' => $siteData->host,
                     'port' => $siteData->port,
-                ], null, $limits->minimumCheckIntervalSeconds($organization->id)),
+                ], $limits->allowedMonitorTypes($organization->id), $limits->minimumCheckIntervalSeconds($organization->id)),
             );
         } catch (AuthorizationException $exception) {
             if (! $this->isCreateLimitException($exception)) {
@@ -143,7 +139,7 @@ final class MonitoredResourceController extends Controller
         Request $request,
         MonitoredResource $site,
         GetCurrentOrganization $getCurrentOrganization,
-        CheckTypeRegistry $checkTypes,
+        MonitorTypeCatalog $monitorTypes,
         BillingAddonCatalog $addonCatalog,
         LimitChecker $limits,
     ): Response {
@@ -172,7 +168,6 @@ final class MonitoredResourceController extends Controller
             ->with('limits')
             ->where('code', 'free')
             ->first();
-        $paidMonitorTypes = BillingAddonCatalog::PAID_MONITOR_TYPES;
         $monitorPayloads = $site->monitors
             ->map(fn (Monitor $monitor) => [
                 'id' => $monitor->id,
@@ -181,7 +176,7 @@ final class MonitoredResourceController extends Controller
                 'status' => $monitor->status,
                 'is_enabled' => $monitor->is_enabled,
                 'is_available' => $limits->isMonitorTypeAvailable((int) $organization->id, $monitor->type),
-                'is_paid_addon' => in_array($monitor->type, $paidMonitorTypes, true),
+                'is_paid_addon' => $addonCatalog->isPaidMonitorType($monitor->type),
                 'is_configured' => true,
                 'interval_seconds' => $monitor->interval_seconds,
                 'timeout_ms' => $monitor->timeout_ms,
@@ -207,21 +202,22 @@ final class MonitoredResourceController extends Controller
             ]);
 
         $configuredTypes = $monitorPayloads->pluck('type')->all();
-        $placeholderPayloads = collect($checkTypes->all())
-            ->reject(fn ($definition): bool => in_array($definition->type(), $configuredTypes, true))
-            ->map(fn ($definition) => [
-                'id' => 'placeholder-'.$definition->type(),
-                'name' => $definition->label(),
-                'type' => $definition->type(),
+        $placeholderPayloads = collect($monitorTypes->payload())
+            ->reject(fn (array $type): bool => in_array($type['code'], $configuredTypes, true))
+            ->map(fn (array $type) => [
+                'id' => 'placeholder-'.$type['code'],
+                'name' => $type['name'],
+                'type' => $type['code'],
                 'status' => 'paused',
                 'is_enabled' => false,
-                'is_available' => $limits->isMonitorTypeAvailable((int) $organization->id, $definition->type()),
-                'is_paid_addon' => in_array($definition->type(), $paidMonitorTypes, true),
+                'is_available' => $limits->isMonitorTypeAvailable((int) $organization->id, $type['code'])
+                    && (! (bool) $type['is_paid'] || $limits->paidCheckUsage((int) $organization->id, $type['code']) < $limits->paidCheckLimit((int) $organization->id, $type['code'])),
+                'is_paid_addon' => (bool) $type['is_paid'],
                 'is_configured' => false,
                 'interval_seconds' => null,
                 'timeout_ms' => null,
-                'settings' => $definition->defaultSettings(),
-                'expected' => $definition->defaultExpected(),
+                'settings' => $type['default_settings'],
+                'expected' => $type['default_expected'],
                 'last_check_at' => null,
                 'next_check_at' => null,
                 'check_in_progress_until' => null,
@@ -245,6 +241,7 @@ final class MonitoredResourceController extends Controller
                 ]])->all()
                 : [],
             'addonCatalog' => $addonCatalog->payload(),
+            'monitorTypes' => $monitorTypes->payload(),
             'site' => [
                 'id' => $site->id,
                 'name' => $site->name,
@@ -269,7 +266,7 @@ final class MonitoredResourceController extends Controller
                     ->sortBy(fn (array $monitor): string => sprintf(
                         '%d-%d-%s',
                         (! $monitor['is_enabled'] || $monitor['status'] === 'paused') ? 1 : 0,
-                        $this->monitorTypeOrder($monitor['type']),
+                        $monitorTypes->sortOrder($monitor['type']),
                         $monitor['name'],
                     ))
                     ->values()
@@ -504,20 +501,5 @@ final class MonitoredResourceController extends Controller
         }
 
         return "{$count} {$word}";
-    }
-
-    private function monitorTypeOrder(string $type): int
-    {
-        return match ($type) {
-            'http' => 0,
-            'ssl' => 1,
-            'domain' => 2,
-            'dns' => 3,
-            'robots_txt' => 4,
-            'sitemap_xml' => 5,
-            'api_endpoint' => 6,
-            'tcp_port' => 7,
-            default => 99,
-        };
     }
 }

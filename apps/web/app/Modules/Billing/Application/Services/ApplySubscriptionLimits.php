@@ -49,7 +49,7 @@ final readonly class ApplySubscriptionLimits
                 ]);
         }
 
-        foreach (BillingAddonCatalog::PAID_MONITOR_TYPES as $type) {
+        foreach ($this->addons->paidMonitorTypes() as $type) {
             $this->applyPaidCheckLimit($organizationId, $type, $allowedResourceIds);
         }
     }

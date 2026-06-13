@@ -149,7 +149,7 @@ final class IncidentAnalyticsQuery
     }
 
     /**
-     * @return array{http:int, ssl:int, domain:int}
+     * @return array<string, int>
      */
     private function typeDistribution(Builder $query): array
     {
@@ -159,11 +159,9 @@ final class IncidentAnalyticsQuery
             ->groupBy('monitors.type')
             ->pluck('value', 'monitors.type');
 
-        return [
-            'http' => (int) ($rows['http'] ?? 0),
-            'ssl' => (int) ($rows['ssl'] ?? 0),
-            'domain' => (int) ($rows['domain'] ?? 0),
-        ];
+        return $rows
+            ->mapWithKeys(fn ($value, string $type): array => [$type => (int) $value])
+            ->all();
     }
 
     /**

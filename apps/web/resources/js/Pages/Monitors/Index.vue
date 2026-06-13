@@ -32,6 +32,15 @@ type LatestResult = {
     normalized_result: Record<string, unknown>
 }
 
+type MonitorTypeOption = {
+    value: string
+    code?: string
+    label: string
+    name?: string
+    short_label?: string
+    sort_order?: number
+}
+
 type Monitor = {
     id: string
     site_id: string
@@ -55,6 +64,7 @@ type Monitor = {
 const props = defineProps<{
     organization: Organization
     monitors: Monitor[]
+    monitorTypes: MonitorTypeOption[]
 }>()
 
 useAutoRefresh({
@@ -66,12 +76,16 @@ const search = ref('')
 const typeFilter = ref('all')
 const statusFilter = ref('all')
 
-const typeFilters = [
+const typeFilters = computed(() => [
     { value: 'all', label: 'Все' },
-    { value: 'http', label: 'HTTP/HTTPS' },
-    { value: 'ssl', label: 'SSL' },
-    { value: 'domain', label: 'Домены' },
-]
+    ...props.monitorTypes
+        .map((type) => ({
+            value: type.code ?? type.value,
+            label: type.short_label ?? type.name ?? type.label,
+            sort_order: type.sort_order ?? 1000,
+        }))
+        .sort((a, b) => a.sort_order - b.sort_order),
+])
 
 const statusFilters = [
     { value: 'all', label: 'Все статусы' },
@@ -155,16 +169,12 @@ function statusClass(monitor: Monitor): string {
 }
 
 function typeLabel(type: string): string {
-    return {
-        http: 'HTTP/HTTPS',
-        ssl: 'SSL',
-        domain: 'Domain',
-        dns: 'DNS',
-        robots_txt: 'Robots.txt',
-        sitemap_xml: 'Sitemap.xml',
-        api_endpoint: 'API endpoint',
-        tcp_port: 'TCP-порт',
-    }[type] ?? type.toUpperCase()
+    const option = props.monitorTypes.find((item) => (item.code ?? item.value) === type)
+
+    return option?.short_label
+        ?? option?.name
+        ?? option?.label
+        ?? type.toUpperCase()
 }
 
 function typeClass(type: string): string {
@@ -257,7 +267,7 @@ function toggleMonitor(monitor: Monitor): void {
         :organization="organization"
         active-item="monitors"
         title="Мониторинги"
-        subtitle="Активные проверки доступности, SSL и доменов"
+        subtitle="Активные проверки по подключенным типам мониторинга"
         :usage-current="stats.total"
     >
         <template #actions>
@@ -295,7 +305,7 @@ function toggleMonitor(monitor: Monitor): void {
                         <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
                             <p class="text-sm font-bold text-[#667085]">Всего мониторингов</p>
                             <p class="mt-3 text-4xl font-extrabold text-[#111827]">{{ stats.total }}</p>
-                            <p class="mt-2 text-sm text-[#667085]">HTTP, SSL и домены</p>
+                            <p class="mt-2 text-sm text-[#667085]">Подключенные типы</p>
                         </article>
                         <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
                             <p class="text-sm font-bold text-[#667085]">Работают</p>
@@ -310,7 +320,7 @@ function toggleMonitor(monitor: Monitor): void {
                         <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
                             <p class="text-sm font-bold text-[#667085]">Предупреждения</p>
                             <p class="mt-3 text-4xl font-extrabold text-[#F59E0B]">{{ stats.warning }}</p>
-                            <p class="mt-2 text-sm text-[#667085]">SSL и домены</p>
+                            <p class="mt-2 text-sm text-[#667085]">предупреждения</p>
                         </article>
                         <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
                             <p class="text-sm font-bold text-[#667085]">Проверяются</p>

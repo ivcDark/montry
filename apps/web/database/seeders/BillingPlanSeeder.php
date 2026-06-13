@@ -2,18 +2,15 @@
 
 namespace Database\Seeders;
 
-use App\Modules\Billing\Application\Services\BillingAddonCatalog;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use Illuminate\Database\Seeder;
 
 final class BillingPlanSeeder extends Seeder
 {
     public function run(): void
     {
-        $allMonitorTypes = array_merge(
-            BillingAddonCatalog::BASE_MONITOR_TYPES,
-            BillingAddonCatalog::PAID_MONITOR_TYPES,
-        );
+        $allMonitorTypes = app(MonitorTypeCatalog::class)->allCodes();
 
         $plans = [
             'free' => [

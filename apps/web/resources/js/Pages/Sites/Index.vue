@@ -68,6 +68,14 @@ type Monitor = {
     latest_result: LatestResult | null
 }
 
+type MonitorTypeOption = {
+    value: string
+    code?: string
+    label: string
+    name?: string
+    short_label?: string
+}
+
 type Site = {
     id: string
     name: string
@@ -86,6 +94,7 @@ type Site = {
 const props = defineProps<{
     organization: Organization
     sites: Site[]
+    monitorTypes: MonitorTypeOption[]
 }>()
 
 const page = usePage<PageProps>()
@@ -308,16 +317,9 @@ function monitorStatus(monitor: Monitor): string {
 }
 
 function monitorTypeLabel(type: string): string {
-    return {
-        http: 'HTTP',
-        ssl: 'SSL',
-        domain: 'Domain',
-        dns: 'DNS',
-        robots_txt: 'Robots',
-        sitemap_xml: 'Sitemap',
-        tcp_port: 'TCP',
-        api_endpoint: 'API',
-    }[type] ?? type.toUpperCase()
+    const option = props.monitorTypes.find((item) => (item.code ?? item.value) === type)
+
+    return option?.short_label ?? option?.label ?? type.toUpperCase()
 }
 
 function monitorBadgeClass(monitor: Monitor): string {

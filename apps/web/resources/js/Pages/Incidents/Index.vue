@@ -36,6 +36,15 @@ type Filters = {
     project_id: number | null
 }
 
+type MonitorTypeOption = {
+    value: string
+    code?: string
+    label: string
+    name?: string
+    short_label?: string
+    sort_order?: number
+}
+
 type Incident = {
     id: number
     site_id: number
@@ -100,11 +109,7 @@ type IncidentAnalytics = {
         incident_counts: Array<{ date: string; value: number }>
         downtime_seconds: Array<{ date: string; value: number }>
     }
-    type_distribution: {
-        http: number
-        ssl: number
-        domain: number
-    }
+    type_distribution: Record<string, number>
     projects: AnalyticsProject[]
     selected_project_id: number | null
     selected_project: { id: number; name: string } | null
@@ -122,6 +127,7 @@ const props = defineProps<{
     activeIncidents: Incident[]
     resolvedIncidents: Incident[]
     warnings: Incident[]
+    monitorTypes: MonitorTypeOption[]
 }>()
 
 const search = ref(props.filters.search)
@@ -186,16 +192,25 @@ const downtimeChartData = computed(() => ({
     ],
 }))
 
+const typeDistributionRows = computed(() => {
+    const distribution = props.analytics?.type_distribution ?? {}
+
+    return Object.entries(distribution)
+        .map(([code, value]) => ({
+            code,
+            label: typeLabel(code),
+            value,
+            sort_order: props.monitorTypes.find((type) => (type.code ?? type.value) === code)?.sort_order ?? 1000,
+        }))
+        .sort((a, b) => a.sort_order - b.sort_order)
+})
+
 const typeDistributionChartData = computed(() => ({
-    labels: ['HTTP', 'SSL', 'Domain'],
+    labels: typeDistributionRows.value.map((row) => row.label),
     datasets: [
         {
-            data: [
-                props.analytics?.type_distribution.http ?? 0,
-                props.analytics?.type_distribution.ssl ?? 0,
-                props.analytics?.type_distribution.domain ?? 0,
-            ],
-            backgroundColor: ['#0F6BFF', '#12B3A8', '#F59E0B'],
+            data: typeDistributionRows.value.map((row) => row.value),
+            backgroundColor: ['#0F6BFF', '#12B3A8', '#F59E0B', '#7C3AED', '#64748B', '#EF4444', '#10B981', '#F97316'],
         },
     ],
 }))
@@ -284,11 +299,12 @@ function signedNumber(value: number): string {
 }
 
 function typeLabel(value: string): string {
-    if (value === 'http') return 'HTTP'
-    if (value === 'ssl') return 'SSL'
-    if (value === 'domain') return 'Domain'
+    const option = props.monitorTypes.find((type) => (type.code ?? type.value) === value)
 
-    return value.toUpperCase()
+    return option?.short_label
+        ?? option?.name
+        ?? option?.label
+        ?? value.toUpperCase()
 }
 
 function statusLabel(value: string): string {
@@ -310,7 +326,7 @@ function severityClass(value: string): string {
         :organization="organization"
         active-item="incidents"
         title="Инциденты"
-        subtitle="Открытые проблемы, история простоев и предупреждения по SSL и доменам"
+        subtitle="Открытые проблемы, история простоев и предупреждения по мониторингам"
     >
         <template #actions>
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -364,9 +380,13 @@ function severityClass(value: string): string {
                     </select>
                     <select v-model="type" class="h-11 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15" @change="applyFilters">
                         <option value="all">Все проверки</option>
-                        <option value="http">HTTP</option>
-                        <option value="ssl">SSL</option>
-                        <option value="domain">Domain</option>
+                        <option
+                            v-for="monitorType in monitorTypes"
+                            :key="monitorType.code ?? monitorType.value"
+                            :value="monitorType.code ?? monitorType.value"
+                        >
+                            {{ monitorType.short_label ?? monitorType.name ?? monitorType.label }}
+                        </option>
                     </select>
                     <input v-model="dateFrom" type="date" class="h-11 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15" @change="applyFilters">
                     <input v-model="dateTo" type="date" class="h-11 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] outline-none focus:border-[#0F6BFF] focus:ring-2 focus:ring-[#0F6BFF]/15" @change="applyFilters">
@@ -475,7 +495,7 @@ function severityClass(value: string): string {
                             </div>
                             <div class="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
                                 <h2 class="text-lg font-extrabold text-[#111827]">Типы</h2>
-                                <p class="mt-1 text-sm text-[#667085]">HTTP, SSL и домены</p>
+                                <p class="mt-1 text-sm text-[#667085]">Распределение по типам из каталога</p>
                                 <div class="mt-5 h-64">
                                     <Doughnut :data="typeDistributionChartData" :options="doughnutOptions" />
                                 </div>

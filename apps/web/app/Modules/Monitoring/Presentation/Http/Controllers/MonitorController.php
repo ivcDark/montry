@@ -12,7 +12,7 @@ use App\Modules\Monitoring\Application\Handlers\CreateMonitorHandler;
 use App\Modules\Monitoring\Application\Handlers\PauseMonitorHandler;
 use App\Modules\Monitoring\Application\Handlers\ResumeMonitorHandler;
 use App\Modules\Monitoring\Application\Handlers\UpdateMonitorHandler;
-use App\Modules\Monitoring\Application\Services\CheckTypeRegistry;
+use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Monitoring\Presentation\Http\Requests\SaveMonitorRequest;
 use App\Modules\Sites\Actions\DeleteMonitorAction;
@@ -29,7 +29,7 @@ final class MonitorController extends Controller
         private readonly GetCurrentOrganization $getCurrentOrganization,
     ) {}
 
-    public function create(Request $request, MonitoredResource $site, CheckTypeRegistry $checkTypes): Response
+    public function create(Request $request, MonitoredResource $site, MonitorTypeCatalog $monitorTypes): Response
     {
         $organization = $this->getCurrentOrganization->handle($request->user());
         abort_unless($site->organization_id === $organization->id, 404);
@@ -37,7 +37,7 @@ final class MonitorController extends Controller
         return Inertia::render('Monitors/Create', [
             'organization' => ['id' => $organization->id, 'name' => $organization->name],
             'site' => $this->sitePayload($site),
-            'monitorTypes' => $this->monitorTypes($checkTypes),
+            'monitorTypes' => $monitorTypes->payload(),
         ]);
     }
 
@@ -81,7 +81,7 @@ final class MonitorController extends Controller
         Request $request,
         MonitoredResource $site,
         Monitor $siteMonitor,
-        CheckTypeRegistry $checkTypes,
+        MonitorTypeCatalog $monitorTypes,
     ): Response {
         $organization = $this->getCurrentOrganization->handle($request->user());
         abort_unless($site->organization_id === $organization->id, 404);
@@ -100,7 +100,7 @@ final class MonitorController extends Controller
                 'settings' => $siteMonitor->settings ?? [],
                 'expected' => $siteMonitor->expected ?? [],
             ],
-            'monitorTypes' => $this->monitorTypes($checkTypes),
+            'monitorTypes' => $monitorTypes->payload(),
         ]);
     }
 
@@ -219,16 +219,5 @@ final class MonitorController extends Controller
             'Check interval is below the current plan limit.',
             'Monitor type is not available for the current plan.',
         ], true);
-    }
-
-    private function monitorTypes(CheckTypeRegistry $checkTypes): array
-    {
-        return collect($checkTypes->all())
-            ->map(fn ($definition) => [
-                'value' => $definition->type(),
-                'label' => $definition->label(),
-            ])
-            ->values()
-            ->all();
     }
 }

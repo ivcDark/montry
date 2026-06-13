@@ -60,6 +60,14 @@ type Site = {
     } | null
 }
 
+type MonitorTypeOption = {
+    value: string
+    code?: string
+    label: string
+    name?: string
+    short_label?: string
+}
+
 type Monitor = {
     id: number
     name: string
@@ -90,6 +98,7 @@ const props = defineProps<{
     sites: Site[]
     monitors: Monitor[]
     plans: Plan[]
+    monitorTypes: MonitorTypeOption[]
 }>()
 
 const planSelections = ref<Record<number, number | null>>(
@@ -155,11 +164,12 @@ function statusClass(status: string): string {
 }
 
 function typeLabel(type: string): string {
-    if (type === 'http') return 'HTTP'
-    if (type === 'ssl') return 'SSL'
-    if (type === 'domain') return 'Domain'
+    const option = props.monitorTypes.find((item) => (item.code ?? item.value) === type)
 
-    return type.toUpperCase()
+    return option?.short_label
+        ?? option?.name
+        ?? option?.label
+        ?? type.toUpperCase()
 }
 </script>
 
