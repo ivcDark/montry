@@ -15,7 +15,6 @@ use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Billing\Presentation\Http\Requests\ScheduleDowngradeRequest;
 use App\Modules\Billing\Presentation\Http\Requests\StartCheckoutRequest;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
-use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
 use App\Modules\Observability\Application\Services\AuditLogger;
@@ -29,13 +28,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class BillingController extends Controller
 {
-    public function index(
-        Request $request,
-        GetCurrentOrganization $getCurrentOrganization,
-        BillingAddonCatalog $addonCatalog,
-        LimitChecker $limits,
-        MonitorTypeCatalog $monitorTypes,
-    ): Response
+    public function index(Request $request, GetCurrentOrganization $getCurrentOrganization, BillingAddonCatalog $addonCatalog, LimitChecker $limits): Response
     {
         $organization = $getCurrentOrganization->handle($request->user());
 
@@ -76,7 +69,6 @@ final class BillingController extends Controller
                 ]])->all()
                 : [],
             'entitlements' => $limits->usageSummary((int) $organization->id),
-            'monitorTypes' => $monitorTypes->payload(),
             'usage' => [
                 'sites' => MonitoredResource::query()
                     ->where('organization_id', $organization->id)
@@ -179,6 +171,7 @@ final class BillingController extends Controller
         Payment $payment,
         GetCurrentOrganization $getCurrentOrganization,
         RobokassaService $robokassa,
+        BillingAddonCatalog $addonCatalog,
     ): Response {
         $organization = $getCurrentOrganization->handle($request->user());
 
@@ -205,6 +198,19 @@ final class BillingController extends Controller
                 'plan' => $payment->subscription?->plan
                     ? $this->planPayload($payment->subscription->plan)
                     : null,
+                'items' => $payment->subscription?->items
+                    ? $payment->subscription->items->map(function ($item) use ($addonCatalog): array {
+                        $catalogItem = $addonCatalog->all()[$item->code] ?? null;
+
+                        return [
+                            'code' => $item->code,
+                            'name' => $catalogItem['name'] ?? $item->code,
+                            'quantity' => $item->quantity,
+                            'unit_price_cents' => $item->unit_price_cents,
+                            'amount_cents' => $item->quantity * $item->unit_price_cents,
+                        ];
+                    })->values()
+                    : [],
                 'robokassa' => $robokassa->paymentForm($payment, $request->user()?->email),
             ],
         ]);

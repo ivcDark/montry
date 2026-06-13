@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { Head, Link, router, usePage } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
 import {
     Activity,
     AlertTriangle,
@@ -21,19 +21,12 @@ import {
     Trash2,
     X,
 } from '@lucide/vue'
-import FlashToast from '@/Components/FlashToast.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useAutoRefresh } from '../../Composables/useAutoRefresh'
 
 type Organization = {
     id: string
     name: string
-}
-
-type PageProps = {
-    flash?: {
-        error?: string | null
-    }
 }
 
 type Project = {
@@ -47,20 +40,6 @@ type AddonCatalogItem = {
     unit_price_cents: number
     unit_label?: string
     kind?: string
-}
-
-type MonitorTypeOption = {
-    value: string
-    code?: string
-    label: string
-    name?: string
-    short_label?: string
-    description?: string
-    is_paid?: boolean
-    unit_price_cents?: number
-    currency?: string
-    unit_label?: string | null
-    sort_order?: number
 }
 
 type CurrentPlan = {
@@ -161,6 +140,7 @@ type Site = {
     updated_at: string | null
     project: Project | null
     monitors: Monitor[]
+    history_retention_days: number
     recent_checks: CheckResult[]
     incidents: Incident[]
 }
@@ -200,11 +180,8 @@ const props = defineProps<{
     site: Site
     currentPlan: CurrentPlan | null
     addonCatalog: AddonCatalogItem[]
-    monitorTypes: MonitorTypeOption[]
     currentAddons: Record<string, { quantity: number, unit_price_cents: number, currency: string }>
 }>()
-
-const page = usePage<PageProps>()
 
 useAutoRefresh({
     only: ['site'],
@@ -462,20 +439,30 @@ function monitorStatus(monitor: Monitor): string {
     return 'unknown'
 }
 
-function monitorTypeOption(type: string): MonitorTypeOption | undefined {
-    return props.monitorTypes.find((option) => (option.code ?? option.value) === type)
-}
-
 function typeLabel(type: string): string {
-    return monitorTypeOption(type)?.name
-        ?? monitorTypeOption(type)?.label
-        ?? type.toUpperCase()
+    return {
+        http: 'Доступность сайта',
+        ssl: 'SSL',
+        domain: 'Домен',
+        dns: 'DNS',
+        robots_txt: 'Robots.txt',
+        sitemap_xml: 'Sitemap.xml',
+        tcp_port: 'TCP-порт',
+        api_endpoint: 'API endpoint',
+    }[type] ?? type.toUpperCase()
 }
 
 function shortTypeLabel(type: string): string {
-    return monitorTypeOption(type)?.short_label
-        ?? monitorTypeOption(type)?.label
-        ?? type.toUpperCase()
+    return {
+        http: 'HTTP',
+        ssl: 'SSL',
+        domain: 'Domain',
+        dns: 'DNS',
+        robots_txt: 'Robots',
+        sitemap_xml: 'Sitemap',
+        tcp_port: 'TCP',
+        api_endpoint: 'API',
+    }[type] ?? type.toUpperCase()
 }
 
 function typeIcon(type: string): typeof Globe2 {
@@ -488,18 +475,25 @@ function typeIcon(type: string): typeof Globe2 {
 
 function addonPriceRub(type: string): number {
     const item = props.addonCatalog.find((addon) => addon.code === type)
-        ?? monitorTypeOption(type)
 
-    return Math.round((item?.unit_price_cents ?? 0) / 100)
+    if (item) {
+        return Math.round(item.unit_price_cents / 100)
+    }
+
+    const fallbackPrices: Record<string, number> = {
+        sitemap_xml: 20,
+        api_endpoint: 30,
+        tcp_port: 20,
+    }
+
+    return fallbackPrices[type] ?? 0
 }
 
 function addonUnitLabel(type: string): string {
-    const unitLabel = props.addonCatalog.find((addon) => addon.code === type)?.unit_label
-        ?? monitorTypeOption(type)?.unit_label
+    if (type === 'api_endpoint') return 'endpoint'
+    if (type === 'tcp_port') return 'порт'
 
-    if (unitLabel) return unitLabel
-
-    return '1 проверка'
+    return 'мес'
 }
 
 function money(value: number): string {
@@ -910,7 +904,10 @@ function saveMonitor(monitor: Monitor): void {
     if (!monitor.is_available) return
 
     if (!monitor.is_configured) {
-        router.post(`/sites/${props.site.id}/monitors`, payloadForMonitor(monitor), {
+        router.post(`/sites/${props.site.id}/monitors`, {
+            ...payloadForMonitor(monitor),
+            feedback_action: 'settings',
+        }, {
             preserveScroll: true,
             onSuccess: () => {
                 expandedMonitorId.value = null
@@ -920,7 +917,10 @@ function saveMonitor(monitor: Monitor): void {
         return
     }
 
-    router.put(`/sites/${props.site.id}/monitors/${monitor.id}`, payloadForMonitor(monitor), {
+    router.put(`/sites/${props.site.id}/monitors/${monitor.id}`, {
+        ...payloadForMonitor(monitor),
+        feedback_action: 'settings',
+    }, {
         preserveScroll: true,
     })
 }
@@ -934,7 +934,10 @@ function toggleMonitor(monitor: Monitor): void {
             is_enabled: true,
         }
 
-        router.post(`/sites/${props.site.id}/monitors`, payloadForMonitor(monitor), {
+        router.post(`/sites/${props.site.id}/monitors`, {
+            ...payloadForMonitor(monitor),
+            feedback_action: 'toggle',
+        }, {
             preserveScroll: true,
         })
 
@@ -1044,8 +1047,6 @@ function sparkClass(status: string): string {
 
 <template>
     <Head :title="site.name" />
-    <FlashToast :message="page.props.flash?.error" />
-
     <DashboardLayout
         :organization="organization"
         active-item="sites"
@@ -1473,12 +1474,14 @@ function sparkClass(status: string): string {
                     </div>
                 </section>
 
-                <section id="incidents" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+                <section id="incidents" class="space-y-6">
                     <div class="overflow-hidden rounded-3xl border border-[#DDEBE3] bg-white shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
                         <div class="flex items-start justify-between gap-3 border-b border-[#DDEBE3] p-5">
                             <div>
-                                <h2 class="text-xl font-semibold text-[#17231C]">История проверок</h2>
-                                <p class="mt-1 text-sm text-[#6A7A70]">Последние технические результаты от poller.</p>
+                                <h2 class="text-xl font-semibold text-[#17231C]">Последние проверки</h2>
+                                <p class="mt-1 text-sm text-[#6A7A70]">
+                                    Показаны последние результаты за {{ site.history_retention_days }} {{ dayWord(site.history_retention_days) }} — в пределах истории, доступной по тарифу.
+                                </p>
                             </div>
                             <History class="h-5 w-5 text-[#8A9A91]" :stroke-width="2" />
                         </div>
@@ -1516,11 +1519,11 @@ function sparkClass(status: string): string {
                         </div>
 
                         <div v-else class="p-8 text-center text-sm font-medium text-[#6A7A70]">
-                            Проверок еще не было.
+                            За последние {{ site.history_retention_days }} {{ dayWord(site.history_retention_days) }} проверок не было.
                         </div>
                     </div>
 
-                    <aside class="rounded-3xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
+                    <div class="rounded-3xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
                         <h2 class="text-xl font-semibold text-[#17231C]">Инциденты</h2>
                         <p class="mt-1 text-sm text-[#6A7A70]">Падения и восстановления сайта.</p>
 
@@ -1547,7 +1550,7 @@ function sparkClass(status: string): string {
                         <div v-else class="mt-5 rounded-2xl border border-dashed border-[#DDEBE3] p-6 text-center text-sm font-medium text-[#6A7A70]">
                             Инцидентов пока нет.
                         </div>
-                    </aside>
+                    </div>
                 </section>
             </main>
 

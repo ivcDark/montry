@@ -2,7 +2,7 @@
 
 namespace App\Modules\Monitoring\Presentation\Http\Requests;
 
-use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
+use App\Modules\Monitoring\Application\Services\CheckTypeRegistry;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,7 +15,7 @@ final class SaveMonitorRequest extends FormRequest
 
     public function rules(): array
     {
-        $types = app(MonitorTypeCatalog::class)->allCodes();
+        $types = array_keys(app(CheckTypeRegistry::class)->all());
 
         return [
             'type' => ['required', 'string', Rule::in($types)],
@@ -25,6 +25,7 @@ final class SaveMonitorRequest extends FormRequest
             'timeout_ms' => ['required', 'integer', 'min:1000', 'max:60000'],
             'settings' => ['required', 'array'],
             'expected' => ['sometimes', 'array'],
+            'feedback_action' => ['sometimes', 'string', Rule::in(['settings', 'toggle'])],
         ];
     }
 }

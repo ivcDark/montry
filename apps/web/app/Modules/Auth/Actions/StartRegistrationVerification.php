@@ -2,7 +2,6 @@
 
 namespace App\Modules\Auth\Actions;
 
-use App\Modules\Auth\DTO\RegisterUserData;
 use App\Modules\Auth\Infrastructure\Persistence\Models\EmailVerificationCode;
 use App\Modules\Auth\Mail\RegistrationVerificationCodeMail;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
@@ -14,18 +13,8 @@ use Illuminate\Support\Facades\Mail;
 final readonly class StartRegistrationVerification
 {
     public function __construct(
-        private RegisterUser $registerUser,
         private BusinessEventRecorder $events,
     ) {}
-
-    public function handle(RegisterUserData $data): User
-    {
-        $user = $this->registerUser->handle($data);
-
-        $this->sendCode($user);
-
-        return $user;
-    }
 
     public function sendCode(User $user): void
     {

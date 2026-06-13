@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
 import BrandMark from '@/Components/BrandMark.vue'
+import FlashToast from '@/Components/FlashToast.vue'
 import {
     Activity,
     BarChart3,
@@ -39,6 +40,11 @@ type PageProps = {
     auth: {
         user: User | null
     }
+    flash?: {
+        success?: string | null
+        error?: string | null
+        token?: string | null
+    }
     billing?: BillingSummary | null
 }
 
@@ -71,6 +77,8 @@ const navigation: NavigationItem[] = [
 const page = usePage<PageProps>()
 const user = page.props.auth.user
 const billingSummary = computed(() => page.props.billing ?? null)
+const toastMessage = computed(() => page.props.flash?.error ?? page.props.flash?.success ?? null)
+const toastVariant = computed<'success' | 'error'>(() => page.props.flash?.error ? 'error' : 'success')
 
 const planName = computed(() => billingSummary.value?.plan?.name ?? 'Free')
 const monitorsCurrent = computed(() => billingSummary.value?.monitors.current ?? 0)
@@ -98,6 +106,12 @@ function limitLabel(limit: number | null): string {
 
 <template>
     <main class="min-h-screen bg-[#F3F8F5] font-sans text-[#26332D] lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
+        <FlashToast
+            :message="toastMessage"
+            :token="page.props.flash?.token"
+            :variant="toastVariant"
+        />
+
         <aside class="sticky top-0 hidden h-screen self-start overflow-y-auto border-r border-[#DDEBE3] bg-white px-5 py-7 lg:flex lg:flex-col">
             <div>
                 <Link href="/" class="flex items-center gap-3">

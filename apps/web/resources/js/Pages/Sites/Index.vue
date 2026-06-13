@@ -33,9 +33,6 @@ type BillingUsage = {
 }
 
 type PageProps = {
-    flash?: {
-        error?: string | null
-    }
     billing?: {
         sites: BillingUsage
     } | null
@@ -68,14 +65,6 @@ type Monitor = {
     latest_result: LatestResult | null
 }
 
-type MonitorTypeOption = {
-    value: string
-    code?: string
-    label: string
-    name?: string
-    short_label?: string
-}
-
 type Site = {
     id: string
     name: string
@@ -94,7 +83,6 @@ type Site = {
 const props = defineProps<{
     organization: Organization
     sites: Site[]
-    monitorTypes: MonitorTypeOption[]
 }>()
 
 const page = usePage<PageProps>()
@@ -114,7 +102,7 @@ const checkingSiteIds = ref<string[]>([])
 const checkingStartedFrom = ref<Record<string, string | null>>({})
 const checkingTimeouts = ref<Record<string, ReturnType<typeof setTimeout>>>({})
 const siteLimitToastToken = ref(0)
-const siteLimitToastMessage = ref<string | null>(page.props.flash?.error ?? null)
+const siteLimitToastMessage = ref<string | null>(null)
 
 const filters = [
     { value: 'all', label: 'Все' },
@@ -317,9 +305,16 @@ function monitorStatus(monitor: Monitor): string {
 }
 
 function monitorTypeLabel(type: string): string {
-    const option = props.monitorTypes.find((item) => (item.code ?? item.value) === type)
-
-    return option?.short_label ?? option?.label ?? type.toUpperCase()
+    return {
+        http: 'HTTP',
+        ssl: 'SSL',
+        domain: 'Domain',
+        dns: 'DNS',
+        robots_txt: 'Robots',
+        sitemap_xml: 'Sitemap',
+        tcp_port: 'TCP',
+        api_endpoint: 'API',
+    }[type] ?? type.toUpperCase()
 }
 
 function monitorBadgeClass(monitor: Monitor): string {
@@ -490,7 +485,7 @@ function handleCreateSiteClick(event: MouseEvent): void {
 
 <template>
     <Head title="Сайты" />
-    <FlashToast :message="siteLimitToastMessage" :token="siteLimitToastToken" />
+    <FlashToast :message="siteLimitToastMessage" :token="siteLimitToastToken" variant="error" />
 
     <DashboardLayout
         :organization="organization"

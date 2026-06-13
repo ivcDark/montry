@@ -3,9 +3,12 @@
 namespace App\Modules\Auth\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Auth\Actions\CompleteRegistration;
+use App\Modules\Auth\Actions\RegisterUser;
 use App\Modules\Auth\Actions\StartRegistrationVerification;
 use App\Modules\Auth\Http\Requests\RegisterRequest;
 use App\Modules\Billing\Application\Services\PlanIntentService;
+use App\Modules\Billing\Application\Services\StartIntendedCheckout;
 use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
 use App\Modules\Observability\Application\Services\BusinessEventRecorder;
 use Illuminate\Http\RedirectResponse;
@@ -42,7 +45,10 @@ final class RegisterController extends Controller
 
     public function store(
         RegisterRequest $request,
+        RegisterUser $registerUser,
         StartRegistrationVerification $startRegistrationVerification,
+        CompleteRegistration $completeRegistration,
+        StartIntendedCheckout $startIntendedCheckout,
         BusinessEventRecorder $events,
     ): RedirectResponse {
         $events->record(new RecordBusinessEventData(
@@ -53,10 +59,28 @@ final class RegisterController extends Controller
             source: 'web',
         ));
 
-        $user = $startRegistrationVerification->handle($request->toData());
+        $user = $registerUser->handle($request->toData());
 
-        $request->session()->put('pending_registration_user_id', $user->id);
+        if ((bool) config('auth.email_verification.enabled', true)) {
+            $startRegistrationVerification->sendCode($user);
+            $request->session()->put('pending_registration_user_id', $user->id);
 
-        return redirect()->route('register.verify-code');
+            return redirect()->route('register.verify-code');
+        }
+
+        $completeRegistration->handle($user);
+        $request->session()->forget('pending_registration_user_id');
+        $request->session()->regenerate();
+
+        $events->record(new RecordBusinessEventData(
+            eventType: 'registration.email_verification_skipped',
+            userId: $user->id,
+            subjectType: 'user',
+            subjectId: (string) $user->id,
+            status: 'success',
+            source: 'configuration',
+        ));
+
+        return $startIntendedCheckout->redirect($request, $user);
     }
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, useForm, usePage } from '@inertiajs/vue3'
+import { Head, useForm } from '@inertiajs/vue3'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 
 type Organization = {
@@ -25,19 +25,11 @@ type Settings = {
     }
 }
 
-type PageProps = {
-    flash?: {
-        success?: string | null
-        error?: string | null
-    }
-}
-
 const props = defineProps<{
     organization: Organization
     settings: Settings
 }>()
 
-const page = usePage<PageProps>()
 const copied = ref(false)
 
 const profileForm = useForm({
@@ -197,20 +189,6 @@ async function copyConnectionCommand(): Promise<void> {
         subtitle="Профиль и каналы уведомлений"
     >
         <section class="mx-auto grid max-w-5xl gap-6 px-5 py-8 sm:px-8">
-            <div
-                v-if="page.props.flash?.success"
-                class="rounded-2xl border border-[#D1FADF] bg-[#ECFDF3] px-5 py-4 text-sm font-bold text-[#15803D]"
-            >
-                {{ page.props.flash.success }}
-            </div>
-
-            <div
-                v-if="page.props.flash?.error"
-                class="rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-5 py-4 text-sm font-bold text-[#B91C1C]"
-            >
-                {{ page.props.flash.error }}
-            </div>
-
             <section class="rounded-2xl border border-[#E5E7EB] bg-white p-6">
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3'
-import FlashToast from '@/Components/FlashToast.vue'
+import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 
 type Organization = {
@@ -9,23 +8,11 @@ type Organization = {
     name: string
 }
 
-type MonitorType = string
+type MonitorType = 'http' | 'ssl' | 'domain' | 'dns' | 'robots_txt' | 'sitemap_xml' | 'api_endpoint' | 'tcp_port'
 
 type MonitorTypeOption = {
     value: string
-    code?: string
     label: string
-    name?: string
-    short_label?: string
-    description?: string
-    is_paid?: boolean
-    is_default_for_site?: boolean
-    default_enabled?: boolean
-    unit_price_cents?: number
-    currency?: string
-    unit_label?: string | null
-    sort_order?: number
-    ui_meta?: Record<string, any>
 }
 
 type AddonCatalogItem = {
@@ -51,12 +38,6 @@ type Usage = {
     monitor_limit: number | null
     minimum_check_interval_seconds: number | null
     allowed_monitor_types: string[] | null
-}
-
-type PageProps = {
-    flash?: {
-        error?: string | null
-    }
 }
 
 type ToggleCard = {
@@ -87,7 +68,6 @@ const props = withDefaults(defineProps<{
     entitlements: null,
 })
 
-const page = usePage<PageProps>()
 const minimumIntervalSecondsValue = props.usage?.minimum_check_interval_seconds ?? 300
 const minimumIntervalMinutes = Math.max(5, Math.ceil(minimumIntervalSecondsValue / 60))
 const statusCodesText = ref('200')
@@ -110,11 +90,20 @@ const tariffCatalog: Record<string, { name: string; priceRub: number; sites: num
     plus: { name: 'Plus', priceRub: 690, sites: 30, historyDays: 60, intervalText: 'от 3 минут' },
 }
 
-function addonPriceRub(code: string): number {
+function addonPriceRub(code: 'sitemap_xml' | 'api_endpoint' | 'tcp_port'): number {
     const item = props.addonCatalog.find((addon) => addon.code === code)
-        ?? props.monitorTypes.find((type) => (type.code ?? type.value) === code)
 
-    return Math.round((item?.unit_price_cents ?? 0) / 100)
+    if (item) {
+        return Math.round(item.unit_price_cents / 100)
+    }
+
+    const fallbackPrices: Record<'sitemap_xml' | 'api_endpoint' | 'tcp_port', number> = {
+        sitemap_xml: 20,
+        api_endpoint: 30,
+        tcp_port: 20,
+    }
+
+    return fallbackPrices[code]
 }
 
 const form = useForm({
@@ -221,17 +210,94 @@ const sitesAfterCreate = computed(() => sitesUsed.value + 1)
 const sitesLeftAfterCreate = computed(() => Math.max(siteLimit.value - sitesAfterCreate.value, 0))
 const isSiteLimitReached = computed(() => sitesAfterCreate.value > siteLimit.value)
 
-const monitorTypeOptions = computed(() => [...props.monitorTypes]
-    .filter((type) => Boolean((form.monitors as Record<string, any>)[type.code ?? type.value]))
-    .sort((left, right) => (left.sort_order ?? 0) - (right.sort_order ?? 0)))
+const baseCheckCards = computed<ToggleCard[]>(() => [
+    {
+        type: 'http',
+        title: 'Доступность сайта',
+        label: typeLabel('http'),
+        description: 'Код ответа, редиректы и время ответа главной страницы.',
+        summary: `${form.monitors.http.method} · ${statusCodesText.value} · ${intervalText(form.monitors.http.interval_seconds)}`,
+        enabled: form.monitors.http.is_enabled,
+        included: true,
+        badge: 'В тарифе',
+    },
+    {
+        type: 'ssl',
+        title: 'SSL-сертификат',
+        label: typeLabel('ssl'),
+        description: 'Валидность сертификата и предупреждения до истечения.',
+        summary: `${fallbackHost.value || 'домен из URL'} · порт ${form.monitors.ssl.port}`,
+        enabled: form.monitors.ssl.is_enabled,
+        included: true,
+        badge: 'В тарифе',
+    },
+    {
+        type: 'domain',
+        title: 'Срок домена',
+        label: typeLabel('domain'),
+        description: 'WHOIS-проверка регистрации и даты окончания домена.',
+        summary: `${fallbackHost.value || 'домен из URL'} · ${domainWarningDaysText.value} дней`,
+        enabled: form.monitors.domain.is_enabled,
+        included: true,
+        badge: 'В тарифе',
+    },
+    {
+        type: 'dns',
+        title: 'DNS-записи',
+        label: typeLabel('dns'),
+        description: 'Проверка резолва домена и базовых DNS-записей.',
+        summary: `${dnsRecordTypesText.value} · минимум ${form.monitors.dns.min_records}`,
+        enabled: form.monitors.dns.is_enabled,
+        included: true,
+        badge: 'В тарифе',
+    },
+    {
+        type: 'robots_txt',
+        title: 'Robots.txt',
+        label: typeLabel('robots_txt'),
+        description: 'Наличие robots.txt и корректный HTTP-ответ.',
+        summary: robotsUrl.value || 'URL появится после ввода сайта',
+        enabled: form.monitors.robots_txt.is_enabled,
+        included: true,
+        badge: 'В тарифе',
+    },
+])
 
-const baseCheckCards = computed<ToggleCard[]>(() => monitorTypeOptions.value
-    .filter((type) => !type.is_paid)
-    .map((type) => cardFromMonitorType(type, true)))
-
-const paidAddonCards = computed<ToggleCard[]>(() => monitorTypeOptions.value
-    .filter((type) => Boolean(type.is_paid))
-    .map((type) => cardFromMonitorType(type, false)))
+const paidAddonCards = computed<ToggleCard[]>(() => [
+    {
+        type: 'sitemap_xml',
+        title: 'Sitemap.xml',
+        label: typeLabel('sitemap_xml'),
+        description: 'Проверка наличия и валидности XML-карты сайта.',
+        summary: sitemapUrl.value || 'URL появится после ввода сайта',
+        enabled: form.monitors.sitemap_xml.is_enabled,
+        included: false,
+        priceRub: addonPriceRub('sitemap_xml'),
+        badge: `+${addonPriceRub('sitemap_xml')} ₽/мес`,
+    },
+    {
+        type: 'api_endpoint',
+        title: 'API endpoint',
+        label: typeLabel('api_endpoint'),
+        description: 'Контроль healthcheck, webhook или любого API URL.',
+        summary: `${form.monitors.api_endpoint.method} · ${apiEndpointUrl.value || 'endpoint'} · ${apiStatusCodesText.value}`,
+        enabled: form.monitors.api_endpoint.is_enabled,
+        included: false,
+        priceRub: addonPriceRub('api_endpoint'),
+        badge: `+${addonPriceRub('api_endpoint')} ₽/endpoint`,
+    },
+    {
+        type: 'tcp_port',
+        title: 'TCP-порт',
+        label: typeLabel('tcp_port'),
+        description: 'Проверка открытого порта: HTTPS, SMTP, SSH или свой сервис.',
+        summary: `${fallbackHost.value || 'host'}:${form.monitors.tcp_port.port}`,
+        enabled: form.monitors.tcp_port.is_enabled,
+        included: false,
+        priceRub: addonPriceRub('tcp_port'),
+        badge: `+${addonPriceRub('tcp_port')} ₽/порт`,
+    },
+])
 
 const selectedPaidAddons = computed(() => paidAddonCards.value.filter((card) => card.enabled))
 const hasPaidAddons = computed(() => selectedPaidAddons.value.length > 0)
@@ -263,68 +329,8 @@ const selectedAddonQuantities = computed<Record<string, number>>(() => {
     return quantities
 })
 
-function cardFromMonitorType(type: MonitorTypeOption, included: boolean): ToggleCard {
-    const code = type.code ?? type.value
-    const priceRub = included ? undefined : addonPriceRub(code)
-
-    return {
-        type: code,
-        title: type.ui_meta?.title ?? defaultCardTitle(code, type.name ?? type.label),
-        label: type.short_label ?? type.label,
-        description: type.description ?? defaultCardDescription(code),
-        summary: summaryForType(code),
-        enabled: Boolean((form.monitors as Record<string, any>)[code]?.is_enabled),
-        included,
-        priceRub,
-        badge: included ? 'В тарифе' : `+${priceRub ?? 0} ₽/мес`,
-    }
-}
-
-function defaultCardTitle(type: string, fallback: string): string {
-    if (type === 'http') return 'Доступность сайта'
-    if (type === 'ssl') return 'SSL-сертификат'
-    if (type === 'domain') return 'Срок домена'
-    if (type === 'dns') return 'DNS-записи'
-    if (type === 'robots_txt') return 'Robots.txt'
-    if (type === 'sitemap_xml') return 'Sitemap.xml'
-    if (type === 'api_endpoint') return 'API endpoint'
-    if (type === 'tcp_port') return 'TCP-порт'
-
-    return fallback
-}
-
-function defaultCardDescription(type: string): string {
-    if (type === 'http') return 'Код ответа, редиректы и время ответа главной страницы.'
-    if (type === 'ssl') return 'Валидность сертификата и предупреждения до истечения.'
-    if (type === 'domain') return 'WHOIS-проверка регистрации и даты окончания домена.'
-    if (type === 'dns') return 'Проверка резолва домена и базовых DNS-записей.'
-    if (type === 'robots_txt') return 'Наличие robots.txt и корректный HTTP-ответ.'
-    if (type === 'sitemap_xml') return 'Проверка наличия и валидности XML-карты сайта.'
-    if (type === 'api_endpoint') return 'Контроль healthcheck, webhook или любого API URL.'
-    if (type === 'tcp_port') return 'Проверка открытого порта: HTTPS, SMTP, SSH или свой сервис.'
-
-    return 'Настраиваемый тип мониторинга.'
-}
-
-function summaryForType(type: string): string {
-    if (type === 'http') return `${form.monitors.http.method} · ${statusCodesText.value} · ${intervalText(form.monitors.http.interval_seconds)}`
-    if (type === 'ssl') return `${fallbackHost.value || 'домен из URL'} · порт ${form.monitors.ssl.port}`
-    if (type === 'domain') return `${fallbackHost.value || 'домен из URL'} · ${domainWarningDaysText.value} дней`
-    if (type === 'dns') return `${dnsRecordTypesText.value} · минимум ${form.monitors.dns.min_records}`
-    if (type === 'robots_txt') return robotsUrl.value || 'URL появится после ввода сайта'
-    if (type === 'sitemap_xml') return sitemapUrl.value || 'URL появится после ввода сайта'
-    if (type === 'api_endpoint') return `${form.monitors.api_endpoint.method} · ${apiEndpointUrl.value || 'endpoint'} · ${apiStatusCodesText.value}`
-    if (type === 'tcp_port') return `${fallbackHost.value || 'host'}:${form.monitors.tcp_port.port}`
-
-    return 'Параметры будут применены по умолчанию'
-}
-
 function typeLabel(type: string): string {
-    const option = props.monitorTypes.find((item) => (item.code ?? item.value) === type)
-
-    return option?.short_label
-        ?? option?.name
-        ?? option?.label
+    return props.monitorTypes.find((option) => option.value === type)?.label
         ?? fallbackTypeLabel(type)
 }
 
@@ -342,11 +348,14 @@ function fallbackTypeLabel(type: string): string {
 }
 
 function toggleMonitor(type: MonitorType): void {
-    const state = (form.monitors as Record<string, any>)[type]
-
-    if (!state) return
-
-    state.is_enabled = !state.is_enabled
+    if (type === 'http') form.monitors.http.is_enabled = !form.monitors.http.is_enabled
+    if (type === 'ssl') form.monitors.ssl.is_enabled = !form.monitors.ssl.is_enabled
+    if (type === 'domain') form.monitors.domain.is_enabled = !form.monitors.domain.is_enabled
+    if (type === 'dns') form.monitors.dns.is_enabled = !form.monitors.dns.is_enabled
+    if (type === 'robots_txt') form.monitors.robots_txt.is_enabled = !form.monitors.robots_txt.is_enabled
+    if (type === 'sitemap_xml') form.monitors.sitemap_xml.is_enabled = !form.monitors.sitemap_xml.is_enabled
+    if (type === 'api_endpoint') form.monitors.api_endpoint.is_enabled = !form.monitors.api_endpoint.is_enabled
+    if (type === 'tcp_port') form.monitors.tcp_port.is_enabled = !form.monitors.tcp_port.is_enabled
 }
 
 function openAdvanced(type: MonitorType): void {
@@ -581,15 +590,13 @@ function paidAddonPayloads() {
 }
 
 function requestPayload() {
-    const visibleTypes = new Set([...baseCheckCards.value, ...paidAddonCards.value].map((card) => card.type))
-
     return {
         name: form.name,
         url: form.url,
         monitors: [
             ...baseMonitorPayloads(),
             ...paidAddonPayloads(),
-        ].filter((monitor) => visibleTypes.has(monitor.type)),
+        ],
     }
 }
 
@@ -620,8 +627,6 @@ function submit(): void {
 
 <template>
     <Head title="Добавить сайт" />
-    <FlashToast :message="page.props.flash?.error" />
-
     <DashboardLayout
         :organization="organization"
         active-item="sites"

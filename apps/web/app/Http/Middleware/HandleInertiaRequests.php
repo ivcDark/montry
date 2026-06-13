@@ -8,6 +8,7 @@ use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -40,6 +41,9 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $successMessage = $request->session()->get('success');
+        $errorMessage = $request->session()->get('error');
+
         return [
             ...parent::share($request),
 
@@ -54,8 +58,11 @@ class HandleInertiaRequests extends Middleware
             ],
 
             'flash' => [
-                'success' => fn () => $request->session()->get('success'),
-                'error' => fn () => $request->session()->get('error'),
+                'success' => $successMessage,
+                'error' => $errorMessage,
+                'token' => $successMessage !== null || $errorMessage !== null
+                    ? (string) Str::uuid()
+                    : null,
             ],
 
             'billing' => fn () => $this->billingSummary($request),

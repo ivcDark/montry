@@ -17,6 +17,10 @@ final class RegisterVerificationController extends Controller
 {
     public function create(Request $request): Response|RedirectResponse
     {
+        if (! $this->verificationEnabled()) {
+            return redirect()->route('register');
+        }
+
         $user = $this->pendingUser($request);
 
         if (! $user) {
@@ -34,6 +38,10 @@ final class RegisterVerificationController extends Controller
         VerifyRegistrationEmailCode $verifyRegistrationEmailCode,
         StartIntendedCheckout $startIntendedCheckout,
     ): RedirectResponse {
+        if (! $this->verificationEnabled()) {
+            return redirect()->route('register');
+        }
+
         $user = $this->pendingUser($request);
 
         if (! $user) {
@@ -52,6 +60,10 @@ final class RegisterVerificationController extends Controller
         Request $request,
         ResendRegistrationVerificationCode $resendRegistrationVerificationCode,
     ): RedirectResponse {
+        if (! $this->verificationEnabled()) {
+            return redirect()->route('register');
+        }
+
         $user = $this->pendingUser($request);
 
         if (! $user) {
@@ -63,6 +75,11 @@ final class RegisterVerificationController extends Controller
         return redirect()
             ->route('register.verify-code')
             ->with('success', 'Новый код отправлен на email.');
+    }
+
+    private function verificationEnabled(): bool
+    {
+        return (bool) config('auth.email_verification.enabled', true);
     }
 
     private function pendingUser(Request $request): ?User
