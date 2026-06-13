@@ -2,6 +2,16 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import {
+    CategoryScale,
+    Chart as ChartJS,
+    Filler,
+    Legend,
+    LineElement,
+    LinearScale,
+    PointElement,
+    Tooltip,
+} from 'chart.js'
+import {
     Activity,
     AlertTriangle,
     CalendarClock,
@@ -21,8 +31,11 @@ import {
     Trash2,
     X,
 } from '@lucide/vue'
+import { Line } from 'vue-chartjs'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useAutoRefresh } from '../../Composables/useAutoRefresh'
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
 
 type Organization = {
     id: string
@@ -125,6 +138,18 @@ type Incident = {
     duration_seconds: number | null
 }
 
+type AvailabilityResponseChartPoint = {
+    date: string
+    label: string
+    average_response_time_ms: number | null
+    sample_count: number
+}
+
+type AvailabilityResponseChart = {
+    points: AvailabilityResponseChartPoint[]
+    has_data: boolean
+}
+
 type Site = {
     id: string
     name: string
@@ -141,6 +166,7 @@ type Site = {
     project: Project | null
     monitors: Monitor[]
     history_retention_days: number
+    availability_response_chart: AvailabilityResponseChart
     recent_checks: CheckResult[]
     incidents: Incident[]
 }
@@ -262,6 +288,90 @@ const averageResponse = computed(() => {
 
     return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
 })
+const historyRetentionDays = computed(() => props.site.history_retention_days)
+const availabilityChartPoints = computed(() => props.site.availability_response_chart.points)
+const hasAvailabilityTrendData = computed(() => props.site.availability_response_chart.has_data)
+const availabilityChartData = computed(() => ({
+    labels: availabilityChartPoints.value.map((point) => point.label),
+    datasets: [
+        {
+            label: 'Средняя скорость загрузки, мс',
+            data: availabilityChartPoints.value.map((point) => point.average_response_time_ms),
+            borderColor: '#2FA568',
+            backgroundColor: 'rgba(47, 165, 104, 0.12)',
+            pointBackgroundColor: '#2FA568',
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 5,
+            tension: 0.35,
+            fill: true,
+            spanGaps: true,
+        },
+    ],
+}))
+const availabilityChartOptions = computed(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+        mode: 'index' as const,
+        intersect: false,
+    },
+    plugins: {
+        legend: {
+            display: false,
+        },
+        tooltip: {
+            displayColors: false,
+            callbacks: {
+                title: (items: Array<{ dataIndex: number }>) => {
+                    const point = availabilityChartPoints.value[items[0]?.dataIndex ?? 0]
+
+                    return point ? formatChartPointDate(point.date) : ''
+                },
+                label: (context: { dataIndex: number; parsed: { y: number | null } }) => {
+                    const point = availabilityChartPoints.value[context.dataIndex]
+                    const value = context.parsed.y
+
+                    if (value === null || value === undefined) {
+                        return 'Нет данных за этот день'
+                    }
+
+                    return `Среднее: ${Math.round(value)} мс · ${point.sample_count} ${pluralizeChecks(point.sample_count)}`
+                },
+            },
+        },
+    },
+    scales: {
+        x: {
+            grid: {
+                display: false,
+            },
+            ticks: {
+                color: '#6A7A70',
+                maxRotation: 0,
+                autoSkipPadding: 20,
+            },
+            border: {
+                display: false,
+            },
+        },
+        y: {
+            beginAtZero: true,
+            ticks: {
+                color: '#6A7A70',
+                callback: (value: string | number) => `${value} мс`,
+            },
+            grid: {
+                color: 'rgba(221, 235, 227, 0.9)',
+                drawBorder: false,
+            },
+            border: {
+                display: false,
+            },
+        },
+    },
+}))
 const sslDaysLeft = computed(() => {
     const values = activeMonitors.value
         .map((monitor) => monitor.latest_result?.normalized_result.days_until_expiration)
@@ -592,6 +702,13 @@ function formatDate(value: string | null): string {
     }).format(new Date(value))
 }
 
+function formatChartPointDate(value: string): string {
+    return new Intl.DateTimeFormat('ru-RU', {
+        day: '2-digit',
+        month: 'long',
+    }).format(new Date(`${value}T00:00:00`))
+}
+
 function relativeDate(value: string | null): string {
     if (!value) return 'нет данных'
 
@@ -657,6 +774,16 @@ function dayWord(days: number): string {
     if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'дня'
 
     return 'дней'
+}
+
+function pluralizeChecks(count: number): string {
+    const mod10 = count % 10
+    const mod100 = count % 100
+
+    if (mod10 === 1 && mod100 !== 11) return 'проверка'
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'проверки'
+
+    return 'проверок'
 }
 
 function resultText(monitor: Monitor): string {
@@ -1478,10 +1605,33 @@ function sparkClass(status: string): string {
                     <div class="overflow-hidden rounded-3xl border border-[#DDEBE3] bg-white shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
                         <div class="flex items-start justify-between gap-3 border-b border-[#DDEBE3] p-5">
                             <div>
-                                <h2 class="text-xl font-semibold text-[#17231C]">Последние проверки</h2>
-                                <p class="mt-1 text-sm text-[#6A7A70]">
-                                    Показаны последние результаты за {{ site.history_retention_days }} {{ dayWord(site.history_retention_days) }} — в пределах истории, доступной по тарифу.
-                                </p>
+                                <h2 class="text-xl font-semibold text-[#17231C]">Скорость загрузки сайта</h2>
+                                <p class="mt-1 text-sm text-[#6A7A70]">Среднее время ответа по дням для проверки «Доступность сайта».</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="rounded-full border border-[#DDEBE3] bg-[#F6FBF8] px-3 py-1 text-xs font-semibold text-[#2B7E53]">
+                                    История: {{ historyRetentionDays }} дн.
+                                </span>
+                                <Activity class="h-5 w-5 text-[#8A9A91]" :stroke-width="2" />
+                            </div>
+                        </div>
+
+                        <div v-if="hasAvailabilityTrendData" class="p-5">
+                            <div class="h-[280px]">
+                                <Line :data="availabilityChartData" :options="availabilityChartOptions" />
+                            </div>
+                        </div>
+
+                        <div v-else class="p-8 text-center text-sm font-medium text-[#6A7A70]">
+                            Недостаточно данных по проверке «Доступность сайта», чтобы построить график.
+                        </div>
+                    </div>
+
+                    <div class="overflow-hidden rounded-3xl border border-[#DDEBE3] bg-white shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
+                        <div class="flex items-start justify-between gap-3 border-b border-[#DDEBE3] p-5">
+                            <div>
+                                <h2 class="text-xl font-semibold text-[#17231C]">История проверок</h2>
+                                <p class="mt-1 text-sm text-[#6A7A70]">Последние технические результаты от poller за {{ historyRetentionDays }} {{ dayWord(historyRetentionDays) }}.</p>
                             </div>
                             <History class="h-5 w-5 text-[#8A9A91]" :stroke-width="2" />
                         </div>
@@ -1519,7 +1669,7 @@ function sparkClass(status: string): string {
                         </div>
 
                         <div v-else class="p-8 text-center text-sm font-medium text-[#6A7A70]">
-                            За последние {{ site.history_retention_days }} {{ dayWord(site.history_retention_days) }} проверок не было.
+                            Проверок за доступный период еще не было.
                         </div>
                     </div>
 

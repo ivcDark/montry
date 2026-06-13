@@ -276,6 +276,7 @@ final class MonitoredResourceController extends Controller
                     ->values()
                     ->all(),
                 'history_retention_days' => $historyRetentionDays,
+                'availability_response_chart' => $this->availabilityResponseChart($site, $historyRetentionDays),
                 'recent_checks' => $this->recentChecks($site, $historyRetentionDays),
                 'incidents' => $this->incidents($site),
             ],
@@ -474,6 +475,59 @@ final class MonitoredResourceController extends Controller
                 'normalized_result' => $result->normalized_result ?? [],
             ])
             ->all();
+    }
+
+    private function availabilityResponseChart(MonitoredResource $site, int $historyRetentionDays): array
+    {
+        $historyStartsAt = now()
+            ->subDays($historyRetentionDays - 1)
+            ->startOfDay();
+        $historyEndsAt = now()->endOfDay();
+        $httpMonitorIds = $site->monitors
+            ->filter(fn (Monitor $monitor): bool => $monitor->type === 'http')
+            ->pluck('id');
+
+        $dailyAverages = CheckResult::query()
+            ->where('organization_id', $site->organization_id)
+            ->when($httpMonitorIds->isNotEmpty(), fn ($query) => $query->whereIn('monitor_id', $httpMonitorIds))
+            ->when($httpMonitorIds->isEmpty(), fn ($query) => $query->whereRaw('1 = 0'))
+            ->where('check_type', 'http')
+            ->whereNotNull('response_time_ms')
+            ->whereBetween('checked_at', [$historyStartsAt, $historyEndsAt])
+            ->selectRaw('DATE(checked_at) as chart_date')
+            ->selectRaw('AVG(response_time_ms) as average_response_time_ms')
+            ->selectRaw('COUNT(*) as sample_count')
+            ->groupBy(DB::raw('DATE(checked_at)'))
+            ->orderBy('chart_date')
+            ->get()
+            ->mapWithKeys(fn ($row): array => [
+                (string) $row->chart_date => [
+                    'average_response_time_ms' => $row->average_response_time_ms !== null ? (int) round((float) $row->average_response_time_ms) : null,
+                    'sample_count' => (int) $row->sample_count,
+                ],
+            ]);
+
+        $points = [];
+        $cursor = $historyStartsAt->copy();
+
+        while ($cursor->lte($historyEndsAt)) {
+            $date = $cursor->toDateString();
+            $dayStats = $dailyAverages->get($date);
+
+            $points[] = [
+                'date' => $date,
+                'label' => $cursor->translatedFormat('d MMM'),
+                'average_response_time_ms' => $dayStats['average_response_time_ms'] ?? null,
+                'sample_count' => $dayStats['sample_count'] ?? 0,
+            ];
+
+            $cursor->addDay();
+        }
+
+        return [
+            'points' => $points,
+            'has_data' => collect($points)->contains(fn (array $point): bool => $point['average_response_time_ms'] !== null),
+        ];
     }
 
     private function incidents(MonitoredResource $site): array
