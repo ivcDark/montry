@@ -9,6 +9,7 @@ use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\Billing\Application\Services\PlanChangeClassifier;
 use App\Modules\Billing\Application\Services\RobokassaService;
 use App\Modules\Billing\Application\Services\ScheduleDowngrade;
+use App\Modules\Billing\Application\Services\YooKassaService;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Payment;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
@@ -171,6 +172,7 @@ final class BillingController extends Controller
         Payment $payment,
         GetCurrentOrganization $getCurrentOrganization,
         RobokassaService $robokassa,
+        YooKassaService $yookassa,
         BillingAddonCatalog $addonCatalog,
     ): Response {
         $organization = $getCurrentOrganization->handle($request->user());
@@ -212,6 +214,7 @@ final class BillingController extends Controller
                     })->values()
                     : [],
                 'robokassa' => $robokassa->paymentForm($payment, $request->user()?->email),
+                'yookassa' => $yookassa->paymentPayload($payment),
             ],
         ]);
     }

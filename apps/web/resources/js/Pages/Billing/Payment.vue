@@ -46,6 +46,13 @@ type RobokassaPayload = {
     fail_url: string
 }
 
+type YooKassaPayload = {
+    is_configured: boolean
+    is_test: boolean
+    checkout_url: string
+    webhook_url: string
+}
+
 const props = defineProps<{
     organization: { id: string | number; name: string }
     payment: {
@@ -60,6 +67,7 @@ const props = defineProps<{
         plan: Plan | null
         items: PaymentItem[]
         robokassa: RobokassaPayload
+        yookassa: YooKassaPayload
     }
 }>()
 
@@ -72,8 +80,17 @@ const robokassaFields = computed(() => Object.entries(props.payment.robokassa.fi
 const isPaid = computed(() => props.payment.status === 'paid')
 const isFailed = computed(() => props.payment.status === 'failed')
 const isPending = computed(() => !isPaid.value && !isFailed.value)
-const canOpenRobokassa = computed(() => props.payment.robokassa.is_configured && props.payment.robokassa.action !== null && !isPaid.value)
-const providerLabel = computed(() => props.payment.provider === 'robokassa' || !props.payment.provider ? 'Robokassa' : props.payment.provider)
+const activeProvider = computed(() => props.payment.provider || 'robokassa')
+const canOpenRobokassa = computed(() => activeProvider.value === 'robokassa' && props.payment.robokassa.is_configured && props.payment.robokassa.action !== null && !isPaid.value)
+const canOpenYooKassa = computed(() => activeProvider.value === 'yookassa' && props.payment.yookassa.is_configured && !isPaid.value)
+const providerLabel = computed(() => {
+    if (activeProvider.value === 'robokassa') return 'Robokassa'
+    if (activeProvider.value === 'yookassa') return 'ЮKassa'
+    return activeProvider.value
+})
+const providerIsTest = computed(() => activeProvider.value === 'yookassa' ? props.payment.yookassa.is_test : props.payment.robokassa.is_test)
+const providerIsConfigured = computed(() => activeProvider.value === 'yookassa' ? props.payment.yookassa.is_configured : props.payment.robokassa.is_configured)
+const csrfToken = computed(() => document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '')
 const statusLabel = computed(() => {
     if (isPaid.value) return 'Оплачен'
     if (isFailed.value) return 'Ошибка оплаты'
@@ -200,16 +217,16 @@ function planFeature(label: string, fallback: string): string {
                         </div>
                     </div>
 
-                    <div v-if="payment.robokassa.is_test" class="flex gap-3 rounded-[22px] border border-[#F0D7A9] bg-[#FFF8E9] p-5 text-sm leading-6 text-[#8A5A12]">
+                    <div v-if="providerIsTest" class="flex gap-3 rounded-[22px] border border-[#F0D7A9] bg-[#FFF8E9] p-5 text-sm leading-6 text-[#8A5A12]">
                         <AlertTriangle class="mt-0.5 h-5 w-5 shrink-0 text-[#C87800]" :stroke-width="2" />
-                        <p><strong class="font-semibold">Тестовый режим.</strong> Реальные деньги не списываются. Оплата пройдёт на тестовой странице Robokassa.</p>
+                        <p><strong class="font-semibold">Тестовый режим.</strong> Реальные деньги не списываются. Оплата пройдёт на тестовой странице {{ providerLabel }}.</p>
                     </div>
 
-                    <div v-if="!payment.robokassa.is_configured" class="flex gap-3 rounded-[22px] border border-[#F4CACA] bg-[#FFF1F1] p-5 text-sm leading-6 text-[#9D282E]">
+                    <div v-if="!providerIsConfigured" class="flex gap-3 rounded-[22px] border border-[#F4CACA] bg-[#FFF1F1] p-5 text-sm leading-6 text-[#9D282E]">
                         <CircleX class="mt-0.5 h-5 w-5 shrink-0 text-[#D43B42]" :stroke-width="2" />
                         <p>
                             <strong class="font-semibold">Платёжный сервис не настроен.</strong>
-                            Укажите параметры Robokassa в Laravel env-файле. Для тестовой оплаты нужны режим test и тестовые пароли.
+                            Укажите параметры {{ providerLabel }} в Laravel env-файле.
                         </p>
                     </div>
                 </div>
@@ -274,6 +291,22 @@ function planFeature(label: string, fallback: string): string {
                                         :name="name"
                                         :value="value ?? ''"
                                     >
+                                    <button
+                                        type="submit"
+                                        class="flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-[#2FA568] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#278F59]"
+                                    >
+                                        Перейти к оплате
+                                        <ExternalLink class="h-4 w-4" :stroke-width="2.25" />
+                                    </button>
+                                </form>
+
+                                <form
+                                    v-else-if="canOpenYooKassa"
+                                    class="mt-5"
+                                    :action="payment.yookassa.checkout_url"
+                                    method="POST"
+                                >
+                                    <input type="hidden" name="_token" :value="csrfToken">
                                     <button
                                         type="submit"
                                         class="flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-[#2FA568] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#278F59]"

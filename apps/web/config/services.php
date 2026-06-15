@@ -67,6 +67,10 @@ return [
         'webhook_secret' => env('FAKE_BANK_WEBHOOK_SECRET'),
     ],
 
+    'payments' => [
+        'provider' => env('PAYMENT_PROVIDER', 'robokassa'),
+    ],
+
     'robokassa' => [
         'mode' => env('ROBOKASSA_MODE', 'test'),
         'merchant_login' => env('ROBOKASSA_MERCHANT_LOGIN'),
@@ -77,6 +81,14 @@ return [
         'hash_algorithm' => env('ROBOKASSA_HASH_ALGORITHM', 'md5'),
         'payment_url' => env('ROBOKASSA_PAYMENT_URL', 'https://auth.robokassa.ru/Merchant/Index.aspx'),
         'culture' => env('ROBOKASSA_CULTURE', 'ru'),
+    ],
+
+    'yookassa' => [
+        'mode' => env('YOOKASSA_MODE', 'test'),
+        'shop_id' => env('YOOKASSA_SHOP_ID'),
+        'secret_key' => env('YOOKASSA_SECRET_KEY'),
+        'api_url' => env('YOOKASSA_API_URL', 'https://api.yookassa.ru/v3'),
+        'webhook_secret' => env('YOOKASSA_WEBHOOK_SECRET'),
     ],
 
 ];

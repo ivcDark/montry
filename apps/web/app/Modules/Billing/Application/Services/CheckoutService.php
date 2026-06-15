@@ -16,11 +16,11 @@ final readonly class CheckoutService
     public function __construct(
         private BusinessEventRecorder $events,
         private BillingAddonCatalog $addons,
-    ) {
-    }
+        private PaymentProviderManager $paymentProviders,
+    ) {}
 
     /**
-     * @param array<string, mixed> $addonQuantities
+     * @param  array<string, mixed>  $addonQuantities
      */
     public function start(int $organizationId, string $planCode, array $addonQuantities = []): Payment
     {
@@ -31,6 +31,8 @@ final readonly class CheckoutService
             ->firstOrFail();
 
         return DB::transaction(function () use ($organizationId, $plan, $addonQuantities): Payment {
+            $provider = $this->paymentProviders->current();
+
             Organization::query()
                 ->lockForUpdate()
                 ->findOrFail($organizationId);
@@ -87,15 +89,15 @@ final readonly class CheckoutService
             $payment = Payment::query()->create([
                 'organization_id' => $organizationId,
                 'subscription_id' => $subscription->id,
-                'provider' => 'robokassa',
+                'provider' => $provider,
                 'status' => 'pending',
                 'amount_cents' => $amountCents,
                 'currency' => $plan->currency,
                 'payload' => [
                     'plan_code' => $plan->code,
                     'period' => 'month',
-                    'provider' => 'robokassa',
-                    'mode' => config('services.robokassa.mode', 'test'),
+                    'provider' => $provider,
+                    'mode' => config("services.{$provider}.mode", 'test'),
                     'billing_mode' => $isAddonDeltaCheckout ? 'addon_delta' : 'plan_checkout',
                     'base_plan_amount_cents' => $isAddonDeltaCheckout ? 0 : $plan->price_cents,
                     'addons_amount_cents' => $addonsTotalCents,
@@ -128,7 +130,7 @@ final readonly class CheckoutService
     }
 
     /**
-     * @param array<string, mixed> $providerPayload
+     * @param  array<string, mixed>  $providerPayload
      */
     public function confirm(Payment $payment, array $providerPayload = [], ?string $providerPaymentId = null): Subscription
     {
@@ -245,7 +247,7 @@ final readonly class CheckoutService
     }
 
     /**
-     * @param array<string, mixed> $providerPayload
+     * @param  array<string, mixed>  $providerPayload
      */
     public function markFailed(Payment $payment, string $failureCode, string $failureReason, array $providerPayload = []): Payment
     {
@@ -295,7 +297,7 @@ final readonly class CheckoutService
     }
 
     /**
-     * @param array<string, mixed> $providerPayload
+     * @param  array<string, mixed>  $providerPayload
      */
     private function mergeProviderPayload(Payment $payment, array $providerPayload, ?string $providerPaymentId): void
     {
@@ -310,7 +312,7 @@ final readonly class CheckoutService
     }
 
     /**
-     * @param array<string, mixed> $providerPayload
+     * @param  array<string, mixed>  $providerPayload
      * @return array<string, mixed>
      */
     private function mergedPayload(Payment $payment, array $providerPayload): array

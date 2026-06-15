@@ -15,6 +15,7 @@ use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Organizations\Enums\OrganizationRole;
 use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -804,6 +805,124 @@ final class BillingFlowTest extends TestCase
                 ->where('payment.robokassa.fields.IsTest', '1')
                 ->has('payment.robokassa.fields.SignatureValue')
             );
+    }
+
+    public function test_checkout_uses_configured_yookassa_provider(): void
+    {
+        config([
+            'services.payments.provider' => 'yookassa',
+            'services.yookassa.mode' => 'test',
+            'services.yookassa.shop_id' => '123456',
+            'services.yookassa.secret_key' => 'test-secret',
+        ]);
+
+        [$user, $organization] = $this->createOrganizationContext();
+        $this->createPlan('free', 0);
+        $this->createPlan('pro', 99000);
+
+        $this
+            ->actingAs($user)
+            ->post('/billing/checkout', [
+                'plan_code' => 'pro',
+            ])
+            ->assertRedirect();
+
+        $payment = Payment::query()->firstOrFail();
+
+        $this->assertSame('yookassa', $payment->provider);
+        $this->assertSame('yookassa', $payment->payload['provider']);
+        $this->assertSame('test', $payment->payload['mode']);
+
+        $this
+            ->actingAs($user)
+            ->get("/billing/payments/{$payment->id}")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('payment.provider', 'yookassa')
+                ->where('payment.yookassa.is_configured', true)
+                ->where('payment.yookassa.is_test', true)
+                ->where('payment.yookassa.checkout_url', route('billing.payments.yookassa.checkout', $payment))
+            );
+    }
+
+    public function test_yookassa_checkout_creates_remote_payment_and_redirects_to_confirmation_url(): void
+    {
+        config([
+            'services.yookassa.mode' => 'test',
+            'services.yookassa.shop_id' => '123456',
+            'services.yookassa.secret_key' => 'test-secret',
+            'services.yookassa.api_url' => 'https://api.yookassa.ru/v3',
+        ]);
+
+        Http::fake([
+            'api.yookassa.ru/v3/payments' => Http::response([
+                'id' => '2f7ef541-000f-5000-9000-18d4d6d8c456',
+                'status' => 'pending',
+                'confirmation' => [
+                    'type' => 'redirect',
+                    'confirmation_url' => 'https://yookassa.test/pay/2f7ef541',
+                ],
+            ]),
+        ]);
+
+        [$user, $organization] = $this->createOrganizationContext();
+        $payment = $this->createPendingPayment($organization);
+        $payment->forceFill(['provider' => 'yookassa'])->save();
+
+        $this
+            ->actingAs($user)
+            ->post("/billing/payments/{$payment->id}/yookassa/checkout")
+            ->assertRedirect('https://yookassa.test/pay/2f7ef541');
+
+        $payment->refresh();
+
+        $this->assertSame('2f7ef541-000f-5000-9000-18d4d6d8c456', $payment->provider_payment_id);
+        $this->assertArrayHasKey('yookassa_idempotence_key', $payment->payload);
+        $this->assertSame('test', $payment->payload['yookassa_mode']);
+
+        Http::assertSent(fn ($request): bool => $request->hasHeader('Idempotence-Key')
+            && $request->url() === 'https://api.yookassa.ru/v3/payments'
+            && $request['amount']['value'] === '990.00'
+            && $request['metadata']['payment_id'] === (string) $payment->id);
+    }
+
+    public function test_yookassa_webhook_confirms_successful_payment(): void
+    {
+        config([
+            'services.yookassa.mode' => 'test',
+            'services.yookassa.webhook_secret' => 'webhook-secret',
+        ]);
+
+        [$user, $organization] = $this->createOrganizationContext();
+        $payment = $this->createPendingPayment($organization);
+        $payment->forceFill(['provider' => 'yookassa'])->save();
+
+        $this
+            ->postJson('/billing/yookassa/webhook', [
+                'type' => 'notification',
+                'event' => 'payment.succeeded',
+                'object' => [
+                    'id' => '2f7ef541-000f-5000-9000-18d4d6d8c456',
+                    'status' => 'succeeded',
+                    'amount' => [
+                        'value' => '990.00',
+                        'currency' => 'RUB',
+                    ],
+                    'metadata' => [
+                        'payment_id' => (string) $payment->id,
+                    ],
+                ],
+            ], [
+                'Authorization' => 'Bearer webhook-secret',
+            ])
+            ->assertOk();
+
+        $payment->refresh();
+        $subscription = $payment->subscription()->firstOrFail();
+
+        $this->assertSame('paid', $payment->status);
+        $this->assertSame('2f7ef541-000f-5000-9000-18d4d6d8c456', $payment->provider_payment_id);
+        $this->assertSame('active', $subscription->status);
     }
 
     private function createPlan(string $code, int $priceCents, int $sortOrder = 0, array $limits = []): Plan

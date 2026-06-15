@@ -9,12 +9,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 final readonly class AuditSensitiveRequestMiddleware
 {
-    public function __construct(private AuditLogger $audit)
-    {
-    }
+    public function __construct(private AuditLogger $audit) {}
 
     /**
-     * @param Closure(Request): Response $next
+     * @param  Closure(Request): Response  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
@@ -44,7 +42,7 @@ final readonly class AuditSensitiveRequestMiddleware
             || $request->is('admin/*')
             || $request->is('billing/payments/*')
             || $request->is('billing/robokassa/*')
+            || $request->is('billing/yookassa/*')
             || $request->is('internal/*');
     }
 }
-
