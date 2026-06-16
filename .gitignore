@@ -24,3 +24,5 @@
 /backups/
 /.superpowers/
 /docker/observability/node-exporter/textfile_collector/*.prom
+
+Заметки.txt

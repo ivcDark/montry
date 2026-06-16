@@ -23,6 +23,7 @@ final class StartCheckoutRequest extends FormRequest
                 'string',
                 Rule::exists('plans', 'code')->where('is_active', true),
             ],
+            'manage_addons' => ['sometimes', 'boolean'],
             'addons' => ['sometimes', 'array:'.implode(',', $addonCodes)],
             'addons.*' => ['nullable', 'integer', 'min:0', 'max:1000'],
         ];

@@ -49,6 +49,8 @@ final readonly class ApplySubscriptionLimits
                 ]);
         }
 
+        $this->applyMonitorLimit($organizationId, $plan, $allowedResourceIds, $allowedTypes);
+
         foreach ($this->addons->paidMonitorTypes() as $type) {
             $this->applyPaidCheckLimit($organizationId, $type, $allowedResourceIds);
         }
@@ -116,6 +118,56 @@ final readonly class ApplySubscriptionLimits
         $types = array_values(array_map('strval', $value['types']));
 
         return in_array('*', $types, true) ? null : $types;
+    }
+
+    /**
+     * @param list<int>|null $allowedResourceIds
+     * @param list<string>|null $allowedTypes
+     */
+    private function applyMonitorLimit(int $organizationId, Plan $plan, ?array $allowedResourceIds, ?array $allowedTypes): void
+    {
+        $limit = $this->maxMonitors($plan);
+
+        if ($limit === null) {
+            return;
+        }
+
+        $allowedMonitorIds = $limit > 0
+            ? Monitor::query()
+                ->where('organization_id', $organizationId)
+                ->where('enabled', true)
+                ->when($allowedResourceIds !== null, fn ($query) => $query->whereIn('monitored_resource_id', $allowedResourceIds))
+                ->when($allowedTypes !== null, fn ($query) => $query->whereIn('type', $allowedTypes))
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->limit($limit)
+                ->pluck('id')
+                ->map(fn (mixed $id): int => (int) $id)
+                ->all()
+            : [];
+
+        Monitor::query()
+            ->where('organization_id', $organizationId)
+            ->where('enabled', true)
+            ->when($allowedMonitorIds !== [], fn ($query) => $query->whereNotIn('id', $allowedMonitorIds))
+            ->update([
+                'enabled' => false,
+                'status' => 'paused',
+            ]);
+    }
+
+    private function maxMonitors(Plan $plan): ?int
+    {
+        $limit = $plan->limits->firstWhere('key', 'max_monitors');
+        $value = $limit?->value;
+
+        if (! is_array($value)) {
+            return null;
+        }
+
+        return array_key_exists('limit', $value) && $value['limit'] !== null
+            ? (int) $value['limit']
+            : null;
     }
 
     /**

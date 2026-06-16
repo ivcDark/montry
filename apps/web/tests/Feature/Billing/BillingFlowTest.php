@@ -245,6 +245,134 @@ final class BillingFlowTest extends TestCase
         $this->assertDatabaseCount('payments', 0);
     }
 
+    public function test_user_can_buy_additional_limits_for_current_plan(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $plan = $this->createPlan('pro', 39000);
+
+        Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addMonth(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/billing/checkout', [
+                'plan_code' => 'pro',
+                'manage_addons' => true,
+                'addons' => [
+                    'extra_sites_pack' => 1,
+                    'api_endpoint' => 2,
+                    'tcp_port' => 1,
+                ],
+            ])
+            ->assertRedirect();
+
+        $payment = Payment::query()->firstOrFail();
+
+        $this->assertSame(23000, $payment->amount_cents);
+        $this->assertSame('addon_delta', $payment->payload['billing_mode']);
+
+        $this
+            ->actingAs($user)
+            ->post("/billing/payments/{$payment->id}/confirm")
+            ->assertRedirect('/dashboard');
+
+        $this->assertDatabaseHas('subscription_items', [
+            'code' => 'extra_sites_pack',
+            'quantity' => 1,
+            'unit_price_cents' => 15000,
+        ]);
+        $this->assertDatabaseHas('subscription_items', [
+            'code' => 'api_endpoint',
+            'quantity' => 2,
+            'unit_price_cents' => 3000,
+        ]);
+        $this->assertDatabaseHas('subscription_items', [
+            'code' => 'tcp_port',
+            'quantity' => 1,
+            'unit_price_cents' => 2000,
+        ]);
+    }
+
+    public function test_user_can_remove_additional_limits_without_payment_and_excess_paid_monitors_are_paused(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $project = $this->createProject($organization);
+        $resource = $this->createResource($organization, $project, $user);
+        $plan = $this->createPlan('pro', 39000, 20, [
+            'max_sites' => ['limit' => 10],
+            'allowed_monitor_types' => ['types' => ['*']],
+        ]);
+        $subscription = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addMonth(),
+        ]);
+        $subscription->items()->create([
+            'code' => 'extra_sites_pack',
+            'quantity' => 1,
+            'unit_price_cents' => 15000,
+            'currency' => 'RUB',
+        ]);
+        $subscription->items()->create([
+            'code' => 'api_endpoint',
+            'quantity' => 2,
+            'unit_price_cents' => 3000,
+            'currency' => 'RUB',
+        ]);
+        $subscription->items()->create([
+            'code' => 'tcp_port',
+            'quantity' => 1,
+            'unit_price_cents' => 2000,
+            'currency' => 'RUB',
+        ]);
+
+        $oldEndpoint = $this->createMonitor($organization, $project, $resource, 'api_endpoint', now()->subDays(2));
+        $newEndpoint = $this->createMonitor($organization, $project, $resource, 'api_endpoint', now()->subDay());
+        $tcpPort = $this->createMonitor($organization, $project, $resource, 'tcp_port', now()->subHour());
+
+        $this
+            ->actingAs($user)
+            ->post('/billing/checkout', [
+                'plan_code' => 'pro',
+                'manage_addons' => true,
+                'addons' => [
+                    'api_endpoint' => 1,
+                ],
+            ])
+            ->assertRedirect('/billing');
+
+        $oldEndpoint->refresh();
+        $newEndpoint->refresh();
+        $tcpPort->refresh();
+
+        $this->assertDatabaseCount('payments', 0);
+        $this->assertDatabaseMissing('subscription_items', [
+            'subscription_id' => $subscription->id,
+            'code' => 'extra_sites_pack',
+        ]);
+        $this->assertDatabaseHas('subscription_items', [
+            'subscription_id' => $subscription->id,
+            'code' => 'api_endpoint',
+            'quantity' => 1,
+        ]);
+        $this->assertDatabaseMissing('subscription_items', [
+            'subscription_id' => $subscription->id,
+            'code' => 'tcp_port',
+        ]);
+        $this->assertTrue($oldEndpoint->enabled);
+        $this->assertFalse($newEndpoint->enabled);
+        $this->assertSame('paused', $newEndpoint->status);
+        $this->assertFalse($tcpPort->enabled);
+        $this->assertSame('paused', $tcpPort->status);
+    }
+
     public function test_user_can_schedule_downgrade_after_current_paid_period(): void
     {
         [$user, $organization] = $this->createOrganizationContext();

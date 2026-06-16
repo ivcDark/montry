@@ -9,6 +9,7 @@ use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\Billing\Application\Services\PlanChangeClassifier;
 use App\Modules\Billing\Application\Services\RobokassaService;
 use App\Modules\Billing\Application\Services\ScheduleDowngrade;
+use App\Modules\Billing\Application\Services\UpdateSubscriptionAddons;
 use App\Modules\Billing\Application\Services\YooKassaService;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Payment;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
@@ -94,11 +95,13 @@ final class BillingController extends Controller
         BillingAddonCatalog $addonCatalog,
         ScheduleDowngrade $scheduleDowngrade,
         PlanChangeClassifier $planChangeClassifier,
+        UpdateSubscriptionAddons $updateSubscriptionAddons,
         BusinessEventRecorder $events,
     ): RedirectResponse {
         $organization = $getCurrentOrganization->handle($request->user());
         $planCode = $request->string('plan_code')->toString();
         $addonQuantities = $addonCatalog->normalizeQuantities($request->validated('addons', []));
+        $isAddonManagement = $request->boolean('manage_addons');
         $plan = Plan::query()
             ->where('code', $planCode)
             ->where('is_active', true)
@@ -107,8 +110,25 @@ final class BillingController extends Controller
         $currentSubscription = $this->currentSubscription($organization->id);
         $changeType = $planChangeClassifier->classify($currentSubscription?->plan, $plan);
 
-        if ($changeType === 'same' && $addonQuantities === []) {
+        if ($changeType === 'same' && ! $isAddonManagement && $addonQuantities === []) {
             return to_route('billing.index');
+        }
+
+        if ($changeType === 'same' && $currentSubscription !== null) {
+            $currentAddonQuantities = $this->addonQuantities($currentSubscription);
+
+            if ($this->sameAddonQuantities($addonQuantities, $currentAddonQuantities)) {
+                return to_route('billing.index');
+            }
+
+            if (! $this->hasAddonIncrease($addonQuantities, $currentAddonQuantities)) {
+                $updateSubscriptionAddons->handle($organization->id, $addonQuantities);
+
+                return to_route('billing.index')
+                    ->with('success', $addonQuantities === []
+                        ? 'Дополнительные лимиты отключены.'
+                        : 'Дополнительные лимиты обновлены.');
+            }
         }
 
         $events->record(new RecordBusinessEventData(
@@ -293,6 +313,43 @@ final class BillingController extends Controller
             ->where('starts_at', '>', now())
             ->latest('starts_at')
             ->first();
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function addonQuantities(Subscription $subscription): array
+    {
+        return $subscription->items
+            ->mapWithKeys(fn ($item): array => [$item->code => (int) $item->quantity])
+            ->all();
+    }
+
+    /**
+     * @param array<string, int> $requested
+     * @param array<string, int> $current
+     */
+    private function hasAddonIncrease(array $requested, array $current): bool
+    {
+        foreach ($requested as $code => $quantity) {
+            if ($quantity > ($current[$code] ?? 0)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, int> $left
+     * @param array<string, int> $right
+     */
+    private function sameAddonQuantities(array $left, array $right): bool
+    {
+        ksort($left);
+        ksort($right);
+
+        return $left === $right;
     }
 
     private function planPayload(Plan $plan): array

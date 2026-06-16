@@ -48,7 +48,7 @@ final readonly class CheckoutService
             $addonsTotalCents = $this->addons->totalCents($addonQuantities);
             $currentAddonsTotalCents = $this->addons->totalCents($currentAddonQuantities);
             $amountCents = $isAddonDeltaCheckout
-                ? max(0, $addonsTotalCents - $currentAddonsTotalCents)
+                ? $this->positiveAddonDeltaCents($addonQuantities, $currentAddonQuantities)
                 : $plan->price_cents + $addonsTotalCents;
 
             $existingPayment = Payment::query()
@@ -127,6 +127,25 @@ final readonly class CheckoutService
 
             return $payment;
         });
+    }
+
+    /**
+     * @param array<string, int> $requested
+     * @param array<string, int> $current
+     */
+    private function positiveAddonDeltaCents(array $requested, array $current): int
+    {
+        $amount = 0;
+
+        foreach ($requested as $code => $quantity) {
+            $additionalQuantity = $quantity - ($current[$code] ?? 0);
+
+            if ($additionalQuantity > 0) {
+                $amount += $this->addons->unitPriceCents($code) * $additionalQuantity;
+            }
+        }
+
+        return $amount;
     }
 
     /**

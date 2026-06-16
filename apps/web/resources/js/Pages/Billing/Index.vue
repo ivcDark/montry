@@ -68,6 +68,44 @@ const effectiveSiteLimit = computed(() => props.usage.site_limit ?? currentPlan.
 const currentHistoryDays = computed(() => currentPlan.value?.limits.history_retention_days?.days ?? 0)
 const siteUsagePercent = computed(() => usagePercent(props.usage.sites, effectiveSiteLimit.value))
 const activeMonitorPercent = computed(() => usagePercent(props.usage.active_monitors, props.usage.monitors || null))
+const addonDrafts = ref<Record<string, number>>(
+    Object.fromEntries(
+        (props.addonCatalog ?? []).map((addon) => [addon.code, props.currentAddons?.[addon.code]?.quantity ?? 0]),
+    ),
+)
+const desiredAddonQuantities = computed(() => {
+    const quantities: Record<string, number> = {}
+
+    for (const addon of props.addonCatalog ?? []) {
+        const quantity = addonDraftQuantity(addon.code)
+
+        if (quantity > 0) {
+            quantities[addon.code] = quantity
+        }
+    }
+
+    return quantities
+})
+const hasAddonChanges = computed(() => {
+    for (const addon of props.addonCatalog ?? []) {
+        if (addonDraftQuantity(addon.code) !== addonQuantity(addon.code)) {
+            return true
+        }
+    }
+
+    return false
+})
+const addonMonthlyTotal = computed(() => (props.addonCatalog ?? []).reduce((sum, addon) => (
+    sum + addon.unit_price_cents * addonDraftQuantity(addon.code)
+), 0))
+const currentAddonMonthlyTotal = computed(() => (props.addonCatalog ?? []).reduce((sum, addon) => (
+    sum + addon.unit_price_cents * addonQuantity(addon.code)
+), 0))
+const addonDueNow = computed(() => (props.addonCatalog ?? []).reduce((sum, addon) => {
+    const additionalQuantity = addonDraftQuantity(addon.code) - addonQuantity(addon.code)
+
+    return additionalQuantity > 0 ? sum + additionalQuantity * addon.unit_price_cents : sum
+}, 0))
 
 function money(plan: Plan): string {
     if (plan.price_cents === 0) {
@@ -85,23 +123,53 @@ function addonQuantity(code: string): number {
     return props.currentAddons?.[code]?.quantity ?? 0
 }
 
-function addonCheckoutData(addon: AddonCatalogItem): Record<string, any> {
-    const addons: Record<string, number> = {}
+function addonDraftQuantity(code: string): number {
+    return addonDrafts.value[code] ?? 0
+}
 
+function changeAddonQuantity(code: string, delta: number): void {
+    addonDrafts.value[code] = Math.max(0, Math.min(1000, addonDraftQuantity(code) + delta))
+}
+
+function resetAddonDrafts(): void {
     for (const item of props.addonCatalog ?? []) {
-        const quantity = addonQuantity(item.code)
+        addonDrafts.value[item.code] = addonQuantity(item.code)
+    }
+}
 
-        if (quantity > 0) {
-            addons[item.code] = quantity
-        }
+function submitAddonChanges(): void {
+    if (!hasAddonChanges.value) {
+        return
     }
 
-    addons[addon.code] = (addons[addon.code] ?? 0) + 1
-
-    return {
+    router.post('/billing/checkout', {
         plan_code: currentPlanCode.value,
-        addons,
+        manage_addons: true,
+        addons: desiredAddonQuantities.value,
+    })
+}
+
+function addonStateLabel(addon: AddonCatalogItem): string {
+    const current = addonQuantity(addon.code)
+    const next = addonDraftQuantity(addon.code)
+
+    if (next > current) {
+        return `+${next - current} после оплаты`
     }
+
+    if (next < current) {
+        return next === 0 ? 'будет отключено' : `останется ${next}`
+    }
+
+    return current > 0 ? `подключено ${current}` : 'не подключено'
+}
+
+function formatCents(cents: number): string {
+    if (cents === 0) {
+        return '0 ₽'
+    }
+
+    return `${new Intl.NumberFormat('ru-RU').format(cents / 100)} ₽`
 }
 
 function planLimit(plan: Plan, key: string, valueKey: string, fallback: string | number = 'Без лимита'): string | number {
@@ -447,7 +515,7 @@ const comparisonRows = [
             </div>
 
             <div v-if="addonCatalog?.length" class="mt-10 rounded-[30px] border border-[#DDEBE3] bg-white p-6 sm:p-8">
-                <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                         <div class="inline-flex items-center gap-2 text-sm font-semibold text-[#1E9B5D]">
                             <Plus class="h-4 w-4" :stroke-width="2.25" />
@@ -455,10 +523,23 @@ const comparisonRows = [
                         </div>
                         <h2 class="mt-2 text-2xl font-semibold text-[#26332D] sm:text-3xl">Расширьте тариф точечно</h2>
                         <p class="mt-2 max-w-2xl text-sm leading-6 text-[#6A7A70]">
-                            Подключайте только те проверки и пакеты, которые нужны сейчас. Дополнения суммируются с возможностями текущего тарифа.
+                            Подключайте только те проверки и пакеты, которые нужны сейчас. Уменьшение лимитов применяется без оплаты, а увеличение откроет счет только на добавленное количество.
                         </p>
                     </div>
-                    <span class="shrink-0 rounded-full bg-[#F3F8F5] px-4 py-2 text-xs font-medium text-[#52645A]">Оплата ежемесячно</span>
+                    <div class="grid gap-2 rounded-2xl border border-[#DDEBE3] bg-[#F8FCFA] p-4 text-sm sm:min-w-[290px]">
+                        <div class="flex items-center justify-between gap-4">
+                            <span class="text-[#6A7A70]">Сейчас</span>
+                            <span class="font-semibold text-[#26332D]">{{ formatCents(currentAddonMonthlyTotal) }} / мес</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-4">
+                            <span class="text-[#6A7A70]">После изменений</span>
+                            <span class="font-semibold text-[#26332D]">{{ formatCents(addonMonthlyTotal) }} / мес</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-4 border-t border-[#E5EFE9] pt-2">
+                            <span class="text-[#6A7A70]">К оплате сейчас</span>
+                            <span class="font-semibold text-[#178A50]">{{ formatCents(addonDueNow) }}</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -471,24 +552,63 @@ const comparisonRows = [
                             <span class="grid h-10 w-10 place-items-center rounded-2xl bg-[#E9F8EF] text-[#1E9B5D]">
                                 <Zap class="h-5 w-5" :stroke-width="2" />
                             </span>
-                            <span v-if="addonQuantity(addon.code) > 0" class="rounded-full bg-[#DDF6E8] px-2.5 py-1 text-xs font-semibold text-[#178A50]">
-                                Подключено: {{ addonQuantity(addon.code) }}
+                            <span
+                                class="rounded-full px-2.5 py-1 text-xs font-semibold"
+                                :class="addonDraftQuantity(addon.code) < addonQuantity(addon.code) ? 'bg-[#FFF0CF] text-[#A76500]' : 'bg-[#DDF6E8] text-[#178A50]'"
+                            >
+                                {{ addonStateLabel(addon) }}
                             </span>
                         </div>
                         <h3 class="mt-4 text-lg font-semibold text-[#26332D]">{{ addon.name }}</h3>
                         <p class="mt-2 flex-1 text-sm leading-6 text-[#6A7A70]">{{ addon.description }}</p>
                         <p class="mt-5 text-lg font-semibold text-[#173B2A]">{{ addonMoney(addon) }}</p>
-                        <Link
-                            href="/billing/checkout"
-                            method="post"
-                            as="button"
-                            :data="addonCheckoutData(addon)"
-                            class="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[#B8D8C5] bg-white px-4 text-sm font-semibold text-[#173B2A] transition hover:border-[#2FA568] hover:bg-[#E9F8EF]"
-                        >
-                            <Plus class="h-4 w-4" :stroke-width="2.25" />
-                            Добавить
-                        </Link>
+                        <div class="mt-4 flex h-11 items-center rounded-2xl border border-[#B8D8C5] bg-white">
+                            <button
+                                type="button"
+                                class="grid h-full w-11 place-items-center rounded-l-2xl text-[#52645A] transition hover:bg-[#F3F8F5] hover:text-[#173B2A] disabled:cursor-not-allowed disabled:opacity-40"
+                                :disabled="addonDraftQuantity(addon.code) === 0"
+                                :aria-label="`Уменьшить ${addon.name}`"
+                                @click="changeAddonQuantity(addon.code, -1)"
+                            >
+                                <Minus class="h-4 w-4" :stroke-width="2.25" />
+                            </button>
+                            <div class="flex-1 text-center text-sm font-semibold text-[#26332D]">
+                                {{ addonDraftQuantity(addon.code) }}
+                            </div>
+                            <button
+                                type="button"
+                                class="grid h-full w-11 place-items-center rounded-r-2xl text-[#178A50] transition hover:bg-[#E9F8EF]"
+                                :aria-label="`Увеличить ${addon.name}`"
+                                @click="changeAddonQuantity(addon.code, 1)"
+                            >
+                                <Plus class="h-4 w-4" :stroke-width="2.25" />
+                            </button>
+                        </div>
                     </article>
+                </div>
+
+                <div class="mt-6 flex flex-col gap-3 rounded-[22px] border border-[#DDEBE3] bg-[#F8FCFA] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                    <p class="text-sm leading-6 text-[#6A7A70]">
+                        При отключении лимита сверхлимитные сайты или платные проверки будут приостановлены автоматически. Вернуть их можно после повторного увеличения лимита.
+                    </p>
+                    <div class="flex shrink-0 flex-col gap-2 sm:flex-row">
+                        <button
+                            type="button"
+                            class="inline-flex h-11 items-center justify-center rounded-2xl border border-[#DDEBE3] px-4 text-sm font-semibold text-[#52645A] transition hover:border-[#B8D0C2] hover:text-[#173B2A] disabled:cursor-not-allowed disabled:opacity-40"
+                            :disabled="!hasAddonChanges"
+                            @click="resetAddonDrafts"
+                        >
+                            Сбросить
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-11 items-center justify-center rounded-2xl bg-[#173B2A] px-5 text-sm font-semibold text-white transition hover:bg-[#214E38] disabled:cursor-not-allowed disabled:bg-[#AAB8B0]"
+                            :disabled="!hasAddonChanges"
+                            @click="submitAddonChanges"
+                        >
+                            {{ addonDueNow > 0 ? 'Перейти к оплате' : 'Сохранить изменения' }}
+                        </button>
+                    </div>
                 </div>
             </div>
 
