@@ -807,6 +807,109 @@ final class BillingFlowTest extends TestCase
             );
     }
 
+    public function test_robokassa_success_url_confirms_pending_payment_when_signature_and_amount_are_valid(): void
+    {
+        config([
+            'services.robokassa.mode' => 'test',
+            'services.robokassa.merchant_login' => 'montry',
+            'services.robokassa.test_password1' => 'test-password-1',
+            'services.robokassa.test_password2' => 'test-password-2',
+            'services.robokassa.hash_algorithm' => 'md5',
+        ]);
+
+        [, $organization] = $this->createOrganizationContext();
+        $payment = $this->createPendingPayment($organization);
+        $payload = $this->robokassaPayload($payment, 'test-password-1', [
+            'OpKey' => 'robokassa-operation-id',
+        ]);
+
+        $this
+            ->get('/billing/robokassa/success?'.http_build_query($payload))
+            ->assertRedirect('/dashboard');
+
+        $payment->refresh();
+        $subscription = $payment->subscription()->firstOrFail();
+
+        $this->assertSame('paid', $payment->status);
+        $this->assertSame('robokassa-operation-id', $payment->provider_payment_id);
+        $this->assertNotNull($payment->paid_at);
+        $this->assertSame('active', $subscription->status);
+        $this->assertArrayHasKey('robokassa_success', $payment->payload);
+    }
+
+    public function test_robokassa_success_url_marks_payment_failed_when_amount_mismatches(): void
+    {
+        config([
+            'services.robokassa.mode' => 'test',
+            'services.robokassa.merchant_login' => 'montry',
+            'services.robokassa.test_password1' => 'test-password-1',
+            'services.robokassa.test_password2' => 'test-password-2',
+            'services.robokassa.hash_algorithm' => 'md5',
+        ]);
+
+        [, $organization] = $this->createOrganizationContext();
+        $payment = $this->createPendingPayment($organization);
+        $payload = $this->robokassaPayload($payment, 'test-password-1', [
+            'OutSum' => '1.00',
+        ]);
+
+        $this
+            ->get('/billing/robokassa/success?'.http_build_query($payload))
+            ->assertRedirect("/billing/payments/{$payment->id}");
+
+        $payment->refresh();
+
+        $this->assertSame('failed', $payment->status);
+        $this->assertSame('amount_mismatch', $payment->failure_code);
+        $this->assertNotNull($payment->failed_at);
+        $this->assertDatabaseHas('payment_logs', [
+            'payment_id' => $payment->id,
+            'event' => 'robokassa.success.amount_mismatch',
+            'level' => 'error',
+        ]);
+    }
+
+    public function test_robokassa_fail_url_marks_pending_payment_failed(): void
+    {
+        [, $organization] = $this->createOrganizationContext();
+        $payment = $this->createPendingPayment($organization);
+
+        $this
+            ->get('/billing/robokassa/fail?'.http_build_query([
+                'InvId' => (string) $payment->id,
+                'OutSum' => '990.00',
+            ]))
+            ->assertRedirect("/billing/payments/{$payment->id}");
+
+        $payment->refresh();
+
+        $this->assertSame('failed', $payment->status);
+        $this->assertSame('robokassa_fail_return', $payment->failure_code);
+        $this->assertNotNull($payment->failed_at);
+    }
+
+    public function test_robokassa_result_url_rejects_payment_from_another_provider(): void
+    {
+        config([
+            'services.robokassa.mode' => 'test',
+            'services.robokassa.merchant_login' => 'montry',
+            'services.robokassa.test_password1' => 'test-password-1',
+            'services.robokassa.test_password2' => 'test-password-2',
+            'services.robokassa.hash_algorithm' => 'md5',
+        ]);
+
+        [, $organization] = $this->createOrganizationContext();
+        $payment = $this->createPendingPayment($organization);
+        $payment->forceFill(['provider' => 'yookassa'])->save();
+        $payload = $this->robokassaPayload($payment, 'test-password-2');
+
+        $this
+            ->post('/billing/robokassa/result', $payload)
+            ->assertStatus(409);
+
+        $this->assertSame('pending', $payment->refresh()->status);
+    }
+
     public function test_checkout_uses_configured_yookassa_provider(): void
     {
         config([
@@ -989,6 +1092,32 @@ final class BillingFlowTest extends TestCase
             'currency' => 'RUB',
             'payload' => ['plan_code' => 'pro'],
         ]);
+    }
+
+    private function robokassaPayload(Payment $payment, string $password, array $overrides = []): array
+    {
+        $payload = array_replace([
+            'OutSum' => number_format($payment->amount_cents / 100, 2, '.', ''),
+            'InvId' => (string) $payment->id,
+            'Shp_payment_id' => (string) $payment->id,
+        ], $overrides);
+
+        $signatureParts = [
+            (string) $payload['OutSum'],
+            (string) $payload['InvId'],
+            $password,
+        ];
+
+        $shp = collect($payload)
+            ->filter(fn ($value, string $key): bool => preg_match('/^Shp_[A-Za-z0-9_]+$/', $key) === 1)
+            ->map(fn ($value, string $key): string => $key.'='.(string) $value)
+            ->sortKeys()
+            ->values()
+            ->all();
+
+        $payload['SignatureValue'] = strtoupper(md5(implode(':', array_merge($signatureParts, $shp))));
+
+        return $payload;
     }
 
     private function createProject(Organization $organization): Project

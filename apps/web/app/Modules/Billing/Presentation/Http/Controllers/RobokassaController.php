@@ -47,6 +47,12 @@ final class RobokassaController extends Controller
                 return response('Payment not found', 404);
             }
 
+            if ($payment->provider !== 'robokassa') {
+                $logger->warning('robokassa.result.provider_mismatch', $payment, $request, 'ResultURL Robokassa пришел для платежа другого провайдера.', $payload);
+
+                return response('Provider mismatch', 409);
+            }
+
             $logger->info('robokassa.result.received', $payment, $request, 'Получен ResultURL от Robokassa.', $payload);
 
             if (! $robokassa->isConfigured()) {
@@ -98,6 +104,7 @@ final class RobokassaController extends Controller
     public function success(
         Request $request,
         RobokassaService $robokassa,
+        CheckoutService $checkout,
         PaymentLogger $logger,
     ): RedirectResponse {
         $payment = $this->findPaymentFromRequest($request, $robokassa);
@@ -108,6 +115,13 @@ final class RobokassaController extends Controller
 
             return to_route('billing.index')
                 ->with('error', 'Платеж не найден. Если деньги были списаны, напишите в поддержку.');
+        }
+
+        if ($payment->provider !== 'robokassa') {
+            $logger->warning('robokassa.success.provider_mismatch', $payment, $request, 'SuccessURL Robokassa пришел для платежа другого провайдера.', $payload);
+
+            return to_route('billing.index')
+                ->with('error', 'Платеж относится к другому платежному провайдеру.');
         }
 
         if ($robokassa->isConfigured() && ! $robokassa->successSignatureIsValid($request)) {
@@ -124,13 +138,44 @@ final class RobokassaController extends Controller
                 ->with('success', 'Платеж подтвержден. Тариф активирован.');
         }
 
-        return redirect()->route('billing.payments.show', $payment)
-            ->with('success', 'Оплата завершена. Ожидаем серверное подтверждение от Robokassa.');
+        if (! $robokassa->isConfigured()) {
+            $logger->warning('robokassa.success.not_configured', $payment, $request, 'SuccessURL Robokassa получен, но Robokassa не настроена для проверки подписи.', $payload);
+
+            return redirect()->route('billing.payments.show', $payment)
+                ->with('success', 'Оплата завершена. Ожидаем серверное подтверждение от Robokassa.');
+        }
+
+        $amountCents = $robokassa->amountCentsFromRequest($request);
+
+        if ($amountCents === null || $amountCents !== $payment->amount_cents) {
+            $checkout->markFailed($payment, 'amount_mismatch', 'Сумма платежа Robokassa на SuccessURL не совпала с суммой в Montry.', [
+                'robokassa_success' => $payload,
+            ]);
+
+            $logger->error('robokassa.success.amount_mismatch', $payment->refresh(), $request, 'Сумма SuccessURL Robokassa не совпала с ожидаемой суммой платежа.', $payload, [
+                'expected_amount_cents' => $payment->amount_cents,
+                'received_amount_cents' => $amountCents,
+            ]);
+
+            return redirect()->route('billing.payments.show', $payment)
+                ->with('error', 'Сумма платежа не совпала. Напишите в поддержку, если деньги были списаны.');
+        }
+
+        $checkout->confirm($payment, [
+            'robokassa_success' => $payload,
+            'robokassa_mode' => $robokassa->isTest() ? 'test' : 'prod',
+        ], $robokassa->providerPaymentIdFromRequest($request));
+
+        $logger->info('robokassa.success.processed', $payment->refresh(), $request, 'Платеж Robokassa подтвержден по валидному SuccessURL.', $payload);
+
+        return to_route('dashboard.index')
+            ->with('success', 'Платеж подтвержден. Тариф активирован.');
     }
 
     public function fail(
         Request $request,
         RobokassaService $robokassa,
+        CheckoutService $checkout,
         PaymentLogger $logger,
     ): RedirectResponse {
         $payment = $this->findPaymentFromRequest($request, $robokassa);
@@ -141,6 +186,17 @@ final class RobokassaController extends Controller
         if ($payment === null) {
             return to_route('billing.index')
                 ->with('error', 'Платеж не завершен. Вы можете выбрать тариф и попробовать оплатить снова.');
+        }
+
+        if ($payment->provider !== 'robokassa') {
+            return to_route('billing.index')
+                ->with('error', 'Платеж относится к другому платежному провайдеру.');
+        }
+
+        if ($payment->status === 'pending') {
+            $checkout->markFailed($payment, 'robokassa_fail_return', 'Пользователь вернулся из Robokassa после отказа или ошибки оплаты.', [
+                'robokassa_fail' => $payload,
+            ]);
         }
 
         return redirect()->route('billing.payments.show', $payment)
