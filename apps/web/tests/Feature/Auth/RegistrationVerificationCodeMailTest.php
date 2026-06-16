@@ -14,7 +14,8 @@ final class RegistrationVerificationCodeMailTest extends TestCase
 
         $this->assertStringContainsString('Montry', $html);
         $this->assertStringContainsString('12345', $html);
-        $this->assertStringContainsString('#0F6BFF', $html);
+        $this->assertStringContainsString('#123D2B', $html);
+        $this->assertStringContainsString('#24A869', $html);
         $this->assertStringContainsString('Код действует 10 минут', $html);
     }
 
@@ -24,7 +25,8 @@ final class RegistrationVerificationCodeMailTest extends TestCase
 
         $this->assertStringContainsString('Montry', $html);
         $this->assertStringContainsString('Ivan Petrov', $html);
-        $this->assertStringContainsString('#0F6BFF', $html);
+        $this->assertStringContainsString('#123D2B', $html);
+        $this->assertStringContainsString('#24A869', $html);
         $this->assertStringContainsString('Открыть кабинет', $html);
     }
 }
