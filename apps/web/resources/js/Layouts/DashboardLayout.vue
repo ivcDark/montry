@@ -6,11 +6,15 @@ import FlashToast from '@/Components/FlashToast.vue'
 import {
     Activity,
     BarChart3,
+    BookOpen,
+    CreditCard,
     FolderKanban,
     Globe2,
     HelpCircle,
     Lightbulb,
+    LifeBuoy,
     LogOut,
+    Mail,
     Send,
     Settings,
     X,
@@ -85,6 +89,7 @@ const toastMessage = computed(() => page.props.flash?.error ?? page.props.flash?
 const toastVariant = computed<'success' | 'error'>(() => page.props.flash?.error ? 'error' : 'success')
 const supportModalOpen = ref(false)
 const ideaModalOpen = ref(false)
+const currentYear = new Date().getFullYear()
 
 const planName = computed(() => billingSummary.value?.plan?.name ?? 'Free')
 const monitorsCurrent = computed(() => billingSummary.value?.monitors.current ?? 0)
@@ -328,6 +333,95 @@ function submitProductIdea(): void {
             </header>
 
             <slot />
+
+            <footer class="border-t border-[#DDEBE3] bg-white/70 px-5 py-8 sm:px-8">
+                <div class="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1.2fr_2fr]">
+                    <div>
+                        <div class="flex items-center gap-3">
+                            <BrandMark class="h-8 w-8" />
+                            <p class="text-lg font-bold text-[#173B2A]">Montry</p>
+                        </div>
+
+                        <p class="mt-5 text-sm text-[#6A7A70]">© {{ currentYear }} Montry</p>
+                    </div>
+
+                    <div class="grid gap-6 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                        <div>
+                            <p class="font-bold text-[#26332D]">Кабинет</p>
+                            <div class="mt-4 grid gap-3">
+                                <Link href="/sites/create" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
+                                    <Globe2 class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
+                                    Добавить сайт
+                                </Link>
+                                <Link href="/billing" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
+                                    <CreditCard class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
+                                    Тариф и лимиты
+                                </Link>
+                                <Link href="/settings" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
+                                    <Settings class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
+                                    Настройки
+                                </Link>
+                            </div>
+                        </div>
+
+                        <div>
+                            <p class="font-bold text-[#26332D]">Документы</p>
+                            <div class="mt-4 grid gap-3">
+                                <Link href="/offers" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
+                                    <BookOpen class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
+                                    Публичная оферта
+                                </Link>
+                                <Link href="/user-agreement" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
+                                    <BookOpen class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
+                                    Пользовательское соглашение
+                                </Link>
+                                <Link href="/articles" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
+                                    <BookOpen class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
+                                    Статьи
+                                </Link>
+                            </div>
+                        </div>
+
+                        <div>
+                            <p class="font-bold text-[#26332D]">Связь</p>
+                            <div class="mt-4 grid gap-3">
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-2 text-left font-medium text-[#52645A] transition hover:text-[#173B2A]"
+                                    @click="openSupportModal"
+                                >
+                                    <LifeBuoy class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
+                                    Написать в поддержку
+                                </button>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-2 text-left font-medium text-[#52645A] transition hover:text-[#173B2A]"
+                                    @click="openIdeaModal"
+                                >
+                                    <Lightbulb class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
+                                    Предложить идею
+                                </button>
+                                <a href="mailto:vladimir@vl-iv.ru" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
+                                    <Mail class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
+                                    vladimir@vl-iv.ru
+                                </a>
+                            </div>
+                        </div>
+
+                        <div>
+                            <p class="font-bold text-[#26332D]">Реквизиты</p>
+                            <div class="mt-4 grid gap-2 leading-6 text-[#52645A]">
+                                <p class="font-medium">Иванов Владимир Юрьевич</p>
+                                <p>Самозанятый</p>
+                                <p>ИНН 562503808625</p>
+                                <a href="mailto:vladimir@vl-iv.ru" class="font-medium text-[#1E9B5D] transition hover:text-[#173B2A]">
+                                    vladimir@vl-iv.ru
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </footer>
         </section>
 
         <div

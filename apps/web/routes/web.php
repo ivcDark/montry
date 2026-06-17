@@ -12,6 +12,10 @@ Route::get('/offers', function () {
 
 Route::redirect('/offer', '/offers');
 
+Route::get('/user-agreement', function () {
+    return Inertia::render('Legal/UserAgreement');
+})->name('user-agreement');
+
 Route::get('/', function () {
     $plans = Plan::query()
         ->with('limits')
