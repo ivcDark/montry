@@ -70,7 +70,7 @@ withDefaults(defineProps<{
 const navigation: NavigationItem[] = [
     { key: 'sites', label: 'Сайты', href: '/sites', icon: Globe2 },
     { key: 'projects', label: 'Проекты', href: '/projects', icon: FolderKanban },
-    { key: 'reports', label: 'Отчеты', href: '#', icon: BarChart3 },
+    { key: 'reports', label: 'Отчеты', href: '/reports', icon: BarChart3 },
     { key: 'settings', label: 'Настройки', href: '/settings', icon: Settings },
 ]
 

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Reports\Infrastructure\Providers;
 
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 final class ReportsModuleServiceProvider extends ServiceProvider
@@ -12,5 +13,7 @@ final class ReportsModuleServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Route::middleware('web')
+            ->group(__DIR__ . '/../../Presentation/Routes/web.php');
     }
 }
