@@ -15,6 +15,6 @@ final class FeedbackMessageController extends Controller
     ): RedirectResponse {
         $handler->handle($request->toCommand());
 
-        return back()->with('success', 'Спасибо, Ваш вопрос отправлен администратору');
+        return back()->with('success', 'Спасибо, ваше обращение отправлено. Мы ответим на указанную почту.');
     }
 }

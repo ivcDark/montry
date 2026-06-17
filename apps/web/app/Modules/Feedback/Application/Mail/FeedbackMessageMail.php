@@ -18,7 +18,7 @@ final class FeedbackMessageMail extends Mailable
     public function build(): self
     {
         return $this
-            ->subject('Новое обращение с сайта Montry')
+            ->subject($this->feedback->source === 'account' ? 'Обращение из личного кабинета' : 'Новое обращение с сайта Montry')
             ->replyTo($this->feedback->email, $this->feedback->name)
             ->view('emails.feedback.message');
     }

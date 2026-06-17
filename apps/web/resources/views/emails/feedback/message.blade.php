@@ -1,17 +1,23 @@
 @extends('emails.layouts.base')
 
-@section('title', 'Новое обращение с сайта Montry')
+@section('title', $feedback->source === 'account' ? 'Обращение из личного кабинета' : 'Новое обращение с сайта Montry')
 @section('containerWidth', '620px')
 @section('footer', 'Это письмо отправлено формой обратной связи Montry.')
 
 @section('content')
     <p style="margin:0 0 12px;font-size:12px;line-height:18px;font-weight:800;color:#24A869;text-transform:uppercase;letter-spacing:0;">
-        Обратная связь
+        {{ $feedback->source === 'account' ? 'Техподдержка' : 'Обратная связь' }}
     </p>
 
     <h1 style="margin:0;font-size:28px;line-height:36px;font-weight:800;color:#26332D;letter-spacing:0;">
-        Новое обращение с главной страницы
+        {{ $feedback->source === 'account' ? 'Обращение из личного кабинета' : 'Новое обращение с главной страницы' }}
     </h1>
+
+    @if($feedback->subject)
+        <p style="margin:14px 0 0;font-size:16px;line-height:26px;font-weight:700;color:#52645A;">
+            {{ $feedback->subject }}
+        </p>
+    @endif
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0;width:100%;">
         <tr>
@@ -25,6 +31,18 @@
                 <p style="margin:4px 0 0;font-size:15px;line-height:24px;color:#52645A;">
                     {{ $feedback->email }}
                 </p>
+                @if($feedback->userId)
+                    <p style="margin:12px 0 0;font-size:13px;line-height:22px;color:#52645A;">
+                        <strong style="color:#26332D;">Пользователь:</strong>
+                        #{{ $feedback->userId }} · {{ $feedback->userName ?? 'без имени' }} · {{ $feedback->userEmail ?? 'без email' }}
+                    </p>
+                @endif
+                @if($feedback->organizationId)
+                    <p style="margin:6px 0 0;font-size:13px;line-height:22px;color:#52645A;">
+                        <strong style="color:#26332D;">Организация:</strong>
+                        #{{ $feedback->organizationId }} · {{ $feedback->organizationName ?? 'без названия' }}
+                    </p>
+                @endif
             </td>
         </tr>
     </table>
