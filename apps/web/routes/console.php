@@ -5,6 +5,7 @@ use App\Modules\Billing\Application\Services\ProcessPastDueSubscriptions;
 use App\Modules\Billing\Application\Services\SendSubscriptionRenewalReminders;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Incidents\Application\Services\SendWeeklyIncidentDigests;
+use App\Modules\Monitoring\Application\Services\PruneMonitoringHistory;
 use App\Modules\Observability\Infrastructure\ClickHouse\ClickHouseBusinessEventExporter;
 use App\Modules\Observability\Infrastructure\Persistence\Models\AnalyticsEventExport;
 use App\Modules\Observability\Infrastructure\Persistence\Models\DeadLetter;
@@ -264,8 +265,26 @@ Artisan::command('incidents:send-weekly-digests', function (SendWeeklyIncidentDi
     return self::SUCCESS;
 })->purpose('Send weekly incident digest emails to paid users.');
 
+Artisan::command('monitoring:prune-history {--days=90 : Number of days to keep} {--dry-run : Show records that would be deleted}', function (PruneMonitoringHistory $pruner): int {
+    $days = (int) $this->option('days');
+
+    if ($days < 1) {
+        $this->error('Retention days must be greater than zero.');
+
+        return self::FAILURE;
+    }
+
+    $counts = $pruner->handle($days, (bool) $this->option('dry-run'));
+    $action = $this->option('dry-run') ? 'Would delete' : 'Deleted';
+
+    $this->info("{$action} {$counts['incidents']} resolved incidents, {$counts['monitor_state_changes']} monitor state changes and {$counts['check_results']} check results older than {$days} days.");
+
+    return self::SUCCESS;
+})->purpose('Delete old monitoring history and resolved incidents.');
+
 Schedule::command('billing:send-renewal-reminders')->dailyAt('09:00');
 Schedule::command('billing:activate-scheduled-subscriptions')->dailyAt('09:10');
 Schedule::command('billing:process-past-due-subscriptions')->dailyAt('09:20');
 Schedule::command('observability:export-business-events')->everyMinute();
 Schedule::command('incidents:send-weekly-digests')->everyFiveMinutes();
+Schedule::command('monitoring:prune-history')->dailyAt('03:30');
