@@ -2,6 +2,7 @@
 
 namespace App\Modules\Billing\Application\Services;
 
+use App\Modules\Billing\Application\Jobs\SendPaymentSucceededEmail;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Payment;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
@@ -153,7 +154,9 @@ final readonly class CheckoutService
      */
     public function confirm(Payment $payment, array $providerPayload = [], ?string $providerPaymentId = null): Subscription
     {
-        return DB::transaction(function () use ($payment, $providerPayload, $providerPaymentId): Subscription {
+        $paymentWasConfirmed = false;
+
+        $subscription = DB::transaction(function () use ($payment, $providerPayload, $providerPaymentId, &$paymentWasConfirmed): Subscription {
             $payment = Payment::query()
                 ->lockForUpdate()
                 ->with(['subscription.plan', 'subscription.items'])
@@ -182,6 +185,7 @@ final readonly class CheckoutService
                 'failure_code' => null,
                 'failure_reason' => null,
             ])->save();
+            $paymentWasConfirmed = true;
 
             $subscription = $payment->subscription;
             $periodStart = now();
@@ -263,6 +267,12 @@ final readonly class CheckoutService
 
             return $subscription;
         });
+
+        if ($paymentWasConfirmed) {
+            SendPaymentSucceededEmail::dispatch($payment->id)->afterCommit();
+        }
+
+        return $subscription;
     }
 
     /**

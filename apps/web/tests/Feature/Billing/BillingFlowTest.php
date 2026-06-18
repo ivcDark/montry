@@ -2,8 +2,11 @@
 
 namespace Tests\Feature\Billing;
 
+use App\Modules\Billing\Application\Jobs\SendPaymentSucceededEmail;
+use App\Modules\Billing\Application\Mail\PaymentSucceededMail;
 use App\Modules\Billing\Application\Mail\SubscriptionPastDueReminderMail;
 use App\Modules\Billing\Application\Mail\SubscriptionRenewalReminderMail;
+use App\Modules\Billing\Application\Services\BillingAddonCatalog;
 use App\Modules\Billing\Infrastructure\Persistence\Models\BillingNotificationLog;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Payment;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
@@ -17,6 +20,7 @@ use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -156,6 +160,79 @@ final class BillingFlowTest extends TestCase
         $this->assertSame($originalStartsAt, $subscription->starts_at->toDateTimeString());
         $this->assertSame($originalEndsAt, $subscription->ends_at->toDateTimeString());
         $this->assertSame($originalPaidAt, $payment->paid_at->toDateTimeString());
+    }
+
+    public function test_successful_payment_queues_email_only_once(): void
+    {
+        Queue::fake();
+
+        [$user, $organization] = $this->createOrganizationContext();
+        $plan = $this->createPlan('pro', 99000);
+        $subscription = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plan->id,
+            'status' => 'pending',
+            'starts_at' => now(),
+        ]);
+        $payment = Payment::query()->create([
+            'organization_id' => $organization->id,
+            'subscription_id' => $subscription->id,
+            'provider' => 'yookassa',
+            'status' => 'pending',
+            'amount_cents' => 99000,
+            'currency' => 'RUB',
+            'payload' => ['plan_code' => 'pro'],
+        ]);
+
+        $this->actingAs($user)->post("/billing/payments/{$payment->id}/confirm");
+        $this->actingAs($user)->post("/billing/payments/{$payment->id}/confirm");
+
+        Queue::assertPushed(SendPaymentSucceededEmail::class, 1);
+    }
+
+    public function test_payment_succeeded_email_is_sent_to_organization_owner(): void
+    {
+        Mail::fake();
+
+        [$user, $organization] = $this->createOrganizationContext();
+        $plan = $this->createPlan('pro', 99000);
+        $subscription = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+            'starts_at' => now(),
+            'ends_at' => now()->addMonth(),
+        ]);
+        $subscription->items()->create([
+            'code' => 'api_endpoint',
+            'quantity' => 2,
+            'unit_price_cents' => 3000,
+            'currency' => 'RUB',
+        ]);
+        $payment = Payment::query()->create([
+            'organization_id' => $organization->id,
+            'subscription_id' => $subscription->id,
+            'provider' => 'yookassa',
+            'status' => 'paid',
+            'amount_cents' => 105000,
+            'currency' => 'RUB',
+            'payload' => ['plan_code' => 'pro'],
+            'paid_at' => now(),
+        ]);
+
+        (new SendPaymentSucceededEmail($payment->id))
+            ->handle(app(BillingAddonCatalog::class));
+
+        Mail::assertSent(PaymentSucceededMail::class, function (PaymentSucceededMail $mail) use ($user): bool {
+            return $mail->hasTo($user->email)
+                && $mail->planName === 'Pro'
+                && $mail->amount === '1 050,00 ₽'
+                && $mail->items === [[
+                    'name' => 'API endpoint',
+                    'quantity' => 2,
+                    'amount' => '60,00 ₽',
+                ]];
+        });
     }
 
     public function test_user_cannot_open_payment_from_another_organization(): void
