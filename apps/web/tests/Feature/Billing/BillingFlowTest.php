@@ -373,6 +373,19 @@ final class BillingFlowTest extends TestCase
             'quantity' => 1,
             'unit_price_cents' => 2000,
         ]);
+
+        $this
+            ->actingAs($user)
+            ->get('/sites/create')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Sites/Create')
+                ->where('currentAddons.api_endpoint.quantity', 2)
+                ->where('currentAddons.tcp_port.quantity', 1)
+                ->where('entitlements.paid_checks.api_endpoint.limit', 2)
+                ->where('entitlements.paid_checks.api_endpoint.used', 0)
+                ->where('entitlements.paid_checks.tcp_port.limit', 1)
+                ->where('entitlements.paid_checks.tcp_port.used', 0));
     }
 
     public function test_billing_page_preselects_intended_plan_before_checkout(): void

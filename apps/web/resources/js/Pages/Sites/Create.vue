@@ -9,6 +9,7 @@ type Organization = {
 }
 
 type MonitorType = 'http' | 'ssl' | 'domain' | 'dns' | 'robots_txt' | 'sitemap_xml' | 'api_endpoint' | 'tcp_port'
+type PaidAddonType = 'sitemap_xml' | 'api_endpoint' | 'tcp_port'
 
 type MonitorTypeOption = {
     value: string
@@ -90,20 +91,28 @@ const tariffCatalog: Record<string, { name: string; priceRub: number; sites: num
     plus: { name: 'Plus', priceRub: 690, sites: 30, historyDays: 60, intervalText: 'от 3 минут' },
 }
 
-function addonPriceRub(code: 'sitemap_xml' | 'api_endpoint' | 'tcp_port'): number {
+function addonPriceRub(code: PaidAddonType): number {
     const item = props.addonCatalog.find((addon) => addon.code === code)
 
     if (item) {
         return Math.round(item.unit_price_cents / 100)
     }
 
-    const fallbackPrices: Record<'sitemap_xml' | 'api_endpoint' | 'tcp_port', number> = {
+    const fallbackPrices: Record<PaidAddonType, number> = {
         sitemap_xml: 20,
         api_endpoint: 30,
         tcp_port: 20,
     }
 
     return fallbackPrices[code]
+}
+
+function hasUnusedPaidAddon(type: PaidAddonType): boolean {
+    const entitlement = props.entitlements?.paid_checks?.[type]
+    const limit = Number(entitlement?.limit ?? props.currentAddons[type]?.quantity ?? 0)
+    const used = Number(entitlement?.used ?? 0)
+
+    return used < limit
 }
 
 const form = useForm({
@@ -271,9 +280,9 @@ const paidAddonCards = computed<ToggleCard[]>(() => [
         description: 'Проверка наличия и валидности XML-карты сайта.',
         summary: sitemapUrl.value || 'URL появится после ввода сайта',
         enabled: form.monitors.sitemap_xml.is_enabled,
-        included: false,
-        priceRub: addonPriceRub('sitemap_xml'),
-        badge: `+${addonPriceRub('sitemap_xml')} ₽/мес`,
+        included: hasUnusedPaidAddon('sitemap_xml'),
+        priceRub: hasUnusedPaidAddon('sitemap_xml') ? 0 : addonPriceRub('sitemap_xml'),
+        badge: hasUnusedPaidAddon('sitemap_xml') ? 'Уже оплачено' : `+${addonPriceRub('sitemap_xml')} ₽/мес`,
     },
     {
         type: 'api_endpoint',
@@ -282,9 +291,9 @@ const paidAddonCards = computed<ToggleCard[]>(() => [
         description: 'Контроль healthcheck, webhook или любого API URL.',
         summary: `${form.monitors.api_endpoint.method} · ${apiEndpointUrl.value || 'endpoint'} · ${apiStatusCodesText.value}`,
         enabled: form.monitors.api_endpoint.is_enabled,
-        included: false,
-        priceRub: addonPriceRub('api_endpoint'),
-        badge: `+${addonPriceRub('api_endpoint')} ₽/endpoint`,
+        included: hasUnusedPaidAddon('api_endpoint'),
+        priceRub: hasUnusedPaidAddon('api_endpoint') ? 0 : addonPriceRub('api_endpoint'),
+        badge: hasUnusedPaidAddon('api_endpoint') ? 'Уже оплачено' : `+${addonPriceRub('api_endpoint')} ₽/endpoint`,
     },
     {
         type: 'tcp_port',
@@ -293,14 +302,15 @@ const paidAddonCards = computed<ToggleCard[]>(() => [
         description: 'Проверка открытого порта: HTTPS, SMTP, SSH или свой сервис.',
         summary: `${fallbackHost.value || 'host'}:${form.monitors.tcp_port.port}`,
         enabled: form.monitors.tcp_port.is_enabled,
-        included: false,
-        priceRub: addonPriceRub('tcp_port'),
-        badge: `+${addonPriceRub('tcp_port')} ₽/порт`,
+        included: hasUnusedPaidAddon('tcp_port'),
+        priceRub: hasUnusedPaidAddon('tcp_port') ? 0 : addonPriceRub('tcp_port'),
+        badge: hasUnusedPaidAddon('tcp_port') ? 'Уже оплачено' : `+${addonPriceRub('tcp_port')} ₽/порт`,
     },
 ])
 
 const selectedPaidAddons = computed(() => paidAddonCards.value.filter((card) => card.enabled))
-const hasPaidAddons = computed(() => selectedPaidAddons.value.length > 0)
+const addonsRequiringPayment = computed(() => selectedPaidAddons.value.filter((card) => !card.included))
+const requiresAddonPayment = computed(() => addonsRequiringPayment.value.length > 0)
 const addonTotalRub = computed(() => selectedPaidAddons.value.reduce((sum, card) => sum + (card.priceRub ?? 0), 0))
 const currentAddonMonthlyRub = computed(() => Object.values(props.currentAddons).reduce((sum, addon) => {
     return sum + Math.round((addon.unit_price_cents * addon.quantity) / 100)
@@ -322,7 +332,7 @@ const selectedAddonQuantities = computed<Record<string, number>>(() => {
         Object.entries(props.currentAddons).map(([code, addon]) => [code, addon.quantity]),
     ) as Record<string, number>
 
-    for (const addon of selectedPaidAddons.value) {
+    for (const addon of addonsRequiringPayment.value) {
         quantities[addon.type] = (quantities[addon.type] ?? 0) + 1
     }
 
@@ -601,7 +611,7 @@ function requestPayload() {
 }
 
 function submit(): void {
-    if (hasPaidAddons.value) {
+    if (requiresAddonPayment.value) {
         paymentProcessing.value = true
 
         router.post('/billing/checkout', {
@@ -1119,7 +1129,7 @@ function submit(): void {
                 </div>
 
                 <aside class="space-y-4 xl:sticky xl:top-28 xl:self-start">
-                    <section v-if="!hasPaidAddons" class="rounded-[28px] border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_35px_rgba(38,51,45,0.08)]">
+                    <section v-if="!requiresAddonPayment" class="rounded-[28px] border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_35px_rgba(38,51,45,0.08)]">
                         <div class="flex items-start justify-between gap-4">
                             <div>
                                 <p class="text-sm font-medium text-[#6A7A70]">Текущий тариф</p>
@@ -1209,7 +1219,7 @@ function submit(): void {
                                     <span>Тариф {{ displayPlan.name }}</span>
                                     <span class="font-bold text-[#173B2A]">{{ displayPlan.priceRub }} ₽/мес</span>
                                 </li>
-                                <li v-for="addon in selectedPaidAddons" :key="addon.type" class="flex justify-between gap-3">
+                                <li v-for="addon in addonsRequiringPayment" :key="addon.type" class="flex justify-between gap-3">
                                     <span>{{ addon.title }}</span>
                                     <span class="font-bold text-[#E08600]">+{{ addon.priceRub }} ₽/мес</span>
                                 </li>
