@@ -7,6 +7,7 @@ import {
     Activity,
     BarChart3,
     BookOpen,
+    ChevronDown,
     CreditCard,
     FolderKanban,
     Globe2,
@@ -89,6 +90,7 @@ const toastMessage = computed(() => page.props.flash?.error ?? page.props.flash?
 const toastVariant = computed<'success' | 'error'>(() => page.props.flash?.error ? 'error' : 'success')
 const supportModalOpen = ref(false)
 const ideaModalOpen = ref(false)
+const profileMenuOpen = ref(false)
 const currentYear = new Date().getFullYear()
 
 const planName = computed(() => billingSummary.value?.plan?.name ?? 'Free')
@@ -248,10 +250,54 @@ function submitProductIdea(): void {
                     Есть идея?
                 </button>
             </div>
+
+            <div class="relative mt-3">
+                <div
+                    v-if="profileMenuOpen"
+                    class="absolute inset-x-0 bottom-full z-30 mb-2 overflow-hidden rounded-2xl border border-[#DDEBE3] bg-white p-1.5 shadow-[0_16px_40px_rgba(38,51,45,0.16)]"
+                >
+                    <Link
+                        href="/settings"
+                        class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#52645A] transition hover:bg-[#F3F8F5] hover:text-[#173B2A]"
+                    >
+                        <Settings class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
+                        Настройки
+                    </Link>
+                    <Link
+                        href="/logout"
+                        method="post"
+                        as="button"
+                        class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-[#52645A] transition hover:bg-[#F3F8F5] hover:text-[#173B2A]"
+                    >
+                        <LogOut class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
+                        Выйти
+                    </Link>
+                </div>
+
+                <button
+                    type="button"
+                    class="flex w-full items-center gap-3 rounded-2xl border border-[#DDEBE3] bg-white p-3 text-left transition hover:border-[#B8D0C2] hover:bg-[#F6FBF8]"
+                    :aria-expanded="profileMenuOpen"
+                    @click="profileMenuOpen = !profileMenuOpen"
+                >
+                    <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[#DDEBE3] bg-[#E9F8EF] text-sm font-semibold text-[#173B2A]">
+                        {{ userInitial }}
+                    </span>
+                    <span class="min-w-0 flex-1">
+                        <span class="block truncate text-sm font-semibold text-[#173B2A]">{{ user?.name || 'Пользователь' }}</span>
+                        <span class="mt-0.5 block truncate text-xs text-[#6A7A70]">{{ user?.email }}</span>
+                    </span>
+                    <ChevronDown
+                        class="h-4 w-4 shrink-0 text-[#8A9A91] transition"
+                        :class="profileMenuOpen ? 'rotate-180' : ''"
+                        :stroke-width="2"
+                    />
+                </button>
+            </div>
         </aside>
 
         <section class="min-w-0">
-            <header class="sticky top-0 z-20 border-b border-[#DDEBE3] bg-white/95 px-5 py-4 backdrop-blur sm:px-8">
+            <header class="sticky top-0 z-20 border-b border-[#DDEBE3] bg-white/95 px-5 py-4 backdrop-blur sm:px-8 lg:hidden">
                 <div class="mx-auto flex max-w-7xl items-center justify-between gap-4">
                     <div class="min-w-0">
                         <div class="flex items-center gap-3 lg:hidden">
@@ -331,6 +377,11 @@ function submitProductIdea(): void {
                     </button>
                 </nav>
             </header>
+
+            <div class="mx-auto hidden max-w-7xl justify-end gap-3 px-8 pt-6 lg:flex">
+                <slot name="header-actions" />
+                <slot name="actions" />
+            </div>
 
             <slot />
 

@@ -16,8 +16,7 @@ final readonly class IncidentResolver
         private BusinessEventRecorder $events,
         private int $failureThreshold = 2,
         private int $recoveryThreshold = 1,
-    ) {
-    }
+    ) {}
 
     public function resolve(CheckResult $checkResult): ?Incident
     {
@@ -50,6 +49,7 @@ final readonly class IncidentResolver
         $existingIncident = Incident::query()
             ->where('monitor_id', $monitor->id)
             ->where('status', 'open')
+            ->where('severity', '!=', 'warning')
             ->first();
 
         if ($existingIncident !== null) {
@@ -63,7 +63,7 @@ final readonly class IncidentResolver
             'monitor_id' => $monitor->id,
             'status' => 'open',
             'severity' => 'incident',
-            'title' => $monitor->name . ' is failing',
+            'title' => $monitor->name.' is failing',
             'summary' => $checkResult->error_message,
             'started_at' => $checkResult->checked_at,
             'opened_by_check_result_id' => $checkResult->id,
@@ -98,6 +98,7 @@ final readonly class IncidentResolver
         $incident = Incident::query()
             ->where('monitor_id', $monitor->id)
             ->where('status', 'open')
+            ->where('severity', '!=', 'warning')
             ->first();
 
         if ($incident === null) {

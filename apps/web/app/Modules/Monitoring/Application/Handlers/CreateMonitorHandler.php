@@ -22,9 +22,8 @@ final readonly class CreateMonitorHandler
     public function handle(CreateMonitorCommand $command): Monitor
     {
         $definition = $this->checkTypeRegistry->get($command->type);
-        $this->limits->assertCanCreateMonitor($command->organizationId);
+        $this->limits->assertCanCreateMonitor($command->organizationId, $command->enabled);
         $this->limits->assertCanUseMonitorType($command->organizationId, $definition->type());
-        $this->limits->assertCanCreatePaidCheck($command->organizationId, $definition->type());
         $this->limits->assertCanUseInterval($command->organizationId, $command->intervalSeconds);
 
         $monitor = $this->monitors->create([

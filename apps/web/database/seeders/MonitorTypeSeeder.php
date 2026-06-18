@@ -129,6 +129,7 @@ final class MonitorTypeSeeder extends Seeder
                     'domain' => '{{site.host}}',
                     'record_types' => ['A', 'AAAA'],
                     'nameservers' => [],
+                    'warn_on_change' => false,
                 ],
                 'default_expected' => [
                     'resolves' => true,

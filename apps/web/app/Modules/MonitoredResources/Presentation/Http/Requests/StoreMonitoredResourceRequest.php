@@ -28,7 +28,7 @@ final class StoreMonitoredResourceRequest extends FormRequest
             'monitors.*.type' => ['required_with:monitors', 'string', Rule::in($types)],
             'monitors.*.name' => ['required_with:monitors', 'string', 'max:255'],
             'monitors.*.is_enabled' => ['required_with:monitors', 'boolean'],
-            'monitors.*.interval_seconds' => ['required_with:monitors', 'integer', 'min:300', 'max:86400', 'multiple_of:60'],
+            'monitors.*.interval_seconds' => ['required_with:monitors', 'integer', 'min:60', 'max:86400', 'multiple_of:60'],
             'monitors.*.timeout_ms' => ['required_with:monitors', 'integer', 'min:1000', 'max:60000'],
             'monitors.*.settings' => ['required_with:monitors', 'array'],
             'monitors.*.expected' => ['sometimes', 'array'],
@@ -62,22 +62,35 @@ final class StoreMonitoredResourceRequest extends FormRequest
     public function monitorPayloads(array $site, ?array $allowedTypes = null, ?int $minimumIntervalSeconds = null): array
     {
         $catalog = app(MonitorTypeCatalog::class);
-        $submitted = collect($this->validated('monitors', []))
-            ->keyBy('type');
+        $submitted = collect($this->validated('monitors', []));
 
-        $types = collect($catalog->defaultForSiteCodes())
-            ->merge($submitted->keys())
-            ->unique()
-            ->values();
+        if ($submitted->isNotEmpty()) {
+            return $submitted
+                ->map(fn (array $monitor): array => $this->mergeMonitorPayload(
+                    $catalog->defaultMonitorPayload((string) $monitor['type'], $site, $minimumIntervalSeconds),
+                    $monitor,
+                ))
+                ->values()
+                ->all();
+        }
+
+        $types = $allowedTypes !== null
+                ? collect($catalog->allCodes())->filter(
+                    fn (string $type): bool => in_array($type, $allowedTypes, true),
+                )->values()
+                : collect($catalog->defaultForSiteCodes());
 
         return $types
-            ->when($allowedTypes !== null, fn ($types) => $types->filter(
-                fn (string $type): bool => in_array($type, $allowedTypes, true),
-            ))
-            ->map(fn (string $type): array => $this->mergeMonitorPayload(
-                $catalog->defaultMonitorPayload($type, $site, $minimumIntervalSeconds),
-                $submitted->get($type, []),
-            ))
+            ->map(function (string $type) use ($catalog, $site, $minimumIntervalSeconds): array {
+                $payload = $this->mergeMonitorPayload(
+                    $catalog->defaultMonitorPayload($type, $site, $minimumIntervalSeconds),
+                    [],
+                );
+
+                $payload['is_enabled'] = true;
+
+                return $payload;
+            })
             ->values()
             ->all();
     }

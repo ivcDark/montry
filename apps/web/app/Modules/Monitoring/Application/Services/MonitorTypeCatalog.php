@@ -177,7 +177,7 @@ final class MonitorTypeCatalog
     }
 
     /**
-     * @param array<string, mixed> $row
+     * @param  array<string, mixed>  $row
      * @return array<string, mixed>
      */
     private function payloadRow(array $row): array
@@ -206,7 +206,7 @@ final class MonitorTypeCatalog
     }
 
     /**
-     * @param array<string, mixed> $site
+     * @param  array<string, mixed>  $site
      */
     private function resolveTemplate(mixed $value, array $site): mixed
     {
@@ -243,7 +243,7 @@ final class MonitorTypeCatalog
     }
 
     /**
-     * @param array{url?: string, host?: string, port?: int|null} $site
+     * @param  array{url?: string, host?: string, port?: int|null}  $site
      */
     private function siteRootUrl(array $site): string
     {
@@ -294,7 +294,7 @@ final class MonitorTypeCatalog
                 'is_default_for_site' => true, 'default_enabled' => false, 'is_paid' => false,
                 'unit_price_cents' => 0, 'currency' => 'RUB', 'unit_label' => '1 проверка', 'sort_order' => 40,
                 'default_interval_seconds' => 86400, 'default_timeout_ms' => 10000,
-                'default_settings' => ['domain' => '{{site.host}}', 'record_types' => ['A', 'AAAA'], 'nameservers' => []],
+                'default_settings' => ['domain' => '{{site.host}}', 'record_types' => ['A', 'AAAA'], 'nameservers' => [], 'warn_on_change' => false],
                 'default_expected' => ['resolves' => true, 'min_records' => 1], 'ui_meta' => ['title' => 'DNS-записи'],
             ],
             [

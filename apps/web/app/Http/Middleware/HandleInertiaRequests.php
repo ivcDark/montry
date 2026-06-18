@@ -5,8 +5,6 @@ namespace App\Http\Middleware;
 use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
-use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
-use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Middleware;
@@ -111,10 +109,8 @@ class HandleInertiaRequests extends Middleware
                 'name' => $plan->name,
             ],
             'monitors' => [
-                'current' => Monitor::query()
-                    ->where('organization_id', $organization->id)
-                    ->count(),
-                'limit' => null,
+                'current' => $usage['monitors']['current'] ?? 0,
+                'limit' => $usage['monitors']['limit'] ?? null,
             ],
             'sites' => [
                 'current' => $usage['sites']['current'] ?? 0,

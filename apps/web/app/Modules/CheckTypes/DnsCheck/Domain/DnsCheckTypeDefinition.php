@@ -25,6 +25,7 @@ final class DnsCheckTypeDefinition implements CheckTypeDefinitionInterface
             'domain' => null,
             'record_types' => ['A', 'AAAA'],
             'nameservers' => [],
+            'warn_on_change' => false,
         ];
     }
 
@@ -49,6 +50,7 @@ final class DnsCheckTypeDefinition implements CheckTypeDefinitionInterface
             'domain' => strtolower($domain),
             'record_types' => $this->normalizeRecordTypes($settings['record_types']),
             'nameservers' => $this->normalizeNameservers($settings['nameservers']),
+            'warn_on_change' => (bool) $settings['warn_on_change'],
         ];
     }
 

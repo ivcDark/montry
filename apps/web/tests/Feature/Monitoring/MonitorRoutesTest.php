@@ -373,7 +373,7 @@ final class MonitorRoutesTest extends TestCase
                 ->where('organization.id', $organization->id)
                 ->where('site.id', $resource->id)
                 ->where('site.host', 'example.com')
-                ->has('monitorTypes', 3)
+                ->has('monitorTypes', 8)
             );
     }
 
@@ -481,7 +481,7 @@ final class MonitorRoutesTest extends TestCase
                 ],
             ])
             ->assertRedirect("/sites/{$resource->id}")
-            ->assertSessionHas('error', 'Лимит по мониторингам исчерпан. Повысьте тариф для добавления мониторинга.');
+            ->assertSessionHas('error', 'Лимит активных мониторингов исчерпан. Отключите часть проверок или повысьте тариф.');
 
         $this->assertDatabaseMissing('monitors', [
             'organization_id' => $organization->id,
@@ -541,7 +541,8 @@ final class MonitorRoutesTest extends TestCase
                     'registered' => true,
                 ],
             ])
-            ->assertForbidden();
+            ->assertRedirect("/sites/{$resource->id}")
+            ->assertSessionHas('error', 'Этот тип проверки недоступен на текущем тарифе.');
 
         $this->assertDatabaseMissing('monitors', [
             'organization_id' => $organization->id,
@@ -618,7 +619,7 @@ final class MonitorRoutesTest extends TestCase
             ->actingAs($user)
             ->patch("/sites/{$resource->id}/monitors/{$pausedMonitor->id}/toggle")
             ->assertRedirect("/sites/{$resource->id}")
-            ->assertSessionHas('error', 'Лимит по мониторингам исчерпан. Повысьте тариф для добавления мониторинга.');
+            ->assertSessionHas('error', 'Лимит активных мониторингов исчерпан. Отключите часть проверок или повысьте тариф.');
 
         $this->assertDatabaseHas('monitors', [
             'id' => $pausedMonitor->id,

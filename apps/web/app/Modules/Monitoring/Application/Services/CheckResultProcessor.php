@@ -4,13 +4,10 @@ namespace App\Modules\Monitoring\Application\Services;
 
 use App\Modules\Monitoring\Domain\Contracts\CheckResultRepositoryInterface;
 use App\Modules\Monitoring\Domain\Contracts\MonitorRepositoryInterface;
-use App\Modules\Monitoring\Domain\Events\DomainExpiring;
-use App\Modules\Monitoring\Domain\Events\SslExpiring;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\CheckResult;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
 use App\Modules\Observability\Application\Services\BusinessEventRecorder;
-use DateTimeImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Carbon;
 
@@ -51,7 +48,6 @@ final readonly class CheckResultProcessor
         ]);
 
         $this->updateMonitorState($monitor, $status, $checkedAt, $eventId);
-        $this->emitExpirationWarningIfNeeded($monitor, $normalizedResult);
 
         $this->events->record(new RecordBusinessEventData(
             eventType: $status === 'success' ? 'check.finished' : 'check.failed',
@@ -73,50 +69,6 @@ final readonly class CheckResultProcessor
         ));
 
         return $checkResult;
-    }
-
-    private function emitExpirationWarningIfNeeded(Monitor $monitor, array $normalizedResult): void
-    {
-        if (! in_array($monitor->type, ['ssl', 'domain'], true)) {
-            return;
-        }
-
-        $daysUntilExpiration = $normalizedResult['days_until_expiration'] ?? null;
-
-        if ($daysUntilExpiration === null || $daysUntilExpiration <= 0) {
-            return;
-        }
-
-        $warningDays = $monitor->settings['warning_days'] ?? [];
-
-        if (! in_array((int) $daysUntilExpiration, array_map('intval', $warningDays), true)) {
-            return;
-        }
-
-        $domain = (string) ($monitor->settings['domain'] ?? $monitor->monitoredResource?->host ?? '');
-        $expiresAt = isset($normalizedResult['expires_at'])
-            ? new DateTimeImmutable((string) $normalizedResult['expires_at'])
-            : null;
-
-        if ($monitor->type === 'ssl') {
-            event(new SslExpiring(
-                monitorId: $monitor->id,
-                organizationId: $monitor->organization_id,
-                domain: $domain,
-                daysUntilExpiration: (int) $daysUntilExpiration,
-                expiresAt: $expiresAt,
-            ));
-
-            return;
-        }
-
-        event(new DomainExpiring(
-            monitorId: $monitor->id,
-            organizationId: $monitor->organization_id,
-            domain: $domain,
-            daysUntilExpiration: (int) $daysUntilExpiration,
-            expiresAt: $expiresAt,
-        ));
     }
 
     private function updateMonitorState(

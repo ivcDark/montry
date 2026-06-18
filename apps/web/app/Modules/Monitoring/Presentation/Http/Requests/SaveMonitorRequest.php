@@ -21,7 +21,7 @@ final class SaveMonitorRequest extends FormRequest
             'type' => ['required', 'string', Rule::in($types)],
             'name' => ['required', 'string', 'max:255'],
             'is_enabled' => ['required', 'boolean'],
-            'interval_seconds' => ['required', 'integer', 'min:300', 'max:86400', 'multiple_of:60'],
+            'interval_seconds' => ['required', 'integer', 'min:60', 'max:86400', 'multiple_of:60'],
             'timeout_ms' => ['required', 'integer', 'min:1000', 'max:60000'],
             'settings' => ['required', 'array'],
             'expected' => ['sometimes', 'array'],

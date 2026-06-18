@@ -195,6 +195,7 @@ type MonitorDraft = {
     valid_xml: boolean
     resolves: boolean
     min_records: number
+    warn_on_change: boolean
     open: boolean
     headers: string
     body: string
@@ -444,6 +445,7 @@ function draftFromMonitor(monitor: Monitor): MonitorDraft {
         valid_xml: Boolean(expected.valid_xml ?? true),
         resolves: Boolean(expected.resolves ?? true),
         min_records: Number(expected.min_records ?? 1),
+        warn_on_change: Boolean(settings.warn_on_change ?? false),
         open: Boolean(expected.open ?? true),
         headers: settings.headers && typeof settings.headers === 'object'
             ? Object.entries(settings.headers as Record<string, unknown>).map(([key, value]) => `${key}: ${String(value)}`).join('\n')
@@ -967,6 +969,7 @@ function payloadForMonitor(monitor: Monitor) {
                 domain: draft.domain,
                 record_types: parseStringList(draft.record_types),
                 nameservers: parseStringList(draft.nameservers),
+                warn_on_change: draft.warn_on_change,
             },
             expected: {
                 resolves: draft.resolves,
@@ -1513,6 +1516,18 @@ function sparkClass(status: string): string {
                                                 <label :for="`${monitor.id}-min`" class="mb-2 block text-sm font-semibold text-[#26332D]">Минимум записей</label>
                                                 <input :id="`${monitor.id}-min`" v-model.number="monitorDrafts[monitor.id].min_records" min="0" type="number" :class="settingsInputClass(monitor)">
                                             </div>
+                                            <label class="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#DDEBE3] bg-[#F8FAFC] p-3 md:col-span-2">
+                                                <input
+                                                    v-model="monitorDrafts[monitor.id].warn_on_change"
+                                                    type="checkbox"
+                                                    class="mt-0.5 h-4 w-4 rounded border-[#B8D0C2] text-[#2FA568] focus:ring-[#2FA568]/25"
+                                                    :disabled="!monitor.is_available"
+                                                >
+                                                <span>
+                                                    <span class="block text-sm font-semibold text-[#26332D]">Создавать Warning при изменении записей</span>
+                                                    <span class="mt-1 block text-xs leading-5 text-[#6A7A70]">Сравнивать DNS-записи с предыдущей успешной проверкой.</span>
+                                                </span>
+                                            </label>
                                         </template>
 
                                         <template v-else-if="monitor.type === 'robots_txt'">

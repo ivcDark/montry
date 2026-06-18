@@ -13,20 +13,42 @@ final class IncidentNotificationMessageFactory
 
         $details = $this->details($incident);
         $error = $this->error($incident);
+        $isWarning = $incident->severity === 'warning';
+        $warningTitle = $details['monitor_type'] === 'dns'
+            ? 'Изменились DNS-записи'
+            : $incident->title;
+        $eventType = $isWarning
+            ? match ($details['monitor_type']) {
+                'ssl' => 'ssl.expiring',
+                'domain' => 'domain.expiring',
+                default => 'incident.opened',
+            }
+        : 'incident.opened';
 
         return new NotificationMessage(
-            eventType: 'incident.opened',
-            subject: "Проблема на сайте: {$details['resource_name']}",
-            body: implode("\n", [
-                '🔴 Обнаружена проблема',
-                '',
-                "Сайт: {$details['resource_name']}",
-                "Адрес: {$details['target']}",
-                "Тип мониторинга: {$details['monitor_type_label']}",
-                "Ошибка: {$error}",
-                "Описание: {$details['description']}",
-                "Время: {$this->formatDate($incident->started_at)}",
-            ]),
+            eventType: $eventType,
+            subject: $isWarning
+                ? "{$warningTitle}: {$details['resource_name']}"
+                : "Проблема на сайте: {$details['resource_name']}",
+            body: $isWarning
+                ? implode("\n", [
+                    "🟡 {$warningTitle}",
+                    '',
+                    "Сайт: {$details['resource_name']}",
+                    "Адрес: {$details['target']}",
+                    "Описание: {$incident->summary}",
+                    "Время: {$this->formatDate($incident->started_at)}",
+                ])
+                : implode("\n", [
+                    '🔴 Обнаружена проблема',
+                    '',
+                    "Сайт: {$details['resource_name']}",
+                    "Адрес: {$details['target']}",
+                    "Тип мониторинга: {$details['monitor_type_label']}",
+                    "Ошибка: {$error}",
+                    "Описание: {$details['description']}",
+                    "Время: {$this->formatDate($incident->started_at)}",
+                ]),
             payload: [
                 ...$details,
                 'incident_id' => $incident->id,
@@ -49,20 +71,34 @@ final class IncidentNotificationMessageFactory
 
         $details = $this->details($incident);
         $duration = $this->formatDuration((int) $incident->duration_seconds);
+        $isWarning = $incident->severity === 'warning';
+        $warningResolvedText = $details['monitor_type'] === 'dns'
+            ? 'DNS-записи больше не изменялись'
+            : 'Срок действия обновлён';
 
         return new NotificationMessage(
             eventType: 'incident.resolved',
-            subject: "Мониторинг восстановлен: {$details['resource_name']}",
-            body: implode("\n", [
-                '🟢 Мониторинг восстановлен',
-                '',
-                "Сайт: {$details['resource_name']}",
-                "Адрес: {$details['target']}",
-                "Тип мониторинга: {$details['monitor_type_label']}",
-                'Описание: проверка снова проходит успешно, инцидент закрыт.',
-                "Время восстановления: {$this->formatDate($incident->resolved_at)}",
-                "Длительность сбоя: {$duration}",
-            ]),
+            subject: $isWarning
+                ? "{$warningResolvedText}: {$details['resource_name']}"
+                : "Мониторинг восстановлен: {$details['resource_name']}",
+            body: $isWarning
+                ? implode("\n", [
+                    "🟢 {$warningResolvedText}",
+                    '',
+                    "Сайт: {$details['resource_name']}",
+                    "Адрес: {$details['target']}",
+                    "Время: {$this->formatDate($incident->resolved_at)}",
+                ])
+                : implode("\n", [
+                    '🟢 Мониторинг восстановлен',
+                    '',
+                    "Сайт: {$details['resource_name']}",
+                    "Адрес: {$details['target']}",
+                    "Тип мониторинга: {$details['monitor_type_label']}",
+                    'Описание: проверка снова проходит успешно, инцидент закрыт.',
+                    "Время восстановления: {$this->formatDate($incident->resolved_at)}",
+                    "Длительность сбоя: {$duration}",
+                ]),
             payload: [
                 ...$details,
                 'incident_id' => $incident->id,

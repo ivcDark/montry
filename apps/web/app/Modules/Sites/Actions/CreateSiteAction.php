@@ -24,10 +24,6 @@ final readonly class CreateSiteAction
     {
         return DB::transaction(function () use ($data, $monitors) {
             $this->limits->assertCanCreateSite((int) $data->organizationId);
-            $this->limits->assertCanCreatePaidChecks(
-                (int) $data->organizationId,
-                array_values(array_map(fn (array $monitor): string => (string) $monitor['type'], $monitors)),
-            );
 
             $site = MonitoredResource::query()->create([
                 'organization_id' => $data->organizationId,

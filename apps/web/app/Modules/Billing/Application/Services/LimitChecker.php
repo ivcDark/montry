@@ -2,7 +2,6 @@
 
 namespace App\Modules\Billing\Application\Services;
 
-use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
@@ -18,20 +17,36 @@ final readonly class LimitChecker
     ) {}
 
     /**
-     * Backward-compatible method. In the new billing model monitors are not a user-facing quota:
-     * a site includes base checks and paid checks are limited by subscription items.
+     * @throws AuthorizationException
      */
-    public function assertCanCreateMonitor(int $organizationId): void
+    public function assertCanCreateMonitor(int $organizationId, bool $enabled = true): void
     {
-        // Intentionally no-op. Use assertCanCreatePaidCheck()/assertCanCreatePaidChecks() for paid checks.
+        if ($enabled) {
+            $this->assertCanEnableMonitor($organizationId);
+        }
     }
 
     /**
-     * Backward-compatible method. Enabling is limited by monitor type, interval and paid check entitlement.
+     * @throws AuthorizationException
      */
     public function assertCanEnableMonitor(int $organizationId): void
     {
-        // Intentionally no-op. Use assertCanEnablePaidMonitor() when monitor instance is available.
+        $limit = $this->activeMonitorLimit($organizationId);
+
+        if ($limit === null) {
+            return;
+        }
+
+        $usage = $this->activeMonitorUsage($organizationId);
+
+        if ($usage >= $limit) {
+            $this->recordLimitHit($organizationId, 'max_monitors', [
+                'current_count' => $usage,
+                'limit' => $limit,
+            ]);
+
+            throw new AuthorizationException('Monitor limit reached for the current plan.');
+        }
     }
 
     /**
@@ -88,14 +103,6 @@ final readonly class LimitChecker
             throw new AuthorizationException('Monitor type is not available for the current plan.');
         }
 
-        if ($this->addons->isPaidMonitorType($type) && $this->paidCheckLimit($organizationId, $type) <= 0) {
-            $this->recordLimitHit($organizationId, 'paid_monitor_type', [
-                'requested_type' => $type,
-                'limit' => 0,
-            ]);
-
-            throw new AuthorizationException('Paid check is not purchased for the current subscription.');
-        }
     }
 
     /**
@@ -103,29 +110,12 @@ final readonly class LimitChecker
      */
     public function assertCanCreatePaidCheck(int $organizationId, string $type, int $additionalQuantity = 1): void
     {
-        if (! $this->addons->isPaidMonitorType($type)) {
-            return;
-        }
-
         $this->assertCanUseMonitorType($organizationId, $type);
-
-        $limit = $this->paidCheckLimit($organizationId, $type);
-        $usage = $this->paidCheckUsage($organizationId, $type);
-
-        if (($usage + $additionalQuantity) > $limit) {
-            $this->recordLimitHit($organizationId, 'paid_check_quantity', [
-                'requested_type' => $type,
-                'current_count' => $usage,
-                'additional_quantity' => $additionalQuantity,
-                'limit' => $limit,
-            ]);
-
-            throw new AuthorizationException('Paid check limit reached for the current subscription.');
-        }
     }
 
     /**
-     * @param list<string> $types
+     * @param  list<string>  $types
+     *
      * @throws AuthorizationException
      */
     public function assertCanCreatePaidChecks(int $organizationId, array $types): void
@@ -150,25 +140,7 @@ final readonly class LimitChecker
      */
     public function assertCanEnablePaidMonitor(Monitor $monitor): void
     {
-        if (! $this->addons->isPaidMonitorType($monitor->type)) {
-            return;
-        }
-
         $this->assertCanUseMonitorType($monitor->organization_id, $monitor->type);
-
-        $limit = $this->paidCheckLimit($monitor->organization_id, $monitor->type);
-        $usage = $this->paidCheckUsage($monitor->organization_id, $monitor->type);
-
-        if ($usage > $limit) {
-            $this->recordLimitHit($monitor->organization_id, 'paid_check_quantity', [
-                'requested_type' => $monitor->type,
-                'current_count' => $usage,
-                'limit' => $limit,
-                'monitor_id' => $monitor->id,
-            ]);
-
-            throw new AuthorizationException('Paid check limit reached for the current subscription.');
-        }
     }
 
     /**
@@ -256,13 +228,7 @@ final readonly class LimitChecker
             return false;
         }
 
-        if (! $this->addons->isPaidMonitorType($type)) {
-            return true;
-        }
-
-        $limit = $this->paidCheckLimit($organizationId, $type);
-
-        return $limit > 0 && $this->paidCheckUsage($organizationId, $type) <= $limit;
+        return true;
     }
 
     public function effectiveSiteLimit(int $organizationId): ?int
@@ -281,6 +247,19 @@ final readonly class LimitChecker
         return MonitoredResource::query()
             ->where('organization_id', $organizationId)
             ->where('type', 'website')
+            ->count();
+    }
+
+    public function activeMonitorLimit(int $organizationId): ?int
+    {
+        return $this->limitValue($organizationId, 'max_monitors');
+    }
+
+    public function activeMonitorUsage(int $organizationId): int
+    {
+        return Monitor::query()
+            ->where('organization_id', $organizationId)
+            ->where('enabled', true)
             ->count();
     }
 
@@ -321,6 +300,10 @@ final readonly class LimitChecker
         $siteLimit = $this->effectiveSiteLimit($organizationId);
 
         return [
+            'monitors' => [
+                'current' => $this->activeMonitorUsage($organizationId),
+                'limit' => $this->activeMonitorLimit($organizationId),
+            ],
             'sites' => [
                 'current' => $this->siteUsage($organizationId),
                 'limit' => $siteLimit,

@@ -49,8 +49,16 @@ final class MonitoredResourceController extends Controller
         CheckTypeRegistry $checkTypes,
         BillingAddonCatalog $addonCatalog,
         LimitChecker $limits,
-    ): Response {
+    ): Response|RedirectResponse {
         $organization = $getCurrentOrganization->handle($request->user());
+
+        try {
+            $limits->assertCanCreateSite((int) $organization->id);
+        } catch (AuthorizationException $exception) {
+            return redirect()
+                ->route('sites.index')
+                ->with('error', $this->limitErrorMessage($exception));
+        }
 
         $currentSubscription = $this->currentSubscription((int) $organization->id);
         $currentPlan = $currentSubscription?->plan ?? Plan::query()
@@ -93,7 +101,7 @@ final class MonitoredResourceController extends Controller
                     ->where('enabled', true)
                     ->count(),
                 'site_limit' => $limits->effectiveSiteLimit((int) $organization->id),
-                'monitor_limit' => null,
+                'monitor_limit' => $limits->activeMonitorLimit((int) $organization->id),
                 'minimum_check_interval_seconds' => $limits->minimumCheckIntervalSeconds((int) $organization->id),
                 'allowed_monitor_types' => $limits->allowedMonitorTypes((int) $organization->id),
             ],
@@ -122,7 +130,7 @@ final class MonitoredResourceController extends Controller
                     'url' => $siteData->url,
                     'host' => $siteData->host,
                     'port' => $siteData->port,
-                ], null, $limits->minimumCheckIntervalSeconds($organization->id)),
+                ], $limits->allowedMonitorTypes($organization->id), $limits->minimumCheckIntervalSeconds($organization->id)),
             );
         } catch (AuthorizationException $exception) {
             if (! $this->isCreateLimitException($exception)) {
@@ -344,7 +352,6 @@ final class MonitoredResourceController extends Controller
         return 'empty';
     }
 
-
     private function currentSubscription(int $organizationId): ?Subscription
     {
         return Subscription::query()
@@ -392,9 +399,7 @@ final class MonitoredResourceController extends Controller
     {
         return match ($exception->getMessage()) {
             'Site limit reached for the current plan.' => 'Лимит по сайтам исчерпан. Повысьте тариф для добавления сайта.',
-            'Monitor limit reached for the current plan.' => 'Лимит по мониторингам больше не используется. Проверьте выбранные платные проверки.',
-            'Paid check is not purchased for the current subscription.' => 'Эта проверка платная. Подключите её в тарифе или уберите из формы.',
-            'Paid check limit reached for the current subscription.' => 'Лимит по этой платной проверке исчерпан. Докупите ещё одну проверку или отключите лишнюю.',
+            'Monitor limit reached for the current plan.' => 'Лимит активных мониторингов исчерпан. Отключите часть проверок или повысьте тариф.',
             'Check interval is below the current plan limit.' => 'Интервал проверки меньше, чем разрешено на текущем тарифе.',
             'Monitor type is not available for the current plan.' => 'Этот тип проверки недоступен на текущем тарифе.',
             default => $exception->getMessage(),

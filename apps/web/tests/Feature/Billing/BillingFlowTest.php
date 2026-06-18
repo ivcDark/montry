@@ -379,7 +379,7 @@ final class BillingFlowTest extends TestCase
             ->get('/sites/create')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Sites/Create')
+                ->component('Sites/Create', false)
                 ->where('currentAddons.api_endpoint.quantity', 2)
                 ->where('currentAddons.tcp_port.quantity', 1)
                 ->where('entitlements.paid_checks.api_endpoint.limit', 2)

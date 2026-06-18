@@ -6,6 +6,7 @@ use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
+use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Organizations\Enums\OrganizationRole;
 use App\Modules\Organizations\Enums\OrganizationStatus;
 use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
@@ -101,7 +102,7 @@ class CreateSiteTest extends TestCase
                 'url' => 'https://example.com',
             ])
             ->assertRedirect('/sites/create')
-            ->assertSessionHas('error', 'Лимит по мониторингам исчерпан. Повысьте тариф для добавления мониторинга.');
+            ->assertSessionHas('error', 'Лимит активных мониторингов исчерпан. Отключите часть проверок или повысьте тариф.');
 
         $this->assertDatabaseMissing('monitored_resources', [
             'organization_id' => $organization->id,
@@ -133,6 +134,180 @@ class CreateSiteTest extends TestCase
         $this->assertDatabaseMissing('monitors', [
             'monitored_resource_id' => $site->id,
             'type' => 'domain',
+        ]);
+    }
+
+    public function test_free_plan_rejects_monitor_type_outside_tariff(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $this->subscribe($organization, 'free', [
+            'max_sites' => ['limit' => null],
+            'max_monitors' => ['limit' => 5],
+            'minimum_check_interval_seconds' => ['seconds' => 300],
+            'allowed_monitor_types' => ['types' => ['http', 'ssl']],
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/sites', [
+                'name' => 'Healthcheck',
+                'url' => 'https://example.com',
+                'monitors' => [
+                    $this->monitorPayload('domain', 86400),
+                ],
+            ])
+            ->assertRedirect('/sites/create')
+            ->assertSessionHas('error', 'Этот тип проверки недоступен на текущем тарифе.');
+
+        $this->assertDatabaseMissing('monitored_resources', [
+            'organization_id' => $organization->id,
+            'host' => 'example.com',
+        ]);
+    }
+
+    public function test_site_creation_is_rolled_back_when_active_monitor_limit_would_be_exceeded(): void
+    {
+        [$user, $organization, $project] = $this->createOrganizationContext();
+        $this->subscribe($organization, 'free', [
+            'max_sites' => ['limit' => null],
+            'max_monitors' => ['limit' => 2],
+            'minimum_check_interval_seconds' => ['seconds' => 300],
+            'allowed_monitor_types' => ['types' => ['http', 'ssl']],
+        ]);
+
+        $existingSite = MonitoredResource::query()->create([
+            'organization_id' => $organization->id,
+            'project_id' => $project->id,
+            'created_user_id' => $user->id,
+            'type' => 'website',
+            'name' => 'existing.example.com',
+            'target' => 'https://existing.example.com',
+            'scheme' => 'https',
+            'host' => 'existing.example.com',
+            'path' => '/',
+            'status' => 'unknown',
+        ]);
+
+        Monitor::query()->create([
+            'organization_id' => $organization->id,
+            'project_id' => $project->id,
+            'monitored_resource_id' => $existingSite->id,
+            'type' => 'http',
+            'name' => 'HTTP availability',
+            'enabled' => true,
+            'status' => 'unknown',
+            'interval_seconds' => 300,
+            'timeout_ms' => 10000,
+            'settings' => ['method' => 'GET', 'url' => 'https://existing.example.com', 'follow_redirects' => true, 'verify_ssl' => true],
+            'expected' => ['status_codes' => [200], 'max_response_time_ms' => 5000],
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/sites', [
+                'name' => 'New site',
+                'url' => 'https://new.example.com',
+            ])
+            ->assertRedirect('/sites/create')
+            ->assertSessionHas('error', 'Лимит активных мониторингов исчерпан. Отключите часть проверок или повысьте тариф.');
+
+        $this->assertDatabaseMissing('monitored_resources', [
+            'organization_id' => $organization->id,
+            'host' => 'new.example.com',
+        ]);
+        $this->assertSame(1, Monitor::query()->where('organization_id', $organization->id)->count());
+    }
+
+    public function test_free_plan_rejects_interval_faster_than_tariff_minimum(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $this->subscribe($organization, 'free', [
+            'max_sites' => ['limit' => null],
+            'max_monitors' => ['limit' => 5],
+            'minimum_check_interval_seconds' => ['seconds' => 300],
+            'allowed_monitor_types' => ['types' => ['http', 'ssl']],
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/sites', [
+                'name' => 'Healthcheck',
+                'url' => 'https://example.com',
+                'monitors' => [
+                    $this->monitorPayload('http', 60),
+                ],
+            ])
+            ->assertRedirect('/sites/create')
+            ->assertSessionHas('error', 'Интервал проверки меньше, чем разрешено на текущем тарифе.');
+
+        $this->assertDatabaseMissing('monitored_resources', [
+            'organization_id' => $organization->id,
+            'host' => 'example.com',
+        ]);
+    }
+
+    public function test_paid_plan_can_create_multiple_tcp_port_monitors_for_one_site(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $this->subscribe($organization, 'pro', [
+            'max_sites' => ['limit' => null],
+            'max_monitors' => ['limit' => 2],
+            'minimum_check_interval_seconds' => ['seconds' => 60],
+            'allowed_monitor_types' => ['types' => ['tcp_port']],
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/sites', [
+                'name' => 'Ports',
+                'url' => 'https://example.com',
+                'monitors' => [
+                    $this->monitorPayload('tcp_port', 60, 443),
+                    $this->monitorPayload('tcp_port', 60, 22),
+                ],
+            ])
+            ->assertRedirect('/sites');
+
+        $site = MonitoredResource::query()->where('host', 'example.com')->firstOrFail();
+
+        $this->assertSame(
+            [22, 443],
+            $site->monitors()
+                ->where('type', 'tcp_port')
+                ->get()
+                ->pluck('settings.port')
+                ->sort()
+                ->values()
+                ->all(),
+        );
+    }
+
+    public function test_each_tcp_port_uses_one_active_monitor_slot(): void
+    {
+        [$user, $organization] = $this->createOrganizationContext();
+        $this->subscribe($organization, 'pro', [
+            'max_sites' => ['limit' => null],
+            'max_monitors' => ['limit' => 1],
+            'minimum_check_interval_seconds' => ['seconds' => 60],
+            'allowed_monitor_types' => ['types' => ['tcp_port']],
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/sites', [
+                'name' => 'Ports',
+                'url' => 'https://example.com',
+                'monitors' => [
+                    $this->monitorPayload('tcp_port', 60, 443),
+                    $this->monitorPayload('tcp_port', 60, 22),
+                ],
+            ])
+            ->assertRedirect('/sites/create')
+            ->assertSessionHas('error', 'Лимит активных мониторингов исчерпан. Отключите часть проверок или повысьте тариф.');
+
+        $this->assertDatabaseMissing('monitored_resources', [
+            'organization_id' => $organization->id,
+            'host' => 'example.com',
         ]);
     }
 
@@ -299,5 +474,60 @@ class CreateSiteTest extends TestCase
             'starts_at' => now()->subDay(),
             'ends_at' => now()->addMonth(),
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function monitorPayload(string $type, int $intervalSeconds, ?int $port = null): array
+    {
+        return match ($type) {
+            'http' => [
+                'type' => 'http',
+                'name' => 'HTTP availability',
+                'is_enabled' => true,
+                'interval_seconds' => $intervalSeconds,
+                'timeout_ms' => 10000,
+                'settings' => [
+                    'method' => 'GET',
+                    'url' => 'https://example.com',
+                    'follow_redirects' => true,
+                    'verify_ssl' => true,
+                ],
+                'expected' => [
+                    'status_codes' => [200],
+                    'max_response_time_ms' => 5000,
+                ],
+            ],
+            'domain' => [
+                'type' => 'domain',
+                'name' => 'Domain expiration',
+                'is_enabled' => true,
+                'interval_seconds' => $intervalSeconds,
+                'timeout_ms' => 10000,
+                'settings' => [
+                    'domain' => 'example.com',
+                    'warning_days' => [30, 14, 7, 3, 1],
+                ],
+                'expected' => [
+                    'registered' => true,
+                ],
+            ],
+            'tcp_port' => [
+                'type' => 'tcp_port',
+                'name' => 'TCP port '.($port ?? 443),
+                'is_enabled' => true,
+                'interval_seconds' => $intervalSeconds,
+                'timeout_ms' => 10000,
+                'settings' => [
+                    'host' => 'example.com',
+                    'port' => $port ?? 443,
+                ],
+                'expected' => [
+                    'open' => true,
+                    'max_response_time_ms' => 5000,
+                ],
+            ],
+        };
     }
 }

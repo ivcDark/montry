@@ -28,7 +28,7 @@ final class StoreMonitoredResourceRequest extends FormRequest
             'monitors.*.type' => ['required_with:monitors', 'string', Rule::in($types)],
             'monitors.*.name' => ['required_with:monitors', 'string', 'max:255'],
             'monitors.*.is_enabled' => ['required_with:monitors', 'boolean'],
-            'monitors.*.interval_seconds' => ['required_with:monitors', 'integer', 'min:300', 'max:86400', 'multiple_of:60'],
+            'monitors.*.interval_seconds' => ['required_with:monitors', 'integer', 'min:60', 'max:86400', 'multiple_of:60'],
             'monitors.*.timeout_ms' => ['required_with:monitors', 'integer', 'min:1000', 'max:60000'],
             'monitors.*.settings' => ['required_with:monitors', 'array'],
             'monitors.*.expected' => ['sometimes', 'array'],
