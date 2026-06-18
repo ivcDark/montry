@@ -4,6 +4,7 @@ namespace App\Modules\Notifications\Application\Senders;
 
 use App\Modules\Notifications\Application\DTO\NotificationMessage;
 use App\Modules\Notifications\Application\Mail\IncidentOpenedMail;
+use App\Modules\Notifications\Application\Mail\IncidentResolvedMail;
 use App\Modules\Notifications\Infrastructure\Persistence\Models\NotificationChannel;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
@@ -25,6 +26,12 @@ final class EmailNotificationSender implements NotificationSenderInterface
 
         if ($message->eventType === 'incident.opened') {
             Mail::to($email)->send(new IncidentOpenedMail($message));
+
+            return;
+        }
+
+        if ($message->eventType === 'incident.resolved') {
+            Mail::to($email)->send(new IncidentResolvedMail($message));
 
             return;
         }

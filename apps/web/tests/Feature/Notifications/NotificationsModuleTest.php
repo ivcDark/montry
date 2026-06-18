@@ -7,12 +7,14 @@ use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Incidents\Domain\Events\IncidentOpened;
+use App\Modules\Incidents\Domain\Events\IncidentResolved;
 use App\Modules\Incidents\Infrastructure\Persistence\Models\Incident;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Monitoring\Domain\Events\DomainExpiring;
 use App\Modules\Monitoring\Domain\Events\SslExpiring;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Notifications\Application\Mail\IncidentOpenedMail;
+use App\Modules\Notifications\Application\Mail\IncidentResolvedMail;
 use App\Modules\Notifications\Infrastructure\Persistence\Models\NotificationChannel;
 use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -70,6 +72,94 @@ final class NotificationsModuleTest extends TestCase
         Event::dispatch(new IncidentOpened($incident->id));
 
         $this->assertDatabaseCount('notification_logs', 1);
+    }
+
+    public function test_it_sends_clear_incident_opened_telegram_message(): void
+    {
+        config()->set('services.telegram.bot_token', 'test-token');
+        Http::fake([
+            'api.telegram.org/*' => Http::response(['ok' => true]),
+        ]);
+
+        [$organization, $monitor] = $this->createMonitorContext();
+        $this->activatePlan($organization, 'pro', ['email', 'telegram']);
+        $incident = $this->createIncident($organization, $monitor);
+
+        NotificationChannel::query()->create([
+            'organization_id' => $organization->id,
+            'type' => 'telegram',
+            'name' => 'Telegram',
+            'enabled' => true,
+            'settings' => ['chat_id' => '123456'],
+        ]);
+
+        Event::dispatch(new IncidentOpened($incident->id));
+
+        Http::assertSent(function ($request): bool {
+            $text = (string) $request['text'];
+
+            return str_contains($text, 'Сайт: Example')
+                && str_contains($text, 'Адрес: https://example.com')
+                && str_contains($text, 'Тип мониторинга: Доступность сайта (HTTP/HTTPS)')
+                && str_contains($text, 'Ошибка: Monitor returned failure.')
+                && str_contains($text, 'Описание:');
+        });
+    }
+
+    public function test_it_sends_email_and_telegram_when_incident_is_resolved(): void
+    {
+        Mail::fake();
+        config()->set('services.telegram.bot_token', 'test-token');
+        Http::fake([
+            'api.telegram.org/*' => Http::response(['ok' => true]),
+        ]);
+
+        [$organization, $monitor] = $this->createMonitorContext();
+        $this->activatePlan($organization, 'pro', ['email', 'telegram']);
+        $incident = $this->createIncident($organization, $monitor);
+        $incident->update([
+            'status' => 'resolved',
+            'resolved_at' => now(),
+            'duration_seconds' => 125,
+        ]);
+
+        NotificationChannel::query()->create([
+            'organization_id' => $organization->id,
+            'type' => 'email',
+            'name' => 'Primary email',
+            'enabled' => true,
+            'settings' => ['email' => 'ops@example.com'],
+        ]);
+        NotificationChannel::query()->create([
+            'organization_id' => $organization->id,
+            'type' => 'telegram',
+            'name' => 'Telegram',
+            'enabled' => true,
+            'settings' => ['chat_id' => '123456'],
+        ]);
+
+        Event::dispatch(new IncidentResolved($incident->id));
+
+        $this->assertDatabaseCount('notification_logs', 2);
+        $this->assertDatabaseHas('notification_logs', [
+            'organization_id' => $organization->id,
+            'incident_id' => $incident->id,
+            'event_type' => 'incident.resolved',
+            'status' => 'sent',
+        ]);
+        Mail::assertSent(IncidentResolvedMail::class, function (IncidentResolvedMail $mail): bool {
+            return $mail->hasTo('ops@example.com')
+                && $mail->notification->subject === 'Мониторинг восстановлен: Example';
+        });
+        Http::assertSent(function ($request): bool {
+            $text = (string) $request['text'];
+
+            return str_contains($text, '🟢 Мониторинг восстановлен')
+                && str_contains($text, 'Сайт: Example')
+                && str_contains($text, 'Тип мониторинга: Доступность сайта (HTTP/HTTPS)')
+                && str_contains($text, 'инцидент закрыт')
+                && str_contains($text, 'Длительность сбоя: 2 мин 5 сек');
+        });
     }
 
     public function test_it_sends_telegram_ssl_expiring_notification(): void
