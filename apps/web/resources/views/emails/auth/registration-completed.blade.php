@@ -31,14 +31,14 @@
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0;">
         <tr>
             <td style="border-radius:12px;background:#24A869;">
-                <a href="{{ url('/dashboard') }}" style="display:inline-block;padding:13px 20px;font-size:14px;line-height:18px;font-weight:800;color:#FFFFFF;text-decoration:none;">
-                    Открыть кабинет
+                <a href="{{ url('/sites') }}" style="display:inline-block;padding:13px 20px;font-size:14px;line-height:18px;font-weight:800;color:#FFFFFF;text-decoration:none;">
+                    Перейти к сайтам
                 </a>
             </td>
         </tr>
     </table>
 
     <p style="margin:22px 0 0;font-size:13px;line-height:20px;color:#8A9A90;">
-        Если кнопка не открывается, перейдите в кабинет вручную: {{ url('/dashboard') }}
+        Если кнопка не открывается, перейдите к сайтам вручную: {{ url('/sites') }}
     </p>
 @endsection
