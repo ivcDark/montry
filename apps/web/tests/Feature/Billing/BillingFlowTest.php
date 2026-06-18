@@ -1225,6 +1225,52 @@ final class BillingFlowTest extends TestCase
             ->assertSessionHas('success', 'Платеж подтвержден. Тариф активирован.');
     }
 
+    public function test_yookassa_return_synchronizes_successful_test_payment_without_webhook(): void
+    {
+        config([
+            'services.yookassa.mode' => 'test',
+            'services.yookassa.shop_id' => '123456',
+            'services.yookassa.secret_key' => 'test-secret',
+            'services.yookassa.api_url' => 'https://api.yookassa.ru/v3',
+        ]);
+
+        Http::fake([
+            'api.yookassa.ru/v3/payments/provider-payment-id' => Http::response([
+                'id' => 'provider-payment-id',
+                'status' => 'succeeded',
+                'paid' => true,
+                'amount' => [
+                    'value' => '990.00',
+                    'currency' => 'RUB',
+                ],
+            ]),
+        ]);
+
+        [, $organization] = $this->createOrganizationContext();
+        $payment = $this->createPendingPayment($organization);
+        $payment->forceFill([
+            'provider' => 'yookassa',
+            'provider_payment_id' => 'provider-payment-id',
+        ])->save();
+
+        $this
+            ->get("/billing/yookassa/return/{$payment->id}")
+            ->assertRedirect('/sites')
+            ->assertSessionHas('success', 'Платеж подтвержден. Тариф активирован.');
+
+        $payment->refresh();
+        $subscription = $payment->subscription()->firstOrFail();
+
+        $this->assertSame('paid', $payment->status);
+        $this->assertNotNull($payment->paid_at);
+        $this->assertSame('active', $subscription->status);
+        $this->assertNotNull($subscription->ends_at);
+        $this->assertArrayHasKey('yookassa_return_sync', $payment->payload);
+
+        Http::assertSent(fn ($request): bool => $request->method() === 'GET'
+            && $request->url() === 'https://api.yookassa.ru/v3/payments/provider-payment-id');
+    }
+
     public function test_yookassa_return_redirects_pending_payment_to_sites_while_webhook_is_processing(): void
     {
         [, $organization] = $this->createOrganizationContext();
@@ -1252,6 +1298,105 @@ final class BillingFlowTest extends TestCase
             ->get("/billing/yookassa/return/{$payment->id}")
             ->assertRedirect("/billing/payments/{$payment->id}")
             ->assertSessionHas('error', 'Платеж отменен.');
+    }
+
+    public function test_canceled_yookassa_payment_returns_to_billing_and_new_checkout_creates_new_payment(): void
+    {
+        config([
+            'services.yookassa.mode' => 'test',
+            'services.yookassa.shop_id' => '123456',
+            'services.yookassa.secret_key' => 'test-secret',
+            'services.yookassa.api_url' => 'https://api.yookassa.ru/v3',
+        ]);
+
+        Http::fake([
+            'api.yookassa.ru/v3/payments/canceled-provider-payment' => Http::response([
+                'id' => 'canceled-provider-payment',
+                'status' => 'canceled',
+                'paid' => false,
+                'amount' => [
+                    'value' => '1040.00',
+                    'currency' => 'RUB',
+                ],
+            ]),
+        ]);
+
+        [$user, $organization] = $this->createOrganizationContext();
+        $this->createPlan('free', 0);
+        $plan = $this->createPlan('pro', 99000);
+        $subscription = Subscription::query()->create([
+            'organization_id' => $organization->id,
+            'plan_id' => $plan->id,
+            'status' => 'pending',
+            'starts_at' => now(),
+        ]);
+        $subscription->items()->create([
+            'code' => 'api_endpoint',
+            'quantity' => 1,
+            'unit_price_cents' => 3000,
+            'currency' => 'RUB',
+        ]);
+        $subscription->items()->create([
+            'code' => 'tcp_port',
+            'quantity' => 1,
+            'unit_price_cents' => 2000,
+            'currency' => 'RUB',
+        ]);
+        $payment = Payment::query()->create([
+            'organization_id' => $organization->id,
+            'subscription_id' => $subscription->id,
+            'provider' => 'yookassa',
+            'provider_payment_id' => 'canceled-provider-payment',
+            'status' => 'pending',
+            'amount_cents' => 104000,
+            'currency' => 'RUB',
+            'payload' => [
+                'plan_code' => 'pro',
+                'billing_mode' => 'plan_checkout',
+                'addon_quantities' => [
+                    'api_endpoint' => 1,
+                    'tcp_port' => 1,
+                ],
+            ],
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->get("/billing/yookassa/return/{$payment->id}")
+            ->assertRedirect('/billing?plan=pro');
+
+        $payment->refresh();
+        $this->assertSame('failed', $payment->status);
+        $this->assertSame('payment_canceled', $payment->failure_code);
+
+        $this
+            ->actingAs($user)
+            ->get('/billing?plan=pro')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('selectedPlanCode', 'pro')
+                ->where('restoredAddonQuantities.api_endpoint', 1)
+                ->where('restoredAddonQuantities.tcp_port', 1)
+                ->where('checkoutNotice', 'Вы отменили оплату. Проверьте тариф и дополнения, при необходимости скорректируйте заказ и попробуйте снова.')
+            );
+
+        $this
+            ->actingAs($user)
+            ->post('/billing/checkout', [
+                'plan_code' => 'pro',
+                'addons' => [
+                    'api_endpoint' => 2,
+                    'tcp_port' => 1,
+                ],
+            ])
+            ->assertRedirect();
+
+        $newPayment = Payment::query()->latest('id')->firstOrFail();
+
+        $this->assertNotSame($payment->id, $newPayment->id);
+        $this->assertSame('pending', $newPayment->status);
+        $this->assertSame(107000, $newPayment->amount_cents);
+        $this->assertDatabaseCount('payments', 2);
     }
 
     private function createPlan(string $code, int $priceCents, int $sortOrder = 0, array $limits = []): Plan

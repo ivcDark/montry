@@ -91,6 +91,38 @@ final class YooKassaService
             ->json();
     }
 
+    /**
+     * @return array<string, mixed>
+     *
+     * @throws RequestException
+     */
+    public function getPayment(string $providerPaymentId): array
+    {
+        return Http::withBasicAuth($this->shopId(), $this->secretKey())
+            ->acceptJson()
+            ->get($this->apiUrl().'/payments/'.urlencode($providerPaymentId))
+            ->throw()
+            ->json();
+    }
+
+    public function amountCents(array $payload): ?int
+    {
+        $value = data_get($payload, 'amount.value');
+
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        return $this->moneyToCents((string) $value);
+    }
+
+    public function paymentStatus(array $payload): ?string
+    {
+        $status = data_get($payload, 'status');
+
+        return is_scalar($status) ? trim((string) $status) : null;
+    }
+
     public function webhookIsValid(Request $request): bool
     {
         $secret = trim((string) config('services.yookassa.webhook_secret', ''));
@@ -129,13 +161,9 @@ final class YooKassaService
 
     public function amountCentsFromWebhook(array $payload): ?int
     {
-        $value = data_get($payload, 'object.amount.value');
+        $object = data_get($payload, 'object');
 
-        if (! is_scalar($value)) {
-            return null;
-        }
-
-        return $this->moneyToCents((string) $value);
+        return is_array($object) ? $this->amountCents($object) : null;
     }
 
     public function providerPaymentIdFromWebhook(array $payload): ?string

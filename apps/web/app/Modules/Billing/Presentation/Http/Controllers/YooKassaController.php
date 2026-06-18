@@ -173,9 +173,62 @@ final class YooKassaController extends Controller
         }
     }
 
-    public function return(Request $request, Payment $payment, PaymentLogger $logger): RedirectResponse
-    {
+    public function return(
+        Request $request,
+        Payment $payment,
+        YooKassaService $yookassa,
+        CheckoutService $checkout,
+        PaymentLogger $logger,
+    ): RedirectResponse {
         $logger->info('yookassa.returned', $payment, $request, 'Пользователь вернулся из ЮKassa после оплаты.');
+
+        if ($payment->status === 'pending'
+            && $payment->provider === 'yookassa'
+            && $payment->provider_payment_id !== null
+            && $yookassa->isConfigured()) {
+            try {
+                $providerPayment = $yookassa->getPayment($payment->provider_payment_id);
+                $providerStatus = $yookassa->paymentStatus($providerPayment);
+
+                if ($providerStatus === 'succeeded') {
+                    $amountCents = $yookassa->amountCents($providerPayment);
+
+                    if ($amountCents === $payment->amount_cents) {
+                        $checkout->confirm($payment, [
+                            'yookassa_return_sync' => $providerPayment,
+                            'yookassa_mode' => $yookassa->isTest() ? 'test' : 'prod',
+                        ], $payment->provider_payment_id);
+
+                        $logger->info('yookassa.return.synchronized', $payment->refresh(), $request, 'Платеж подтвержден при возврате из ЮKassa.', [
+                            'provider_status' => $providerStatus,
+                        ]);
+                    } else {
+                        $checkout->markFailed($payment, 'amount_mismatch', 'Сумма платежа ЮKassa не совпала с суммой в Montry.', [
+                            'yookassa_return_sync' => $providerPayment,
+                        ]);
+
+                        $logger->error('yookassa.return.amount_mismatch', $payment->refresh(), $request, 'При возврате обнаружено несовпадение суммы платежа ЮKassa.', [
+                            'expected_amount_cents' => $payment->amount_cents,
+                            'received_amount_cents' => $amountCents,
+                        ]);
+                    }
+                } elseif ($providerStatus === 'canceled') {
+                    $checkout->markFailed($payment, 'payment_canceled', 'Платеж ЮKassa отменен или не завершен.', [
+                        'yookassa_return_sync' => $providerPayment,
+                    ]);
+
+                    $logger->warning('yookassa.return.canceled', $payment->refresh(), $request, 'ЮKassa вернула отмененный платеж.', [
+                        'provider_status' => $providerStatus,
+                    ]);
+                }
+
+                $payment->refresh();
+            } catch (RequestException $exception) {
+                $logger->warning('yookassa.return.sync_failed', $payment, $request, 'Не удалось проверить статус платежа при возврате из ЮKassa.', context: [
+                    'exception' => $exception::class,
+                ]);
+            }
+        }
 
         if ($payment->status === 'paid') {
             return to_route('sites.index')
@@ -187,7 +240,27 @@ final class YooKassaController extends Controller
                 ->with('success', 'Оплата завершена. Тариф активируется после подтверждения от ЮKassa.');
         }
 
+        if ($payment->failure_code === 'payment_canceled') {
+            return $this->redirectCanceledPaymentToBilling($payment);
+        }
+
         return redirect()->route('billing.payments.show', $payment)
             ->with('error', $payment->failure_reason ?: 'Оплата не была подтверждена.');
+    }
+
+    private function redirectCanceledPaymentToBilling(Payment $payment): RedirectResponse
+    {
+        $payment->loadMissing(['subscription.plan', 'subscription.items']);
+        $planCode = $payment->subscription?->plan?->code;
+        $addonQuantities = $payment->subscription?->items
+            ? $payment->subscription->items
+                ->mapWithKeys(fn ($item): array => [$item->code => (int) $item->quantity])
+                ->all()
+            : [];
+        $isPlanCheckout = ($payment->payload['billing_mode'] ?? null) === 'plan_checkout';
+
+        return to_route('billing.index', $isPlanCheckout && $planCode !== null ? ['plan' => $planCode] : [])
+            ->with('billing.restored_addons', $addonQuantities)
+            ->with('billing.checkout_notice', 'Вы отменили оплату. Проверьте тариф и дополнения, при необходимости скорректируйте заказ и попробуйте снова.');
     }
 }

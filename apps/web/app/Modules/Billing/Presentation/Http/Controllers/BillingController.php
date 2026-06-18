@@ -44,6 +44,9 @@ final class BillingController extends Controller
                 ->where('price_cents', '>', 0)
                 ->value('code')
             : null;
+        $restoredAddonQuantities = $addonCatalog->normalizeQuantities(
+            $request->session()->get('billing.restored_addons', []),
+        );
 
         return Inertia::render('Billing/Index', [
             'organization' => [
@@ -64,6 +67,8 @@ final class BillingController extends Controller
                 'plan' => $this->planPayload($scheduledSubscription->plan),
             ] : null,
             'selectedPlanCode' => $selectedPlanCode,
+            'restoredAddonQuantities' => $restoredAddonQuantities,
+            'checkoutNotice' => $request->session()->get('billing.checkout_notice'),
             'plans' => Plan::query()
                 ->with('limits')
                 ->where('is_active', true)

@@ -50,6 +50,8 @@ const props = defineProps<{
     currentSubscription: Subscription | null
     scheduledSubscription: Subscription | null
     selectedPlanCode?: string | null
+    restoredAddonQuantities?: Record<string, number>
+    checkoutNotice?: string | null
     plans: Plan[]
     usage: {
         sites: number
@@ -80,7 +82,8 @@ const addonDrafts = ref<Record<string, number>>(
     Object.fromEntries(
         (props.addonCatalog ?? []).map((addon) => [
             addon.code,
-            checkoutPlanCode.value ? 0 : (props.currentAddons?.[addon.code]?.quantity ?? 0),
+            props.restoredAddonQuantities?.[addon.code]
+                ?? (checkoutPlanCode.value ? 0 : (props.currentAddons?.[addon.code]?.quantity ?? 0)),
         ]),
     ),
 )
@@ -538,7 +541,15 @@ const comparisonRows = [
                 </article>
             </div>
 
-            <div id="billing-addons" v-if="addonCatalog?.length" class="mt-10 scroll-mt-24 rounded-[30px] border border-[#DDEBE3] bg-white p-6 sm:p-8">
+            <div
+                v-if="checkoutNotice"
+                class="mt-10 flex gap-3 rounded-[22px] border border-[#F0D7A9] bg-[#FFF8E9] p-5 text-sm leading-6 text-[#8A5A12]"
+            >
+                <Clock3 class="mt-0.5 h-5 w-5 shrink-0 text-[#C87800]" :stroke-width="2" />
+                <p>{{ checkoutNotice }}</p>
+            </div>
+
+            <div id="billing-addons" v-if="addonCatalog?.length" :class="checkoutNotice ? 'mt-4' : 'mt-10'" class="scroll-mt-24 rounded-[30px] border border-[#DDEBE3] bg-white p-6 sm:p-8">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                         <div class="inline-flex items-center gap-2 text-sm font-semibold text-[#1E9B5D]">
