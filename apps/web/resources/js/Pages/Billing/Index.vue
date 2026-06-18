@@ -49,6 +49,7 @@ const props = defineProps<{
     organization: { id: string | number; name: string }
     currentSubscription: Subscription | null
     scheduledSubscription: Subscription | null
+    selectedPlanCode?: string | null
     plans: Plan[]
     usage: {
         sites: number
@@ -63,6 +64,13 @@ const props = defineProps<{
 
 const currentPlanCode = computed(() => props.currentSubscription?.plan.code ?? 'free')
 const currentPlan = computed(() => props.currentSubscription?.plan ?? props.plans.find((plan) => plan.code === currentPlanCode.value) ?? null)
+const checkoutPlanCode = ref<string | null>(
+    props.selectedPlanCode && props.selectedPlanCode !== currentPlanCode.value
+        ? props.selectedPlanCode
+        : null,
+)
+const checkoutPlan = computed(() => props.plans.find((plan) => plan.code === checkoutPlanCode.value) ?? null)
+const isPlanCheckout = computed(() => checkoutPlan.value !== null)
 const selectedDowngradePlan = ref<Plan | null>(null)
 const effectiveSiteLimit = computed(() => props.usage.site_limit ?? currentPlan.value?.limits.max_sites?.limit ?? null)
 const currentHistoryDays = computed(() => currentPlan.value?.limits.history_retention_days?.days ?? 0)
@@ -70,7 +78,10 @@ const siteUsagePercent = computed(() => usagePercent(props.usage.sites, effectiv
 const activeMonitorPercent = computed(() => usagePercent(props.usage.active_monitors, props.usage.monitors || null))
 const addonDrafts = ref<Record<string, number>>(
     Object.fromEntries(
-        (props.addonCatalog ?? []).map((addon) => [addon.code, props.currentAddons?.[addon.code]?.quantity ?? 0]),
+        (props.addonCatalog ?? []).map((addon) => [
+            addon.code,
+            checkoutPlanCode.value ? 0 : (props.currentAddons?.[addon.code]?.quantity ?? 0),
+        ]),
     ),
 )
 const desiredAddonQuantities = computed(() => {
@@ -102,10 +113,15 @@ const currentAddonMonthlyTotal = computed(() => (props.addonCatalog ?? []).reduc
     sum + addon.unit_price_cents * addonQuantity(addon.code)
 ), 0))
 const addonDueNow = computed(() => (props.addonCatalog ?? []).reduce((sum, addon) => {
+    if (isPlanCheckout.value) {
+        return sum + addon.unit_price_cents * addonDraftQuantity(addon.code)
+    }
+
     const additionalQuantity = addonDraftQuantity(addon.code) - addonQuantity(addon.code)
 
     return additionalQuantity > 0 ? sum + additionalQuantity * addon.unit_price_cents : sum
 }, 0))
+const checkoutTotal = computed(() => (checkoutPlan.value?.price_cents ?? 0) + addonMonthlyTotal.value)
 
 function money(plan: Plan): string {
     if (plan.price_cents === 0) {
@@ -133,19 +149,28 @@ function changeAddonQuantity(code: string, delta: number): void {
 
 function resetAddonDrafts(): void {
     for (const item of props.addonCatalog ?? []) {
-        addonDrafts.value[item.code] = addonQuantity(item.code)
+        addonDrafts.value[item.code] = isPlanCheckout.value ? 0 : addonQuantity(item.code)
     }
 }
 
 function submitAddonChanges(): void {
-    if (!hasAddonChanges.value) {
+    if (!isPlanCheckout.value && !hasAddonChanges.value) {
         return
     }
 
     router.post('/billing/checkout', {
-        plan_code: currentPlanCode.value,
-        manage_addons: true,
+        plan_code: checkoutPlan.value?.code ?? currentPlanCode.value,
+        manage_addons: !isPlanCheckout.value,
         addons: desiredAddonQuantities.value,
+    })
+}
+
+function selectPlan(plan: Plan): void {
+    checkoutPlanCode.value = plan.code
+    resetAddonDrafts()
+
+    requestAnimationFrame(() => {
+        document.getElementById('billing-addons')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
 }
 
@@ -439,6 +464,7 @@ const comparisonRows = [
                         plan.code === currentPlanCode
                             ? 'border-[#2FA568] shadow-[0_18px_50px_rgba(47,165,104,0.14)]'
                             : 'border-[#DDEBE3] hover:-translate-y-1 hover:border-[#B8D8C5] hover:shadow-[0_18px_45px_rgba(23,59,42,0.09)]',
+                        plan.code === checkoutPlanCode ? 'border-[#173B2A] ring-2 ring-[#173B2A]/10' : '',
                         isFeatured(plan) && plan.code !== currentPlanCode ? 'ring-1 ring-[#BEE7CE]' : '',
                     ]"
                 >
@@ -499,45 +525,48 @@ const comparisonRows = [
                             Понизить тариф
                         </button>
 
-                        <Link
+                        <button
                             v-else
-                            href="/billing/checkout"
-                            method="post"
-                            as="button"
-                            :data="{ plan_code: plan.code }"
+                            type="button"
                             class="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#173B2A] px-5 text-sm font-semibold text-white transition hover:bg-[#214E38]"
+                            @click="selectPlan(plan)"
                         >
-                            Выбрать {{ plan.name }}
+                            {{ plan.code === checkoutPlanCode ? `${plan.name} выбран` : `Выбрать ${plan.name}` }}
                             <ArrowRight class="h-4 w-4" :stroke-width="2.25" />
-                        </Link>
+                        </button>
                     </div>
                 </article>
             </div>
 
-            <div v-if="addonCatalog?.length" class="mt-10 rounded-[30px] border border-[#DDEBE3] bg-white p-6 sm:p-8">
+            <div id="billing-addons" v-if="addonCatalog?.length" class="mt-10 scroll-mt-24 rounded-[30px] border border-[#DDEBE3] bg-white p-6 sm:p-8">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                         <div class="inline-flex items-center gap-2 text-sm font-semibold text-[#1E9B5D]">
                             <Plus class="h-4 w-4" :stroke-width="2.25" />
                             Дополнительные возможности
                         </div>
-                        <h2 class="mt-2 text-2xl font-semibold text-[#26332D] sm:text-3xl">Расширьте тариф точечно</h2>
+                        <h2 class="mt-2 text-2xl font-semibold text-[#26332D] sm:text-3xl">
+                            {{ isPlanCheckout ? `Настройте тариф ${checkoutPlan?.name}` : 'Расширьте тариф точечно' }}
+                        </h2>
                         <p class="mt-2 max-w-2xl text-sm leading-6 text-[#6A7A70]">
-                            Подключайте только те проверки и пакеты, которые нужны сейчас. Уменьшение лимитов применяется без оплаты, а увеличение откроет счет только на добавленное количество.
+                            {{ isPlanCheckout
+                                ? 'Добавьте нужные платные типы мониторинга. Тариф и выбранные дополнения попадут в один заказ.'
+                                : 'Подключайте только те проверки и пакеты, которые нужны сейчас. Уменьшение лимитов применяется без оплаты, а увеличение откроет счет только на добавленное количество.'
+                            }}
                         </p>
                     </div>
                     <div class="grid gap-2 rounded-2xl border border-[#DDEBE3] bg-[#F8FCFA] p-4 text-sm sm:min-w-[290px]">
                         <div class="flex items-center justify-between gap-4">
-                            <span class="text-[#6A7A70]">Сейчас</span>
-                            <span class="font-semibold text-[#26332D]">{{ formatCents(currentAddonMonthlyTotal) }} / мес</span>
+                            <span class="text-[#6A7A70]">{{ isPlanCheckout ? `Тариф ${checkoutPlan?.name}` : 'Сейчас' }}</span>
+                            <span class="font-semibold text-[#26332D]">{{ formatCents(isPlanCheckout ? (checkoutPlan?.price_cents ?? 0) : currentAddonMonthlyTotal) }} / мес</span>
                         </div>
                         <div class="flex items-center justify-between gap-4">
-                            <span class="text-[#6A7A70]">После изменений</span>
+                            <span class="text-[#6A7A70]">{{ isPlanCheckout ? 'Дополнения' : 'После изменений' }}</span>
                             <span class="font-semibold text-[#26332D]">{{ formatCents(addonMonthlyTotal) }} / мес</span>
                         </div>
                         <div class="flex items-center justify-between gap-4 border-t border-[#E5EFE9] pt-2">
                             <span class="text-[#6A7A70]">К оплате сейчас</span>
-                            <span class="font-semibold text-[#178A50]">{{ formatCents(addonDueNow) }}</span>
+                            <span class="font-semibold text-[#178A50]">{{ formatCents(isPlanCheckout ? checkoutTotal : addonDueNow) }}</span>
                         </div>
                     </div>
                 </div>
@@ -554,9 +583,9 @@ const comparisonRows = [
                             </span>
                             <span
                                 class="rounded-full px-2.5 py-1 text-xs font-semibold"
-                                :class="addonDraftQuantity(addon.code) < addonQuantity(addon.code) ? 'bg-[#FFF0CF] text-[#A76500]' : 'bg-[#DDF6E8] text-[#178A50]'"
+                                :class="!isPlanCheckout && addonDraftQuantity(addon.code) < addonQuantity(addon.code) ? 'bg-[#FFF0CF] text-[#A76500]' : 'bg-[#DDF6E8] text-[#178A50]'"
                             >
-                                {{ addonStateLabel(addon) }}
+                                {{ isPlanCheckout ? (addonDraftQuantity(addon.code) > 0 ? `выбрано ${addonDraftQuantity(addon.code)}` : 'не выбрано') : addonStateLabel(addon) }}
                             </span>
                         </div>
                         <h3 class="mt-4 text-lg font-semibold text-[#26332D]">{{ addon.name }}</h3>
@@ -595,7 +624,7 @@ const comparisonRows = [
                         <button
                             type="button"
                             class="inline-flex h-11 items-center justify-center rounded-2xl border border-[#DDEBE3] px-4 text-sm font-semibold text-[#52645A] transition hover:border-[#B8D0C2] hover:text-[#173B2A] disabled:cursor-not-allowed disabled:opacity-40"
-                            :disabled="!hasAddonChanges"
+                            :disabled="isPlanCheckout ? addonMonthlyTotal === 0 : !hasAddonChanges"
                             @click="resetAddonDrafts"
                         >
                             Сбросить
@@ -603,10 +632,10 @@ const comparisonRows = [
                         <button
                             type="button"
                             class="inline-flex h-11 items-center justify-center rounded-2xl bg-[#173B2A] px-5 text-sm font-semibold text-white transition hover:bg-[#214E38] disabled:cursor-not-allowed disabled:bg-[#AAB8B0]"
-                            :disabled="!hasAddonChanges"
+                            :disabled="!isPlanCheckout && !hasAddonChanges"
                             @click="submitAddonChanges"
                         >
-                            {{ addonDueNow > 0 ? 'Перейти к оплате' : 'Сохранить изменения' }}
+                            {{ isPlanCheckout || addonDueNow > 0 ? 'Перейти к оплате' : 'Сохранить изменения' }}
                         </button>
                     </div>
                 </div>

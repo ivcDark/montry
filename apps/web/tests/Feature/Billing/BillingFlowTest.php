@@ -298,6 +298,59 @@ final class BillingFlowTest extends TestCase
         ]);
     }
 
+    public function test_billing_page_preselects_intended_plan_before_checkout(): void
+    {
+        [$user] = $this->createOrganizationContext();
+        $this->createPlan('free', 0);
+        $this->createPlan('pro', 39000);
+
+        $this
+            ->actingAs($user)
+            ->get('/billing?plan=pro')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Billing/Index', false)
+                ->where('selectedPlanCode', 'pro')
+                ->has('addonCatalog')
+            );
+
+        $this->assertDatabaseCount('payments', 0);
+    }
+
+    public function test_payment_page_shows_selected_plan_and_addons(): void
+    {
+        [$user] = $this->createOrganizationContext();
+        $this->createPlan('pro', 39000);
+
+        $this
+            ->actingAs($user)
+            ->post('/billing/checkout', [
+                'plan_code' => 'pro',
+                'addons' => [
+                    'api_endpoint' => 2,
+                    'tcp_port' => 1,
+                ],
+            ])
+            ->assertRedirect();
+
+        $payment = Payment::query()->firstOrFail();
+
+        $this
+            ->actingAs($user)
+            ->get("/billing/payments/{$payment->id}")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Billing/Payment', false)
+                ->where('payment.plan.code', 'pro')
+                ->where('payment.amount_cents', 47000)
+                ->has('payment.items', 2)
+                ->where('payment.items.0.code', 'api_endpoint')
+                ->where('payment.items.0.quantity', 2)
+                ->where('payment.items.1.code', 'tcp_port')
+                ->where('payment.items.1.quantity', 1)
+            );
+    }
+
     public function test_user_can_remove_additional_limits_without_payment_and_excess_paid_monitors_are_paused(): void
     {
         [$user, $organization] = $this->createOrganizationContext();

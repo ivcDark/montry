@@ -3,7 +3,6 @@
 namespace App\Modules\Billing\Application\Services;
 
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
-use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
 use App\Modules\Observability\Application\Services\BusinessEventRecorder;
@@ -15,7 +14,6 @@ final readonly class StartIntendedCheckout
 {
     public function __construct(
         private PlanIntentService $planIntent,
-        private CheckoutService $checkout,
         private GetCurrentOrganization $getCurrentOrganization,
         private BusinessEventRecorder $events,
     ) {}
@@ -57,29 +55,8 @@ final readonly class StartIntendedCheckout
             ],
         ));
 
-        if ($this->hasActivePlan($organization->id, $plan->id)) {
-            $this->planIntent->clear($request);
-
-            return to_route('billing.index');
-        }
-
-        $payment = $this->checkout->start($organization->id, $plan->code);
-
         $this->planIntent->clear($request);
 
-        return redirect()->route('billing.payments.show', $payment);
-    }
-
-    private function hasActivePlan(int $organizationId, int $planId): bool
-    {
-        return Subscription::query()
-            ->where('organization_id', $organizationId)
-            ->where('plan_id', $planId)
-            ->where('status', 'active')
-            ->where('starts_at', '<=', now())
-            ->where(function ($query): void {
-                $query->whereNull('ends_at')->orWhere('ends_at', '>', now());
-            })
-            ->exists();
+        return to_route('billing.index', ['plan' => $plan->code]);
     }
 }

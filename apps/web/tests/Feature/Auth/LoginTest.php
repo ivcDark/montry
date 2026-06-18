@@ -71,7 +71,7 @@ class LoginTest extends TestCase
         );
     }
 
-    public function test_login_with_paid_plan_intent_redirects_to_purchase_confirmation(): void
+    public function test_login_with_paid_plan_intent_redirects_to_billing_configuration(): void
     {
         $user = User::factory()->create([
             'email' => 'ivan@gmail.com',
@@ -119,11 +119,10 @@ class LoginTest extends TestCase
                 'remember' => false,
             ]);
 
-        $payment = Payment::query()->firstOrFail();
-
-        $response->assertRedirect("/billing/payments/{$payment->id}");
+        $response->assertRedirect('/billing?plan=studio');
         $this->assertNull(session('billing.intended_plan_code'));
-        $this->assertDatabaseHas('subscriptions', [
+        $this->assertDatabaseCount('payments', 0);
+        $this->assertDatabaseMissing('subscriptions', [
             'organization_id' => $organization->id,
             'plan_id' => $studioPlan->id,
             'status' => 'pending',

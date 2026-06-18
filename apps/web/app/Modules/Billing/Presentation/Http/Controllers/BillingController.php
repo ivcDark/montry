@@ -36,6 +36,14 @@ final class BillingController extends Controller
 
         $currentSubscription = $this->currentSubscription($organization->id);
         $scheduledSubscription = $this->scheduledSubscription($organization->id);
+        $requestedPlanCode = $request->query('plan');
+        $selectedPlanCode = is_string($requestedPlanCode) && $requestedPlanCode !== ''
+            ? Plan::query()
+                ->where('code', $requestedPlanCode)
+                ->where('is_active', true)
+                ->where('price_cents', '>', 0)
+                ->value('code')
+            : null;
 
         return Inertia::render('Billing/Index', [
             'organization' => [
@@ -55,6 +63,7 @@ final class BillingController extends Controller
                 'starts_at' => $scheduledSubscription->starts_at?->toISOString(),
                 'plan' => $this->planPayload($scheduledSubscription->plan),
             ] : null,
+            'selectedPlanCode' => $selectedPlanCode,
             'plans' => Plan::query()
                 ->with('limits')
                 ->where('is_active', true)
