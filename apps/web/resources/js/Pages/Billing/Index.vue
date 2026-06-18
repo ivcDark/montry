@@ -355,22 +355,22 @@ const comparisonRows = [
     >
         <section class="mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:py-10">
             <div class="overflow-hidden rounded-[32px] border border-[#CFE1D7] bg-[#173B2A] shadow-[0_18px_60px_rgba(23,59,42,0.14)]">
-                <div class="relative grid gap-8 px-6 py-8 sm:px-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.75fr)] lg:px-10 lg:py-10">
+                <div class="relative grid gap-6 px-6 py-6 sm:px-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)] lg:px-10 lg:py-7">
                     <div class="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-[#2FA568]/20 blur-3xl" />
                     <div class="pointer-events-none absolute -bottom-24 left-1/3 h-60 w-60 rounded-full bg-[#DDF6E8]/10 blur-3xl" />
 
                     <div class="relative">
-                        <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3.5 py-2 text-xs font-semibold text-[#CFF2DC]">
+                        <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-[#CFF2DC]">
                             <Sparkles class="h-4 w-4" :stroke-width="2" />
                             Тарифы Montry
                         </div>
-                        <h1 class="mt-5 max-w-3xl text-3xl font-semibold leading-tight text-white sm:text-4xl lg:text-[44px]">
+                        <h1 class="mt-4 max-w-3xl text-3xl font-semibold leading-tight text-white sm:text-4xl lg:text-[38px]">
                             Выберите тариф под количество ваших сайтов
                         </h1>
-                        <p class="mt-4 max-w-2xl text-base leading-7 text-[#C8D9CF] sm:text-lg">
+                        <p class="mt-3 max-w-2xl text-sm leading-6 text-[#C8D9CF] sm:text-base">
                             Начните бесплатно и увеличивайте лимиты по мере роста. Базовый мониторинг уже включён, дополнительные проверки подключаются отдельно.
                         </p>
-                        <div class="mt-7 flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium text-[#E5F4EB]">
+                        <div class="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium text-[#E5F4EB]">
                             <span class="inline-flex items-center gap-2">
                                 <CheckCircle2 class="h-5 w-5 text-[#65D493]" :stroke-width="2" />
                                 Без скрытых платежей
@@ -382,16 +382,16 @@ const comparisonRows = [
                         </div>
                     </div>
 
-                    <div class="relative rounded-[28px] border border-white/15 bg-white/10 p-5 backdrop-blur sm:p-6">
+                    <div class="relative rounded-[24px] border border-white/15 bg-white/10 p-5 backdrop-blur">
                         <div class="flex items-start justify-between gap-4">
                             <div>
                                 <p class="text-xs font-semibold uppercase tracking-[0.14em] text-[#9FC6AE]">Текущий тариф</p>
-                                <h2 class="mt-2 text-3xl font-semibold text-white">{{ currentPlan?.name ?? 'Free' }}</h2>
+                                <h2 class="mt-1 text-2xl font-semibold text-white">{{ currentPlan?.name ?? 'Free' }}</h2>
                             </div>
                             <span class="rounded-full bg-[#65D493]/15 px-3 py-1.5 text-xs font-semibold text-[#8DE4B0]">Активен</span>
                         </div>
 
-                        <div class="mt-6 space-y-5">
+                        <div class="mt-4 space-y-3">
                             <div>
                                 <div class="flex items-center justify-between text-sm">
                                     <span class="text-[#C8D9CF]">Сайты</span>
@@ -412,20 +412,24 @@ const comparisonRows = [
                             </div>
                         </div>
 
-                        <div class="mt-6 grid grid-cols-2 gap-3">
-                            <div class="rounded-2xl bg-white/10 p-3.5">
-                                <History class="h-5 w-5 text-[#8DE4B0]" :stroke-width="2" />
-                                <p class="mt-2 text-lg font-semibold text-white">{{ currentHistoryDays }} дней</p>
-                                <p class="mt-1 text-xs text-[#B7CCBF]">История</p>
+                        <div class="mt-4 grid grid-cols-2 gap-3">
+                            <div class="flex items-center gap-3 rounded-2xl bg-white/10 p-3">
+                                <History class="h-5 w-5 shrink-0 text-[#8DE4B0]" :stroke-width="2" />
+                                <div>
+                                    <p class="font-semibold text-white">{{ currentHistoryDays }} дней</p>
+                                    <p class="text-xs text-[#B7CCBF]">История</p>
+                                </div>
                             </div>
-                            <div class="rounded-2xl bg-white/10 p-3.5">
-                                <Layers3 class="h-5 w-5 text-[#8DE4B0]" :stroke-width="2" />
-                                <p class="mt-2 text-lg font-semibold text-white">{{ usage.monitors }}</p>
-                                <p class="mt-1 text-xs text-[#B7CCBF]">Всего проверок</p>
+                            <div class="flex items-center gap-3 rounded-2xl bg-white/10 p-3">
+                                <Layers3 class="h-5 w-5 shrink-0 text-[#8DE4B0]" :stroke-width="2" />
+                                <div>
+                                    <p class="font-semibold text-white">{{ usage.monitors }}</p>
+                                    <p class="text-xs text-[#B7CCBF]">Всего проверок</p>
+                                </div>
                             </div>
                         </div>
 
-                        <p v-if="currentSubscription?.ends_at" class="mt-5 flex items-center gap-2 text-sm text-[#C8D9CF]">
+                        <p v-if="currentSubscription?.ends_at" class="mt-4 flex items-center gap-2 text-sm text-[#C8D9CF]">
                             <CalendarClock class="h-4 w-4" :stroke-width="2" />
                             Оплачен до {{ formatDate(currentSubscription.ends_at) }}
                         </p>
@@ -550,7 +554,7 @@ const comparisonRows = [
             </div>
 
             <div id="billing-addons" v-if="addonCatalog?.length" :class="checkoutNotice ? 'mt-4' : 'mt-10'" class="scroll-mt-24 rounded-[30px] border border-[#DDEBE3] bg-white p-6 sm:p-8">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
                     <div>
                         <div class="inline-flex items-center gap-2 text-sm font-semibold text-[#1E9B5D]">
                             <Plus class="h-4 w-4" :stroke-width="2.25" />
@@ -566,89 +570,108 @@ const comparisonRows = [
                             }}
                         </p>
                     </div>
-                    <div class="grid gap-2 rounded-2xl border border-[#DDEBE3] bg-[#F8FCFA] p-4 text-sm sm:min-w-[290px]">
-                        <div class="flex items-center justify-between gap-4">
-                            <span class="text-[#6A7A70]">{{ isPlanCheckout ? `Тариф ${checkoutPlan?.name}` : 'Сейчас' }}</span>
-                            <span class="font-semibold text-[#26332D]">{{ formatCents(isPlanCheckout ? (checkoutPlan?.price_cents ?? 0) : currentAddonMonthlyTotal) }} / мес</span>
-                        </div>
-                        <div class="flex items-center justify-between gap-4">
-                            <span class="text-[#6A7A70]">{{ isPlanCheckout ? 'Дополнения' : 'После изменений' }}</span>
-                            <span class="font-semibold text-[#26332D]">{{ formatCents(addonMonthlyTotal) }} / мес</span>
-                        </div>
-                        <div class="flex items-center justify-between gap-4 border-t border-[#E5EFE9] pt-2">
-                            <span class="text-[#6A7A70]">К оплате сейчас</span>
-                            <span class="font-semibold text-[#178A50]">{{ formatCents(isPlanCheckout ? checkoutTotal : addonDueNow) }}</span>
-                        </div>
-                    </div>
                 </div>
 
-                <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    <article
-                        v-for="addon in addonCatalog"
-                        :key="addon.code"
-                        class="flex min-h-full flex-col rounded-[22px] border border-[#DDEBE3] bg-[#F8FCFA] p-5 transition hover:border-[#B8D8C5] hover:bg-white"
-                    >
-                        <div class="flex items-start justify-between gap-3">
-                            <span class="grid h-10 w-10 place-items-center rounded-2xl bg-[#E9F8EF] text-[#1E9B5D]">
-                                <Zap class="h-5 w-5" :stroke-width="2" />
-                            </span>
-                            <span
-                                class="rounded-full px-2.5 py-1 text-xs font-semibold"
-                                :class="!isPlanCheckout && addonDraftQuantity(addon.code) < addonQuantity(addon.code) ? 'bg-[#FFF0CF] text-[#A76500]' : 'bg-[#DDF6E8] text-[#178A50]'"
+                <div class="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+                    <div>
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <article
+                                v-for="addon in addonCatalog"
+                                :key="addon.code"
+                                class="flex min-h-full flex-col rounded-[22px] border border-[#DDEBE3] bg-[#F8FCFA] p-5 transition hover:border-[#B8D8C5] hover:bg-white"
                             >
-                                {{ isPlanCheckout ? (addonDraftQuantity(addon.code) > 0 ? `выбрано ${addonDraftQuantity(addon.code)}` : 'не выбрано') : addonStateLabel(addon) }}
-                            </span>
+                                <div class="flex items-start justify-between gap-3">
+                                    <span class="grid h-10 w-10 place-items-center rounded-2xl bg-[#E9F8EF] text-[#1E9B5D]">
+                                        <Zap class="h-5 w-5" :stroke-width="2" />
+                                    </span>
+                                    <span
+                                        class="rounded-full px-2.5 py-1 text-xs font-semibold"
+                                        :class="!isPlanCheckout && addonDraftQuantity(addon.code) < addonQuantity(addon.code) ? 'bg-[#FFF0CF] text-[#A76500]' : 'bg-[#DDF6E8] text-[#178A50]'"
+                                    >
+                                        {{ isPlanCheckout ? (addonDraftQuantity(addon.code) > 0 ? `выбрано ${addonDraftQuantity(addon.code)}` : 'не выбрано') : addonStateLabel(addon) }}
+                                    </span>
+                                </div>
+                                <h3 class="mt-4 text-lg font-semibold text-[#26332D]">{{ addon.name }}</h3>
+                                <p class="mt-2 flex-1 text-sm leading-6 text-[#6A7A70]">{{ addon.description }}</p>
+                                <p class="mt-5 text-lg font-semibold text-[#173B2A]">{{ addonMoney(addon) }}</p>
+                                <div class="mt-4 flex h-11 items-center rounded-2xl border border-[#B8D8C5] bg-white">
+                                    <button
+                                        type="button"
+                                        class="grid h-full w-11 place-items-center rounded-l-2xl text-[#52645A] transition hover:bg-[#F3F8F5] hover:text-[#173B2A] disabled:cursor-not-allowed disabled:opacity-40"
+                                        :disabled="addonDraftQuantity(addon.code) === 0"
+                                        :aria-label="`Уменьшить ${addon.name}`"
+                                        @click="changeAddonQuantity(addon.code, -1)"
+                                    >
+                                        <Minus class="h-4 w-4" :stroke-width="2.25" />
+                                    </button>
+                                    <div class="flex-1 text-center text-sm font-semibold text-[#26332D]">
+                                        {{ addonDraftQuantity(addon.code) }}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        class="grid h-full w-11 place-items-center rounded-r-2xl text-[#178A50] transition hover:bg-[#E9F8EF]"
+                                        :aria-label="`Увеличить ${addon.name}`"
+                                        @click="changeAddonQuantity(addon.code, 1)"
+                                    >
+                                        <Plus class="h-4 w-4" :stroke-width="2.25" />
+                                    </button>
+                                </div>
+                            </article>
                         </div>
-                        <h3 class="mt-4 text-lg font-semibold text-[#26332D]">{{ addon.name }}</h3>
-                        <p class="mt-2 flex-1 text-sm leading-6 text-[#6A7A70]">{{ addon.description }}</p>
-                        <p class="mt-5 text-lg font-semibold text-[#173B2A]">{{ addonMoney(addon) }}</p>
-                        <div class="mt-4 flex h-11 items-center rounded-2xl border border-[#B8D8C5] bg-white">
-                            <button
-                                type="button"
-                                class="grid h-full w-11 place-items-center rounded-l-2xl text-[#52645A] transition hover:bg-[#F3F8F5] hover:text-[#173B2A] disabled:cursor-not-allowed disabled:opacity-40"
-                                :disabled="addonDraftQuantity(addon.code) === 0"
-                                :aria-label="`Уменьшить ${addon.name}`"
-                                @click="changeAddonQuantity(addon.code, -1)"
-                            >
-                                <Minus class="h-4 w-4" :stroke-width="2.25" />
-                            </button>
-                            <div class="flex-1 text-center text-sm font-semibold text-[#26332D]">
-                                {{ addonDraftQuantity(addon.code) }}
+
+                        <p class="mt-5 rounded-[22px] border border-[#DDEBE3] bg-[#F8FCFA] p-4 text-sm leading-6 text-[#6A7A70]">
+                            При отключении лимита сверхлимитные сайты или платные проверки будут приостановлены автоматически. Вернуть их можно после повторного увеличения лимита.
+                        </p>
+                    </div>
+
+                    <aside class="xl:sticky xl:top-28 xl:self-start">
+                        <div class="rounded-[24px] border border-[#F6C66E] bg-white p-5 shadow-[0_12px_38px_rgba(38,51,45,0.1)]">
+                            <h3 class="text-xl font-semibold text-[#173B2A]">Итого</h3>
+
+                            <div class="mt-4 rounded-3xl bg-[#FFFCF4] p-4">
+                                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[#B7791F]">Сейчас к оплате</p>
+                                <p class="mt-2 text-3xl font-semibold tracking-tight text-[#173B2A]">
+                                    {{ formatCents(isPlanCheckout ? checkoutTotal : addonDueNow) }}
+                                </p>
                             </div>
+
+                            <div class="mt-5 space-y-3 text-sm">
+                                <div class="flex items-center justify-between gap-4">
+                                    <span class="text-[#6A7A70]">{{ isPlanCheckout ? `Тариф ${checkoutPlan?.name}` : 'Сейчас' }}</span>
+                                    <span class="font-semibold text-[#26332D]">{{ formatCents(isPlanCheckout ? (checkoutPlan?.price_cents ?? 0) : currentAddonMonthlyTotal) }} / мес</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-4">
+                                    <span class="text-[#6A7A70]">{{ isPlanCheckout ? 'Дополнения' : 'После изменений' }}</span>
+                                    <span class="font-semibold text-[#26332D]">{{ formatCents(addonMonthlyTotal) }} / мес</span>
+                                </div>
+                            </div>
+
+                            <div class="mt-5 rounded-3xl bg-[#173B2A] p-4 text-white">
+                                <div class="flex items-end justify-between gap-3">
+                                    <span class="text-sm font-medium text-white/75">Будет списано сейчас</span>
+                                    <span class="text-xl font-semibold">{{ formatCents(isPlanCheckout ? checkoutTotal : addonDueNow) }}</span>
+                                </div>
+                            </div>
+
                             <button
                                 type="button"
-                                class="grid h-full w-11 place-items-center rounded-r-2xl text-[#178A50] transition hover:bg-[#E9F8EF]"
-                                :aria-label="`Увеличить ${addon.name}`"
-                                @click="changeAddonQuantity(addon.code, 1)"
+                                class="mt-5 inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[#2FA568] px-5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(47,165,104,0.22)] transition hover:bg-[#248653] disabled:cursor-not-allowed disabled:bg-[#AAB8B0]"
+                                :disabled="!isPlanCheckout && !hasAddonChanges"
+                                @click="submitAddonChanges"
                             >
-                                <Plus class="h-4 w-4" :stroke-width="2.25" />
+                                {{ isPlanCheckout || addonDueNow > 0 ? 'Перейти к оплате' : 'Сохранить изменения' }}
+                            </button>
+
+                            <button
+                                type="button"
+                                class="mt-3 inline-flex h-11 w-full items-center justify-center rounded-2xl border border-[#DDEBE3] px-4 text-sm font-semibold text-[#52645A] transition hover:border-[#B8D0C2] hover:text-[#173B2A] disabled:cursor-not-allowed disabled:opacity-40"
+                                :disabled="isPlanCheckout ? addonMonthlyTotal === 0 : !hasAddonChanges"
+                                @click="resetAddonDrafts"
+                            >
+                                Сбросить
                             </button>
                         </div>
-                    </article>
-                </div>
-
-                <div class="mt-6 flex flex-col gap-3 rounded-[22px] border border-[#DDEBE3] bg-[#F8FCFA] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                    <p class="text-sm leading-6 text-[#6A7A70]">
-                        При отключении лимита сверхлимитные сайты или платные проверки будут приостановлены автоматически. Вернуть их можно после повторного увеличения лимита.
-                    </p>
-                    <div class="flex shrink-0 flex-col gap-2 sm:flex-row">
-                        <button
-                            type="button"
-                            class="inline-flex h-11 items-center justify-center rounded-2xl border border-[#DDEBE3] px-4 text-sm font-semibold text-[#52645A] transition hover:border-[#B8D0C2] hover:text-[#173B2A] disabled:cursor-not-allowed disabled:opacity-40"
-                            :disabled="isPlanCheckout ? addonMonthlyTotal === 0 : !hasAddonChanges"
-                            @click="resetAddonDrafts"
-                        >
-                            Сбросить
-                        </button>
-                        <button
-                            type="button"
-                            class="inline-flex h-11 items-center justify-center rounded-2xl bg-[#173B2A] px-5 text-sm font-semibold text-white transition hover:bg-[#214E38] disabled:cursor-not-allowed disabled:bg-[#AAB8B0]"
-                            :disabled="!isPlanCheckout && !hasAddonChanges"
-                            @click="submitAddonChanges"
-                        >
-                            {{ isPlanCheckout || addonDueNow > 0 ? 'Перейти к оплате' : 'Сохранить изменения' }}
-                        </button>
-                    </div>
+                    </aside>
                 </div>
             </div>
 
