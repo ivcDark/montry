@@ -178,11 +178,16 @@ final class YooKassaController extends Controller
         $logger->info('yookassa.returned', $payment, $request, 'Пользователь вернулся из ЮKassa после оплаты.');
 
         if ($payment->status === 'paid') {
-            return to_route('dashboard.index')
+            return to_route('sites.index')
                 ->with('success', 'Платеж подтвержден. Тариф активирован.');
         }
 
+        if ($payment->status === 'pending') {
+            return to_route('sites.index')
+                ->with('success', 'Оплата завершена. Тариф активируется после подтверждения от ЮKassa.');
+        }
+
         return redirect()->route('billing.payments.show', $payment)
-            ->with('success', 'Оплата завершена. Ожидаем серверное подтверждение от ЮKassa.');
+            ->with('error', $payment->failure_reason ?: 'Оплата не была подтверждена.');
     }
 }

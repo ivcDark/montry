@@ -1209,6 +1209,51 @@ final class BillingFlowTest extends TestCase
         $this->assertSame('active', $subscription->status);
     }
 
+    public function test_yookassa_return_redirects_paid_payment_to_sites(): void
+    {
+        [, $organization] = $this->createOrganizationContext();
+        $payment = $this->createPendingPayment($organization);
+        $payment->forceFill([
+            'provider' => 'yookassa',
+            'status' => 'paid',
+            'paid_at' => now(),
+        ])->save();
+
+        $this
+            ->get("/billing/yookassa/return/{$payment->id}")
+            ->assertRedirect('/sites')
+            ->assertSessionHas('success', 'Платеж подтвержден. Тариф активирован.');
+    }
+
+    public function test_yookassa_return_redirects_pending_payment_to_sites_while_webhook_is_processing(): void
+    {
+        [, $organization] = $this->createOrganizationContext();
+        $payment = $this->createPendingPayment($organization);
+        $payment->forceFill(['provider' => 'yookassa'])->save();
+
+        $this
+            ->get("/billing/yookassa/return/{$payment->id}")
+            ->assertRedirect('/sites')
+            ->assertSessionHas('success', 'Оплата завершена. Тариф активируется после подтверждения от ЮKassa.');
+    }
+
+    public function test_yookassa_return_keeps_failed_payment_on_payment_page(): void
+    {
+        [, $organization] = $this->createOrganizationContext();
+        $payment = $this->createPendingPayment($organization);
+        $payment->forceFill([
+            'provider' => 'yookassa',
+            'status' => 'failed',
+            'failure_reason' => 'Платеж отменен.',
+            'failed_at' => now(),
+        ])->save();
+
+        $this
+            ->get("/billing/yookassa/return/{$payment->id}")
+            ->assertRedirect("/billing/payments/{$payment->id}")
+            ->assertSessionHas('error', 'Платеж отменен.');
+    }
+
     private function createPlan(string $code, int $priceCents, int $sortOrder = 0, array $limits = []): Plan
     {
         $plan = Plan::query()->create([
