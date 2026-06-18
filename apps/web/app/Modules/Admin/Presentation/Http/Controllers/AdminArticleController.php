@@ -46,7 +46,7 @@ final class AdminArticleController extends Controller
             metadata: ['slug' => $article->slug],
         );
 
-        return back()->with('success', 'Статья создана.');
+        return back()->with('success', "Статья «{$article->title}» создана.");
     }
 
     public function update(Request $request, Article $article, AuditLogger $audit): RedirectResponse
@@ -72,7 +72,7 @@ final class AdminArticleController extends Controller
             ],
         );
 
-        return back()->with('success', 'Статья обновлена.');
+        return back()->with('success', "Статья «{$article->title}» обновлена.");
     }
 
     public function toggle(Request $request, Article $article, AuditLogger $audit): RedirectResponse
@@ -94,7 +94,12 @@ final class AdminArticleController extends Controller
             metadata: ['slug' => $article->slug],
         );
 
-        return back()->with('success', $article->is_published ? 'Статья опубликована.' : 'Статья скрыта.');
+        return back()->with(
+            'success',
+            $article->is_published
+                ? "Статья «{$article->title}» опубликована."
+                : "Статья «{$article->title}» скрыта.",
+        );
     }
 
     /**

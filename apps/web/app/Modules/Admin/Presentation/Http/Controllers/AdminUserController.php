@@ -218,7 +218,12 @@ final class AdminUserController extends Controller
             ],
         );
 
-        return back()->with('success', $user->is_blocked ? 'User blocked.' : 'User unblocked.');
+        return back()->with(
+            'success',
+            $user->is_blocked
+                ? "Пользователь {$user->email} заблокирован."
+                : "Пользователь {$user->email} разблокирован.",
+        );
     }
 
     public function updatePlan(
@@ -286,6 +291,9 @@ final class AdminUserController extends Controller
             ],
         );
 
-        return back()->with('success', 'Organization plan changed.');
+        return back()->with(
+            'success',
+            "Тариф организации «{$organization->name}» изменён на «{$plan->name}».",
+        );
     }
 }

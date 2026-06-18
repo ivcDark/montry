@@ -60,7 +60,7 @@ final class AdminPlanController extends Controller
             ],
         );
 
-        return back()->with('success', 'Тариф создан.');
+        return back()->with('success', "Тариф «{$plan->name}» создан.");
     }
 
     public function update(Request $request, Plan $plan, AuditLogger $audit): RedirectResponse
@@ -90,15 +90,13 @@ final class AdminPlanController extends Controller
             ],
         );
 
-        return back()->with('success', 'Тариф обновлен.');
+        return back()->with('success', "Тариф «{$plan->name}» обновлён.");
     }
 
     public function destroy(Request $request, Plan $plan, AuditLogger $audit): RedirectResponse
     {
         if ($plan->subscriptions()->exists()) {
-            return back()->withErrors([
-                'plan' => 'Нельзя удалить тариф, который уже используется в подписках. Сначала переведите организации на другой тариф или отключите тариф.',
-            ]);
+            return back()->with('error', "Нельзя удалить тариф «{$plan->name}»: он используется в подписках.");
         }
 
         $deletedPlan = $plan->only(['id', 'code', 'name', 'price_cents', 'currency']);
@@ -116,7 +114,7 @@ final class AdminPlanController extends Controller
             metadata: $deletedPlan,
         );
 
-        return back()->with('success', 'Тариф удален.');
+        return back()->with('success', "Тариф «{$deletedPlan['name']}» удалён.");
     }
 
     /**

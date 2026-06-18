@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, router, useForm, usePage } from '@inertiajs/vue3'
+import { Head, router, useForm } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 
 type ArticleFormData = {
@@ -27,17 +27,10 @@ type Article = {
     form: ArticleFormData
 }
 
-type PageProps = {
-    flash?: {
-        success?: string
-    }
-}
-
 const props = defineProps<{
     articles: Article[]
 }>()
 
-const page = usePage<PageProps>()
 const editingArticleId = ref<number | null>(null)
 
 const blankArticleForm = (): ArticleFormData => ({
@@ -143,10 +136,6 @@ function formatDate(value: string | null): string {
         </template>
 
         <div class="mx-auto max-w-7xl px-5 py-8 sm:px-8">
-            <div v-if="page.props.flash?.success" class="mb-5 rounded-2xl border border-[#BBF7D0] bg-[#F0FDF4] px-5 py-4 text-sm font-bold text-[#15803D]">
-                {{ page.props.flash.success }}
-            </div>
-
             <section class="grid gap-4 sm:grid-cols-3">
                 <article class="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
                     <p class="text-sm font-bold text-[#667085]">Всего статей</p>
