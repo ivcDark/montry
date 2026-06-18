@@ -80,20 +80,20 @@ services:
 #        condition: service_healthy
 #    restart: unless-stopped
 
-#  web-queue:
-#    build: *web-build
-#    container_name: montry-web-queue
-#    <<: *web-env
-#    command: ["php", "artisan", "queue:work", "redis", "--queue=notifications,reports,default", "--sleep=1", "--tries=3", "--timeout=120", "--memory=256"]
-#    depends_on:
-#      web:
-#        condition: service_started
-#      postgres:
-#        condition: service_healthy
-#      redis:
-#        condition: service_healthy
-#    restart: unless-stopped
-#
+  web-queue:
+    build: *web-build
+    container_name: montry-web-queue
+    <<: *web-env
+    command: ["php", "artisan", "queue:work", "redis", "--queue=notifications,reports,default", "--sleep=1", "--tries=3", "--timeout=120", "--memory=256"]
+    depends_on:
+      web:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 #  web-result-consumer:
 #    build: *web-build
 #    container_name: montry-web-result-consumer

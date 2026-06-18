@@ -47,6 +47,10 @@ services:
     <<: *web-service
     command: ["php", "artisan", "schedule:work"]
 
+  web-queue:
+    <<: *web-service
+    command: ["php", "artisan", "queue:work", "redis", "--queue=notifications,reports,default", "--sleep=1", "--tries=3", "--timeout=120", "--memory=256"]
+
   poller:
     image: montry-poller:prod
     build:

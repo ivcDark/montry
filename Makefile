@@ -1,7 +1,7 @@
 COMPOSE = docker compose
 PROD_ENV = .env.production
 PROD_COMPOSE = docker compose --env-file $(PROD_ENV) -f docker-compose.prod.yml
-PROD_SERVICES = nginx web web-scheduler poller postgres redis
+PROD_SERVICES = nginx web web-scheduler web-queue poller postgres redis
 WEB = $(COMPOSE) exec web
 WEB_RUN = $(COMPOSE) run --rm web
 POLLER_HTTP = $(COMPOSE) exec poller-http
