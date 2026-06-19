@@ -9,11 +9,10 @@ import {
     Clock3,
     Globe2,
     History,
-    Layers3,
     Minus,
-    Plus,
     ShieldCheck,
     Sparkles,
+    UsersRound,
     X,
     Zap,
 } from '@lucide/vue'
@@ -29,15 +28,6 @@ type Plan = {
     limits: Record<string, any>
 }
 
-type AddonCatalogItem = {
-    code: string
-    name: string
-    description: string
-    unit_label: string
-    unit_price_cents: number
-    currency: string
-}
-
 type Subscription = {
     status: string
     starts_at?: string | null
@@ -49,8 +39,6 @@ const props = defineProps<{
     organization: { id: string | number; name: string }
     currentSubscription: Subscription | null
     scheduledSubscription: Subscription | null
-    selectedPlanCode?: string | null
-    restoredAddonQuantities?: Record<string, number>
     checkoutNotice?: string | null
     plans: Plan[]
     usage: {
@@ -59,72 +47,22 @@ const props = defineProps<{
         active_monitors: number
         site_limit?: number | null
     }
-    addonCatalog?: AddonCatalogItem[]
-    currentAddons?: Record<string, { quantity: number, unit_price_cents: number, currency: string }>
-    entitlements?: Record<string, any>
 }>()
 
 const currentPlanCode = computed(() => props.currentSubscription?.plan.code ?? 'free')
 const currentPlan = computed(() => props.currentSubscription?.plan ?? props.plans.find((plan) => plan.code === currentPlanCode.value) ?? null)
-const checkoutPlanCode = ref<string | null>(
-    props.selectedPlanCode && props.selectedPlanCode !== currentPlanCode.value
-        ? props.selectedPlanCode
-        : null,
-)
-const checkoutPlan = computed(() => props.plans.find((plan) => plan.code === checkoutPlanCode.value) ?? null)
-const isPlanCheckout = computed(() => checkoutPlan.value !== null)
 const selectedDowngradePlan = ref<Plan | null>(null)
 const effectiveSiteLimit = computed(() => props.usage.site_limit ?? currentPlan.value?.limits.max_sites?.limit ?? null)
+const currentMonitorLimit = computed(() => currentPlan.value?.limits.max_monitors?.limit ?? null)
 const currentHistoryDays = computed(() => currentPlan.value?.limits.history_retention_days?.days ?? 0)
-const siteUsagePercent = computed(() => usagePercent(props.usage.sites, effectiveSiteLimit.value))
-const activeMonitorPercent = computed(() => usagePercent(props.usage.active_monitors, props.usage.monitors || null))
-const addonDrafts = ref<Record<string, number>>(
-    Object.fromEntries(
-        (props.addonCatalog ?? []).map((addon) => [
-            addon.code,
-            props.restoredAddonQuantities?.[addon.code]
-                ?? (checkoutPlanCode.value ? 0 : (props.currentAddons?.[addon.code]?.quantity ?? 0)),
-        ]),
-    ),
-)
-const desiredAddonQuantities = computed(() => {
-    const quantities: Record<string, number> = {}
+const currentIntervalMinutes = computed(() => Math.max(1, Math.round((currentPlan.value?.limits.minimum_check_interval_seconds?.seconds ?? 300) / 60)))
+const currentMonitorTypesLabel = computed(() => {
+    const types = currentPlan.value?.limits.allowed_monitor_types?.types ?? []
 
-    for (const addon of props.addonCatalog ?? []) {
-        const quantity = addonDraftQuantity(addon.code)
-
-        if (quantity > 0) {
-            quantities[addon.code] = quantity
-        }
-    }
-
-    return quantities
+    return types.length > 2 || types.includes('*') ? 'Все типы' : 'HTTP и SSL'
 })
-const hasAddonChanges = computed(() => {
-    for (const addon of props.addonCatalog ?? []) {
-        if (addonDraftQuantity(addon.code) !== addonQuantity(addon.code)) {
-            return true
-        }
-    }
-
-    return false
-})
-const addonMonthlyTotal = computed(() => (props.addonCatalog ?? []).reduce((sum, addon) => (
-    sum + addon.unit_price_cents * addonDraftQuantity(addon.code)
-), 0))
-const currentAddonMonthlyTotal = computed(() => (props.addonCatalog ?? []).reduce((sum, addon) => (
-    sum + addon.unit_price_cents * addonQuantity(addon.code)
-), 0))
-const addonDueNow = computed(() => (props.addonCatalog ?? []).reduce((sum, addon) => {
-    if (isPlanCheckout.value) {
-        return sum + addon.unit_price_cents * addonDraftQuantity(addon.code)
-    }
-
-    const additionalQuantity = addonDraftQuantity(addon.code) - addonQuantity(addon.code)
-
-    return additionalQuantity > 0 ? sum + additionalQuantity * addon.unit_price_cents : sum
-}, 0))
-const checkoutTotal = computed(() => (checkoutPlan.value?.price_cents ?? 0) + addonMonthlyTotal.value)
+const currentChannelsLabel = computed(() => currentPlan.value ? formatChannels(currentPlan.value) : 'Email')
+const monitorUsagePercent = computed(() => usagePercent(props.usage.active_monitors, currentMonitorLimit.value))
 
 function money(plan: Plan): string {
     if (plan.price_cents === 0) {
@@ -134,74 +72,10 @@ function money(plan: Plan): string {
     return `${new Intl.NumberFormat('ru-RU').format(plan.price_cents / 100)} ₽`
 }
 
-function addonMoney(addon: AddonCatalogItem): string {
-    return `+${new Intl.NumberFormat('ru-RU').format(addon.unit_price_cents / 100)} ₽/мес`
-}
-
-function addonQuantity(code: string): number {
-    return props.currentAddons?.[code]?.quantity ?? 0
-}
-
-function addonDraftQuantity(code: string): number {
-    return addonDrafts.value[code] ?? 0
-}
-
-function changeAddonQuantity(code: string, delta: number): void {
-    addonDrafts.value[code] = Math.max(0, Math.min(1000, addonDraftQuantity(code) + delta))
-}
-
-function resetAddonDrafts(): void {
-    for (const item of props.addonCatalog ?? []) {
-        addonDrafts.value[item.code] = isPlanCheckout.value ? 0 : addonQuantity(item.code)
-    }
-}
-
-function submitAddonChanges(): void {
-    if (!isPlanCheckout.value && !hasAddonChanges.value) {
-        return
-    }
-
-    router.post('/billing/checkout', {
-        plan_code: checkoutPlan.value?.code ?? currentPlanCode.value,
-        manage_addons: !isPlanCheckout.value,
-        addons: desiredAddonQuantities.value,
-    })
-}
-
 function selectPlan(plan: Plan): void {
-    checkoutPlanCode.value = plan.code
-    resetAddonDrafts()
-
-    requestAnimationFrame(() => {
-        document.getElementById('billing-addons')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    router.post('/billing/checkout', {
+        plan_code: plan.code,
     })
-}
-
-function addonStateLabel(addon: AddonCatalogItem): string {
-    const current = addonQuantity(addon.code)
-    const next = addonDraftQuantity(addon.code)
-
-    if (next > current) {
-        return `+${next - current} после оплаты`
-    }
-
-    if (next < current) {
-        return next === 0 ? 'будет отключено' : `останется ${next}`
-    }
-
-    return current > 0 ? `подключено ${current}` : 'не подключено'
-}
-
-function formatCents(cents: number): string {
-    if (cents === 0) {
-        return '0 ₽'
-    }
-
-    return `${new Intl.NumberFormat('ru-RU').format(cents / 100)} ₽`
-}
-
-function planLimit(plan: Plan, key: string, valueKey: string, fallback: string | number = 'Без лимита'): string | number {
-    return plan.limits[key]?.[valueKey] ?? fallback
 }
 
 function formatChannels(plan: Plan): string {
@@ -219,17 +93,51 @@ function formatChannels(plan: Plan): string {
     return channels.map((channel: string) => labels[channel] ?? channel).join(' и ')
 }
 
+function pluralize(value: number, forms: [string, string, string]): string {
+    const normalized = Math.abs(value) % 100
+    const lastDigit = normalized % 10
+
+    if (normalized > 10 && normalized < 20) {
+        return forms[2]
+    }
+
+    if (lastDigit === 1) {
+        return forms[0]
+    }
+
+    if (lastDigit >= 2 && lastDigit <= 4) {
+        return forms[1]
+    }
+
+    return forms[2]
+}
+
+const publicPagesByPlan: Record<string, number> = {
+    free: 1,
+    pro: 10,
+    team: 30,
+}
+
+const usersByPlan: Record<string, number> = {
+    free: 1,
+    pro: 1,
+    team: 10,
+}
+
 function planFeatures(plan: Plan): string[] {
-    const sites = plan.limits.max_sites?.limit
+    const monitors = plan.limits.max_monitors?.limit
     const historyDays = plan.limits.history_retention_days?.days ?? 0
     const intervalMinutes = Math.max(1, Math.round((plan.limits.minimum_check_interval_seconds?.seconds ?? 300) / 60))
+    const publicPages = plan.limits.max_public_status_pages?.limit ?? publicPagesByPlan[plan.code] ?? 0
+    const users = plan.limits.max_organization_users?.limit ?? usersByPlan[plan.code] ?? 1
 
     return [
-        sites === null || sites === undefined ? 'Сайты без лимита' : `До ${sites} сайтов`,
-        'Базовые проверки включены',
-        `История проверок ${historyDays} дней`,
-        `Интервал от ${intervalMinutes} минут`,
-        formatChannels(plan),
+        monitors === null || monitors === undefined ? 'Мониторинги без лимита' : `До ${monitors} мониторингов`,
+        `Интервал от ${intervalMinutes} ${pluralize(intervalMinutes, ['минуты', 'минут', 'минут'])}`,
+        `Оповещения: ${formatChannels(plan)}`,
+        `История проверок: ${historyDays} ${pluralize(historyDays, ['день', 'дня', 'дней'])}`,
+        `До ${publicPages} ${pluralize(publicPages, ['публичной страницы', 'публичных страниц', 'публичных страниц'])}`,
+        users > 1 ? `До ${users} пользователей` : '1 пользователь',
     ]
 }
 
@@ -264,36 +172,55 @@ function isDowngrade(plan: Plan): boolean {
 }
 
 function isFeatured(plan: Plan): boolean {
-    return plan.code === 'solo'
+    return plan.code === 'pro'
 }
 
 function comparisonValue(plan: Plan, key: string): string {
     const limits = plan.limits
+    const intervalMinutes = Math.max(1, Math.round((limits.minimum_check_interval_seconds?.seconds ?? 300) / 60))
+    const historyDays = limits.history_retention_days?.days ?? 0
+    const monitorTypes = limits.allowed_monitor_types?.types ?? []
+    const publicPages = limits.max_public_status_pages?.limit ?? publicPagesByPlan[plan.code] ?? 0
+    const users = limits.max_organization_users?.limit ?? usersByPlan[plan.code] ?? 1
 
     if (key === 'price') {
-        return plan.price_cents === 0 ? 'Бесплатно' : `${money(plan)} / мес`
+        return plan.price_cents === 0 ? '0 ₽' : `${money(plan)} / месяц`
     }
 
-    if (key === 'max_sites') {
-        return String(planLimit(plan, 'max_sites', 'limit'))
+    if (key === 'monitors') {
+        return String(limits.max_monitors?.limit ?? 'Без ограничений')
     }
 
-    if (key === 'checks') {
-        return 'HTTP, SSL, домен, DNS, Robots.txt'
-    }
-
-    if (key === 'types') {
-        return limits.allowed_monitor_types?.types?.includes('*')
-            ? 'Все типы'
-            : (limits.allowed_monitor_types?.types ?? []).join(', ').toUpperCase()
+    if (key === 'interval') {
+        return `${intervalMinutes} ${pluralize(intervalMinutes, ['минута', 'минуты', 'минут'])}`
     }
 
     if (key === 'history') {
-        return `${planLimit(plan, 'history_retention_days', 'days', 0)} дней`
+        return `${historyDays} ${pluralize(historyDays, ['день', 'дня', 'дней'])}`
+    }
+
+    if (key === 'types') {
+        return monitorTypes.length > 2 || monitorTypes.includes('*') ? 'Все типы' : 'HTTP, SSL'
+    }
+
+    if (key === 'notifications') {
+        return formatChannels(plan).replace(' и ', ', ')
+    }
+
+    if (key === 'users') {
+        return users > 1 ? `До ${users}` : '1'
     }
 
     if (key === 'projects') {
-        return limits.can_create_projects?.enabled ? 'Доступны' : 'Недоступны'
+        return plan.code === 'free' ? '1' : 'Без ограничений'
+    }
+
+    if (key === 'public_pages') {
+        return plan.code === 'free' ? '1' : `До ${publicPages}`
+    }
+
+    if (key === 'reports') {
+        return plan.code === 'free' ? '—' : 'Email, PDF'
     }
 
     return ''
@@ -333,12 +260,16 @@ function confirmDowngrade(): void {
 }
 
 const comparisonRows = [
-    { key: 'price', label: 'Стоимость' },
-    { key: 'max_sites', label: 'Сайты' },
-    { key: 'checks', label: 'Базовые проверки' },
-    { key: 'types', label: 'Типы проверок' },
+    { key: 'price', label: 'Цена в месяц' },
+    { key: 'monitors', label: 'Активные мониторинги' },
+    { key: 'interval', label: 'Минимальный интервал' },
     { key: 'history', label: 'История' },
+    { key: 'types', label: 'Типы мониторинга' },
+    { key: 'notifications', label: 'Уведомления' },
+    { key: 'users', label: 'Пользователи' },
     { key: 'projects', label: 'Проекты' },
+    { key: 'public_pages', label: 'Публичные страницы' },
+    { key: 'reports', label: 'Отчёты' },
 ]
 </script>
 
@@ -354,26 +285,26 @@ const comparisonRows = [
         :usage-limit="effectiveSiteLimit ?? undefined"
     >
         <section class="mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:py-10">
-            <div class="overflow-hidden rounded-[32px] border border-[#CFE1D7] bg-[#173B2A] shadow-[0_18px_60px_rgba(23,59,42,0.14)]">
-                <div class="relative grid gap-6 px-6 py-6 sm:px-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)] lg:px-10 lg:py-7">
+            <div class="mx-auto max-w-6xl overflow-hidden rounded-[28px] border border-[#CFE1D7] bg-[#173B2A] shadow-[0_18px_60px_rgba(23,59,42,0.14)]">
+                <div class="relative grid gap-5 px-6 py-6 sm:px-8 lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.55fr)] lg:px-9 lg:py-6">
                     <div class="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-[#2FA568]/20 blur-3xl" />
                     <div class="pointer-events-none absolute -bottom-24 left-1/3 h-60 w-60 rounded-full bg-[#DDF6E8]/10 blur-3xl" />
 
-                    <div class="relative">
-                        <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-[#CFF2DC]">
+                    <div class="relative flex flex-col justify-center">
+                        <div class="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-[#CFF2DC]">
                             <Sparkles class="h-4 w-4" :stroke-width="2" />
                             Тарифы Montry
                         </div>
-                        <h1 class="mt-4 max-w-3xl text-3xl font-semibold leading-tight text-white sm:text-4xl lg:text-[38px]">
-                            Выберите тариф под количество ваших сайтов
+                        <h1 class="mt-4 max-w-2xl text-3xl font-semibold leading-tight text-white sm:text-[34px]">
+                            Мониторинг без доплат за отдельные проверки
                         </h1>
-                        <p class="mt-3 max-w-2xl text-sm leading-6 text-[#C8D9CF] sm:text-base">
-                            Начните бесплатно и увеличивайте лимиты по мере роста. Базовый мониторинг уже включён, дополнительные проверки подключаются отдельно.
+                        <p class="mt-3 max-w-2xl text-sm leading-6 text-[#C8D9CF] sm:text-[15px]">
+                            Free подходит для старта, Pro — для регулярного мониторинга, Team — для студий и команд с большим количеством проектов.
                         </p>
                         <div class="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium text-[#E5F4EB]">
                             <span class="inline-flex items-center gap-2">
                                 <CheckCircle2 class="h-5 w-5 text-[#65D493]" :stroke-width="2" />
-                                Без скрытых платежей
+                                Без отдельных платных дополнений
                             </span>
                             <span class="inline-flex items-center gap-2">
                                 <CheckCircle2 class="h-5 w-5 text-[#65D493]" :stroke-width="2" />
@@ -382,7 +313,7 @@ const comparisonRows = [
                         </div>
                     </div>
 
-                    <div class="relative rounded-[24px] border border-white/15 bg-white/10 p-5 backdrop-blur">
+                    <div class="relative rounded-[22px] border border-white/15 bg-white/10 p-5 backdrop-blur">
                         <div class="flex items-start justify-between gap-4">
                             <div>
                                 <p class="text-xs font-semibold uppercase tracking-[0.14em] text-[#9FC6AE]">Текущий тариф</p>
@@ -391,24 +322,13 @@ const comparisonRows = [
                             <span class="rounded-full bg-[#65D493]/15 px-3 py-1.5 text-xs font-semibold text-[#8DE4B0]">Активен</span>
                         </div>
 
-                        <div class="mt-4 space-y-3">
-                            <div>
-                                <div class="flex items-center justify-between text-sm">
-                                    <span class="text-[#C8D9CF]">Сайты</span>
-                                    <span class="font-semibold text-white">{{ usage.sites }} / {{ limitLabel(effectiveSiteLimit) }}</span>
-                                </div>
-                                <div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                                    <div class="h-full rounded-full bg-[#65D493] transition-all" :style="{ width: `${siteUsagePercent}%` }" />
-                                </div>
+                        <div class="mt-4">
+                            <div class="flex items-center justify-between gap-4 text-sm">
+                                <span class="text-[#C8D9CF]">Активные мониторинги</span>
+                                <span class="font-semibold text-white">{{ usage.active_monitors }} / {{ limitLabel(currentMonitorLimit) }}</span>
                             </div>
-                            <div>
-                                <div class="flex items-center justify-between text-sm">
-                                    <span class="text-[#C8D9CF]">Активные проверки</span>
-                                    <span class="font-semibold text-white">{{ usage.active_monitors }} / {{ usage.monitors }}</span>
-                                </div>
-                                <div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                                    <div class="h-full rounded-full bg-[#A7EAC2] transition-all" :style="{ width: `${activeMonitorPercent}%` }" />
-                                </div>
+                            <div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                                <div class="h-full rounded-full bg-[#65D493] transition-all" :style="{ width: `${monitorUsagePercent}%` }" />
                             </div>
                         </div>
 
@@ -421,12 +341,17 @@ const comparisonRows = [
                                 </div>
                             </div>
                             <div class="flex items-center gap-3 rounded-2xl bg-white/10 p-3">
-                                <Layers3 class="h-5 w-5 shrink-0 text-[#8DE4B0]" :stroke-width="2" />
+                                <Clock3 class="h-5 w-5 shrink-0 text-[#8DE4B0]" :stroke-width="2" />
                                 <div>
-                                    <p class="font-semibold text-white">{{ usage.monitors }}</p>
-                                    <p class="text-xs text-[#B7CCBF]">Всего проверок</p>
+                                    <p class="font-semibold text-white">от {{ currentIntervalMinutes }} мин.</p>
+                                    <p class="text-xs text-[#B7CCBF]">Интервал</p>
                                 </div>
                             </div>
+                        </div>
+
+                        <div class="mt-3 flex items-center justify-between gap-4 text-xs text-[#B7CCBF]">
+                            <span>{{ currentMonitorTypesLabel }}</span>
+                            <span>{{ currentChannelsLabel }}</span>
                         </div>
 
                         <p v-if="currentSubscription?.ends_at" class="mt-4 flex items-center gap-2 text-sm text-[#C8D9CF]">
@@ -458,7 +383,7 @@ const comparisonRows = [
                 <p class="text-sm font-semibold text-[#1E9B5D]">Простые тарифы без лишних условий</p>
                 <h2 class="mt-2 text-3xl font-semibold text-[#26332D]">Найдите подходящий объём мониторинга</h2>
                 <p class="mx-auto mt-3 max-w-2xl text-base leading-7 text-[#6A7A70]">
-                    Во всех тарифах доступны основные типы проверок. Отличаются лимиты сайтов, глубина истории и частота мониторинга.
+                    Сравните лимиты мониторингов, частоту проверок, каналы оповещений, глубину истории и возможности для команды.
                 </p>
             </div>
 
@@ -471,21 +396,28 @@ const comparisonRows = [
                         plan.code === currentPlanCode
                             ? 'border-[#2FA568] shadow-[0_18px_50px_rgba(47,165,104,0.14)]'
                             : 'border-[#DDEBE3] hover:-translate-y-1 hover:border-[#B8D8C5] hover:shadow-[0_18px_45px_rgba(23,59,42,0.09)]',
-                        plan.code === checkoutPlanCode ? 'border-[#173B2A] ring-2 ring-[#173B2A]/10' : '',
-                        isFeatured(plan) && plan.code !== currentPlanCode ? 'ring-1 ring-[#BEE7CE]' : '',
+                        isFeatured(plan) ? 'border-[#21A663] bg-gradient-to-b from-[#F1FCF5] via-white to-white shadow-[0_24px_65px_rgba(30,155,93,0.22)] ring-2 ring-[#21A663]/20 lg:-translate-y-2 lg:hover:-translate-y-3' : '',
                     ]"
                 >
-                    <div v-if="isFeatured(plan)" class="absolute right-5 top-5 rounded-full bg-[#E9F8EF] px-3 py-1.5 text-xs font-semibold text-[#178A50]">
-                        Популярный
+                    <div v-if="isFeatured(plan)" class="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[#49D889] via-[#1E9B5D] to-[#0F6F40]"></div>
+
+                    <div v-if="isFeatured(plan)" class="absolute right-5 top-5 inline-flex items-center gap-1.5 rounded-full bg-[#173B2A] px-3.5 py-2 text-xs font-semibold text-white shadow-[0_8px_20px_rgba(23,59,42,0.22)]">
+                        <Sparkles class="h-3.5 w-3.5 text-[#8DE4B0]" :stroke-width="2.25" />
+                        Популярный выбор
                     </div>
 
                     <div class="flex items-center gap-3">
                         <span
                             class="grid h-11 w-11 place-items-center rounded-2xl border"
-                            :class="plan.code === currentPlanCode ? 'border-[#BEE7CE] bg-[#DDF6E8] text-[#178A50]' : 'border-[#DDEBE3] bg-[#F3F8F5] text-[#52645A]'"
+                            :class="isFeatured(plan)
+                                ? 'border-[#A9E2C0] bg-[#DDF6E8] text-[#178A50] shadow-[0_8px_20px_rgba(30,155,93,0.14)]'
+                                : plan.code === currentPlanCode
+                                    ? 'border-[#BEE7CE] bg-[#DDF6E8] text-[#178A50]'
+                                    : 'border-[#DDEBE3] bg-[#F3F8F5] text-[#52645A]'"
                         >
                             <Globe2 v-if="plan.code === 'free'" class="h-5 w-5" :stroke-width="2" />
                             <Zap v-else-if="isFeatured(plan)" class="h-5 w-5" :stroke-width="2" />
+                            <UsersRound v-else-if="plan.code === 'team'" class="h-5 w-5" :stroke-width="2" />
                             <ShieldCheck v-else class="h-5 w-5" :stroke-width="2" />
                         </span>
                         <div>
@@ -535,10 +467,13 @@ const comparisonRows = [
                         <button
                             v-else
                             type="button"
-                            class="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#173B2A] px-5 text-sm font-semibold text-white transition hover:bg-[#214E38]"
+                            class="flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold text-white transition"
+                            :class="isFeatured(plan)
+                                ? 'bg-[#1E9B5D] shadow-[0_12px_28px_rgba(30,155,93,0.28)] hover:bg-[#178A50] hover:shadow-[0_14px_32px_rgba(30,155,93,0.34)]'
+                                : 'bg-[#173B2A] hover:bg-[#214E38]'"
                             @click="selectPlan(plan)"
                         >
-                            {{ plan.code === checkoutPlanCode ? `${plan.name} выбран` : `Выбрать ${plan.name}` }}
+                            {{ isFeatured(plan) ? `Подключить ${plan.name}` : `Выбрать ${plan.name}` }}
                             <ArrowRight class="h-4 w-4" :stroke-width="2.25" />
                         </button>
                     </div>
@@ -553,128 +488,6 @@ const comparisonRows = [
                 <p>{{ checkoutNotice }}</p>
             </div>
 
-            <div id="billing-addons" v-if="addonCatalog?.length" :class="checkoutNotice ? 'mt-4' : 'mt-10'" class="scroll-mt-24 rounded-[30px] border border-[#DDEBE3] bg-white p-6 sm:p-8">
-                <div>
-                    <div>
-                        <div class="inline-flex items-center gap-2 text-sm font-semibold text-[#1E9B5D]">
-                            <Plus class="h-4 w-4" :stroke-width="2.25" />
-                            Дополнительные возможности
-                        </div>
-                        <h2 class="mt-2 text-2xl font-semibold text-[#26332D] sm:text-3xl">
-                            {{ isPlanCheckout ? `Настройте тариф ${checkoutPlan?.name}` : 'Расширьте тариф точечно' }}
-                        </h2>
-                        <p class="mt-2 max-w-2xl text-sm leading-6 text-[#6A7A70]">
-                            {{ isPlanCheckout
-                                ? 'Добавьте нужные платные типы мониторинга. Тариф и выбранные дополнения попадут в один заказ.'
-                                : 'Подключайте только те проверки и пакеты, которые нужны сейчас. Уменьшение лимитов применяется без оплаты, а увеличение откроет счет только на добавленное количество.'
-                            }}
-                        </p>
-                    </div>
-                </div>
-
-                <div class="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-                    <div>
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <article
-                                v-for="addon in addonCatalog"
-                                :key="addon.code"
-                                class="flex min-h-full flex-col rounded-[22px] border border-[#DDEBE3] bg-[#F8FCFA] p-5 transition hover:border-[#B8D8C5] hover:bg-white"
-                            >
-                                <div class="flex items-start justify-between gap-3">
-                                    <span class="grid h-10 w-10 place-items-center rounded-2xl bg-[#E9F8EF] text-[#1E9B5D]">
-                                        <Zap class="h-5 w-5" :stroke-width="2" />
-                                    </span>
-                                    <span
-                                        class="rounded-full px-2.5 py-1 text-xs font-semibold"
-                                        :class="!isPlanCheckout && addonDraftQuantity(addon.code) < addonQuantity(addon.code) ? 'bg-[#FFF0CF] text-[#A76500]' : 'bg-[#DDF6E8] text-[#178A50]'"
-                                    >
-                                        {{ isPlanCheckout ? (addonDraftQuantity(addon.code) > 0 ? `выбрано ${addonDraftQuantity(addon.code)}` : 'не выбрано') : addonStateLabel(addon) }}
-                                    </span>
-                                </div>
-                                <h3 class="mt-4 text-lg font-semibold text-[#26332D]">{{ addon.name }}</h3>
-                                <p class="mt-2 flex-1 text-sm leading-6 text-[#6A7A70]">{{ addon.description }}</p>
-                                <p class="mt-5 text-lg font-semibold text-[#173B2A]">{{ addonMoney(addon) }}</p>
-                                <div class="mt-4 flex h-11 items-center rounded-2xl border border-[#B8D8C5] bg-white">
-                                    <button
-                                        type="button"
-                                        class="grid h-full w-11 place-items-center rounded-l-2xl text-[#52645A] transition hover:bg-[#F3F8F5] hover:text-[#173B2A] disabled:cursor-not-allowed disabled:opacity-40"
-                                        :disabled="addonDraftQuantity(addon.code) === 0"
-                                        :aria-label="`Уменьшить ${addon.name}`"
-                                        @click="changeAddonQuantity(addon.code, -1)"
-                                    >
-                                        <Minus class="h-4 w-4" :stroke-width="2.25" />
-                                    </button>
-                                    <div class="flex-1 text-center text-sm font-semibold text-[#26332D]">
-                                        {{ addonDraftQuantity(addon.code) }}
-                                    </div>
-                                    <button
-                                        type="button"
-                                        class="grid h-full w-11 place-items-center rounded-r-2xl text-[#178A50] transition hover:bg-[#E9F8EF]"
-                                        :aria-label="`Увеличить ${addon.name}`"
-                                        @click="changeAddonQuantity(addon.code, 1)"
-                                    >
-                                        <Plus class="h-4 w-4" :stroke-width="2.25" />
-                                    </button>
-                                </div>
-                            </article>
-                        </div>
-
-                        <p class="mt-5 rounded-[22px] border border-[#DDEBE3] bg-[#F8FCFA] p-4 text-sm leading-6 text-[#6A7A70]">
-                            При отключении лимита сверхлимитные сайты или платные проверки будут приостановлены автоматически. Вернуть их можно после повторного увеличения лимита.
-                        </p>
-                    </div>
-
-                    <aside class="xl:sticky xl:top-28 xl:self-start">
-                        <div class="rounded-[24px] border border-[#F6C66E] bg-white p-5 shadow-[0_12px_38px_rgba(38,51,45,0.1)]">
-                            <h3 class="text-xl font-semibold text-[#173B2A]">Итого</h3>
-
-                            <div class="mt-4 rounded-3xl bg-[#FFFCF4] p-4">
-                                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[#B7791F]">Сейчас к оплате</p>
-                                <p class="mt-2 text-3xl font-semibold tracking-tight text-[#173B2A]">
-                                    {{ formatCents(isPlanCheckout ? checkoutTotal : addonDueNow) }}
-                                </p>
-                            </div>
-
-                            <div class="mt-5 space-y-3 text-sm">
-                                <div class="flex items-center justify-between gap-4">
-                                    <span class="text-[#6A7A70]">{{ isPlanCheckout ? `Тариф ${checkoutPlan?.name}` : 'Сейчас' }}</span>
-                                    <span class="font-semibold text-[#26332D]">{{ formatCents(isPlanCheckout ? (checkoutPlan?.price_cents ?? 0) : currentAddonMonthlyTotal) }} / мес</span>
-                                </div>
-                                <div class="flex items-center justify-between gap-4">
-                                    <span class="text-[#6A7A70]">{{ isPlanCheckout ? 'Дополнения' : 'После изменений' }}</span>
-                                    <span class="font-semibold text-[#26332D]">{{ formatCents(addonMonthlyTotal) }} / мес</span>
-                                </div>
-                            </div>
-
-                            <div class="mt-5 rounded-3xl bg-[#173B2A] p-4 text-white">
-                                <div class="flex items-end justify-between gap-3">
-                                    <span class="text-sm font-medium text-white/75">Будет списано сейчас</span>
-                                    <span class="text-xl font-semibold">{{ formatCents(isPlanCheckout ? checkoutTotal : addonDueNow) }}</span>
-                                </div>
-                            </div>
-
-                            <button
-                                type="button"
-                                class="mt-5 inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[#2FA568] px-5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(47,165,104,0.22)] transition hover:bg-[#248653] disabled:cursor-not-allowed disabled:bg-[#AAB8B0]"
-                                :disabled="!isPlanCheckout && !hasAddonChanges"
-                                @click="submitAddonChanges"
-                            >
-                                {{ isPlanCheckout || addonDueNow > 0 ? 'Перейти к оплате' : 'Сохранить изменения' }}
-                            </button>
-
-                            <button
-                                type="button"
-                                class="mt-3 inline-flex h-11 w-full items-center justify-center rounded-2xl border border-[#DDEBE3] px-4 text-sm font-semibold text-[#52645A] transition hover:border-[#B8D0C2] hover:text-[#173B2A] disabled:cursor-not-allowed disabled:opacity-40"
-                                :disabled="isPlanCheckout ? addonMonthlyTotal === 0 : !hasAddonChanges"
-                                @click="resetAddonDrafts"
-                            >
-                                Сбросить
-                            </button>
-                        </div>
-                    </aside>
-                </div>
-            </div>
-
             <div class="mt-10 overflow-hidden rounded-[30px] border border-[#DDEBE3] bg-white">
                 <div class="border-b border-[#DDEBE3] px-6 py-6 sm:px-8">
                     <p class="text-sm font-semibold text-[#1E9B5D]">Подробное сравнение</p>
@@ -686,9 +499,18 @@ const comparisonRows = [
                         <thead class="bg-[#F6FBF8] text-xs font-semibold uppercase tracking-[0.08em] text-[#6A7A70]">
                             <tr>
                                 <th class="px-6 py-4 sm:px-8">Параметр</th>
-                                <th v-for="plan in plans" :key="plan.code" class="px-6 py-4">
-                                    <div class="flex items-center gap-2">
-                                        {{ plan.name }}
+                                <th
+                                    v-for="plan in plans"
+                                    :key="plan.code"
+                                    class="px-6 py-4"
+                                    :class="isFeatured(plan) ? 'border-x border-[#CDE9D8] bg-[#EAF8F0]' : ''"
+                                >
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span :class="isFeatured(plan) ? 'font-bold text-[#173B2A]' : ''">{{ plan.name }}</span>
+                                        <span v-if="isFeatured(plan)" class="inline-flex items-center gap-1 rounded-full bg-[#173B2A] px-2.5 py-1 text-[10px] font-semibold normal-case tracking-normal text-white">
+                                            <Sparkles class="h-3 w-3 text-[#8DE4B0]" :stroke-width="2.25" />
+                                            популярный
+                                        </span>
                                         <span v-if="plan.code === currentPlanCode" class="rounded-full bg-[#DDF6E8] px-2 py-1 text-[10px] normal-case tracking-normal text-[#178A50]">текущий</span>
                                     </div>
                                 </th>
@@ -697,7 +519,12 @@ const comparisonRows = [
                         <tbody class="divide-y divide-[#E5EFE9]">
                             <tr v-for="row in comparisonRows" :key="row.key" class="transition hover:bg-[#FAFCFB]">
                                 <td class="px-6 py-4 font-semibold text-[#26332D] sm:px-8">{{ row.label }}</td>
-                                <td v-for="plan in plans" :key="`${row.key}-${plan.code}`" class="px-6 py-4 leading-6 text-[#52645A]">
+                                <td
+                                    v-for="plan in plans"
+                                    :key="`${row.key}-${plan.code}`"
+                                    class="px-6 py-4 leading-6 text-[#52645A]"
+                                    :class="isFeatured(plan) ? 'border-x border-[#E0F0E6] bg-[#F5FBF7] font-medium text-[#294A38]' : ''"
+                                >
                                     {{ comparisonValue(plan, row.key) }}
                                 </td>
                             </tr>
@@ -708,7 +535,7 @@ const comparisonRows = [
 
             <div class="mt-6 flex flex-col gap-3 rounded-[24px] border border-[#DDEBE3] bg-[#F6FBF8] p-5 text-sm leading-6 text-[#6A7A70] sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <p>
-                    Оплачивая тариф или дополнение, вы принимаете условия
+                    Оплачивая тариф, вы принимаете условия
                     <Link href="/offers" class="font-semibold text-[#178A50] transition hover:text-[#126F41]">публичной оферты</Link>.
                 </p>
                 <span class="inline-flex shrink-0 items-center gap-2 font-medium text-[#52645A]">
