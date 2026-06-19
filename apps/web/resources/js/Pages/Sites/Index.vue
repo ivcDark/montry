@@ -10,6 +10,7 @@ import {
     Globe2,
     LayoutGrid,
     LoaderCircle,
+    MoreHorizontal,
     Minus,
     Pause,
     Plus,
@@ -101,6 +102,7 @@ const viewMode = ref<'table' | 'cards'>('table')
 const checkingSiteIds = ref<string[]>([])
 const checkingStartedFrom = ref<Record<string, string | null>>({})
 const checkingTimeouts = ref<Record<string, ReturnType<typeof setTimeout>>>({})
+const openActionsSiteId = ref<string | null>(null)
 const siteLimitToastToken = ref(0)
 const siteLimitToastMessage = ref<string | null>(null)
 
@@ -359,18 +361,16 @@ function responseText(site: Site): string {
     return response === null ? '-' : `${response} мс`
 }
 
+function projectName(site: Site): string {
+    return site.project?.name ?? 'Без проекта'
+}
+
 function problemText(site: Site): string {
     if (site.status === 'ok') return 'Нет проблем'
     if (site.status === 'paused') return 'Мониторинг приостановлен'
     if (site.status === 'empty') return 'Мониторинги не настроены'
 
     return site.problem_label
-}
-
-function tinyBars(site: Site): number[] {
-    const seed = site.name.length + site.url.length
-
-    return Array.from({ length: 10 }, (_, index) => 12 + ((seed + index * 7) % 20))
 }
 
 function monitorIcon(monitor: Monitor): typeof Check {
@@ -437,6 +437,10 @@ function checkNow(site: Site): void {
             stopChecking(site.id)
         },
     })
+}
+
+function toggleActions(siteId: string): void {
+    openActionsSiteId.value = openActionsSiteId.value === siteId ? null : siteId
 }
 
 function checkAllVisible(): void {
@@ -670,138 +674,126 @@ function handleCreateSiteClick(event: MouseEvent): void {
 
             <section
                 v-if="filteredSites.length && viewMode === 'table'"
-                class="mt-8 overflow-hidden rounded-3xl border border-[#DDEBE3] bg-white shadow-[0_16px_44px_rgba(31,68,49,0.06)]"
+                class="mt-8 overflow-visible rounded-3xl border border-[#DDEBE3] bg-white shadow-[0_16px_44px_rgba(31,68,49,0.06)]"
             >
-                <div class="overflow-x-auto">
-                    <table class="w-full min-w-[1020px] table-fixed border-separate border-spacing-0 text-left text-sm">
-                        <colgroup>
-                            <col class="w-[230px]">
-                            <col class="w-[210px]">
-                            <col class="w-[210px]">
-                            <col class="w-[110px]">
-                            <col class="w-[100px]">
-                            <col class="w-[110px]">
-                            <col class="w-[120px]">
-                        </colgroup>
-                        <thead class="bg-[#FBFDFC] text-xs font-semibold text-[#6A7A70]">
-                            <tr>
-                                <th class="px-5 py-4">Сайт</th>
-                                <th class="px-5 py-4">Статус</th>
-                                <th class="px-5 py-4">Проверки</th>
-                                <th class="px-5 py-4">Успешность</th>
-                                <th class="px-5 py-4">Ответ</th>
-                                <th class="px-5 py-4">Последняя</th>
-                                <th class="px-5 py-4">Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr
-                                v-for="site in filteredSites"
-                                :key="site.id"
-                                :class="rowClass(site.status)"
-                            >
-                                <td class="relative border-t border-[#DDEBE3] px-5 py-4">
-                                    <span class="absolute bottom-0 left-0 top-0 w-1" :class="rowAccentClass(site.status)"></span>
-                                    <div class="flex items-start gap-3">
-                                        <span
-                                            class="grid h-9 w-9 shrink-0 place-items-center rounded-xl border"
-                                            :class="isChecking(site) ? 'border-[#BFEBD0] bg-white text-[#24A869]' : statusIconBoxClass(site.status)"
-                                        >
-                                            <LoaderCircle v-if="isChecking(site)" class="h-4 w-4 animate-spin" :stroke-width="2.2" />
-                                            <component v-else :is="siteStatusIcon(site.status)" class="h-4 w-4" :stroke-width="2.2" />
-                                        </span>
-                                        <div class="min-w-0">
-                                            <Link :href="`/sites/${site.id}`" class="font-semibold text-[#17231C] hover:text-[#1E9B5D]">
-                                                {{ site.name }}
-                                            </Link>
-                                            <p class="mt-1 max-w-44 truncate text-sm text-[#6A7A70]">{{ site.host ?? site.url }}</p>
-                                            <p class="mt-2 inline-flex rounded-full bg-[#EEF4F0] px-3 py-1 text-xs font-medium text-[#52645A]">
-                                                Проект: {{ site.project?.name ?? 'Без проекта' }}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </td>
-
-                                <td class="border-t border-[#DDEBE3] px-5 py-4">
-                                    <span class="inline-flex rounded-full px-3 py-1.5 text-xs font-medium" :class="statusClass(site.status)">
-                                        <component :is="siteStatusIcon(site.status)" class="mr-1 inline h-3.5 w-3.5 align-[-3px]" :stroke-width="2.2" />
-                                        {{ statusLabel(site.status) }}
-                                    </span>
-                                    <p
-                                        class="mt-1.5 text-xs font-medium leading-5"
-                                        :class="site.status === 'ok' ? 'text-[#159653]' : site.status === 'warning' ? 'text-[#D97706]' : site.status === 'down' ? 'text-[#E11D25]' : 'text-[#6A7A70]'"
-                                    >
-                                        {{ problemText(site) }}
-                                    </p>
-                                </td>
-
-                                <td class="border-t border-[#DDEBE3] px-5 py-4">
-                                    <p class="font-semibold" :class="monitorsSummaryClass(site)">
-                                        {{ successfulMonitorsCount(site) }}/{{ site.monitors_count }} успешно
-                                    </p>
-                                    <div class="mt-2 flex flex-wrap gap-1.5">
-                                        <span
-                                            v-for="monitor in site.monitors.slice(0, 5)"
-                                            :key="monitor.id"
-                                            class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium"
-                                            :class="monitorBadgeClass(monitor)"
-                                        >
-                                            <component :is="monitorIcon(monitor)" class="h-3.5 w-3.5" :stroke-width="2.2" />
-                                            {{ monitorTypeLabel(monitor.type) }}
-                                        </span>
-                                    </div>
-                                </td>
-
-                                <td class="border-t border-[#DDEBE3] px-5 py-4">
-                                    <p class="font-semibold" :class="site.status === 'down' ? 'text-[#E11D25]' : 'text-[#159653]'">{{ successRateText(site) }}</p>
-                                    <div class="mt-2 flex h-7 items-end gap-1">
-                                        <span
-                                            v-for="(height, index) in tinyBars(site)"
-                                            :key="index"
-                                            class="w-1.5 rounded-t-full"
-                                            :class="site.status === 'down' ? 'bg-[#EF6B6B]' : site.status === 'warning' ? 'bg-[#F3A83B]' : 'bg-[#62C98F]'"
-                                            :style="{ height: `${height}px` }"
-                                        ></span>
-                                    </div>
-                                </td>
-
-                                <td class="border-t border-[#DDEBE3] px-5 py-4">
-                                    <p class="font-semibold text-[#26332D]">{{ responseText(site) }}</p>
-                                </td>
-
-                                <td class="whitespace-nowrap border-t border-[#DDEBE3] px-5 py-4 text-[#6A7A70]">
-                                    {{ relativeDate(site.last_checked_at) }}
-                                </td>
-
-                                <td class="border-t border-[#DDEBE3] px-5 py-4">
-                                    <div class="flex items-center gap-2">
-                                        <button
-                                            type="button"
-                                            class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#D4E3DA] text-xs font-medium text-[#26332D] transition enabled:hover:border-[#24A869] enabled:hover:text-[#1E9B5D] disabled:cursor-not-allowed disabled:opacity-60"
-                                            :disabled="site.enabled_monitors_count === 0 || isChecking(site)"
-                                            title="Проверить сейчас"
-                                            @click="checkNow(site)"
-                                        >
-                                            <span
-                                                v-if="isChecking(site)"
-                                                class="h-4 w-4 animate-spin rounded-full border-2 border-[#24A869]/25 border-t-[#24A869]"
-                                                aria-hidden="true"
-                                            />
-                                            <RotateCw v-else class="h-4 w-4" :stroke-width="2" />
-                                        </button>
-                                        <Link
-                                            :href="`/sites/${site.id}`"
-                                            class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#D4E3DA] px-4 text-sm font-medium text-[#26332D] transition hover:border-[#24A869] hover:text-[#1E9B5D]"
-                                        >
-                                            <ExternalLink class="h-4 w-4" :stroke-width="2" />
-                                            Открыть
-                                        </Link>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div class="hidden grid-cols-[minmax(190px,1.45fr)_minmax(130px,.9fr)_minmax(160px,1fr)_90px_105px_40px] gap-4 rounded-t-3xl bg-[#FBFDFC] px-5 py-3 text-xs font-semibold text-[#6A7A70] xl:grid">
+                    <span>Сайт</span>
+                    <span>Состояние</span>
+                    <span>Мониторинги</span>
+                    <span>Успешность</span>
+                    <span>Последняя</span>
+                    <span class="sr-only">Действия</span>
                 </div>
+
+                <article
+                    v-for="site in filteredSites"
+                    :key="site.id"
+                    class="relative grid gap-4 border-t border-[#DDEBE3] px-4 py-3.5 first-of-type:border-t-0 xl:grid-cols-[minmax(190px,1.45fr)_minmax(130px,.9fr)_minmax(160px,1fr)_90px_105px_40px] xl:items-center xl:px-5"
+                    :class="rowClass(site.status)"
+                >
+                    <span class="absolute bottom-0 left-0 top-0 w-1" :class="rowAccentClass(site.status)"></span>
+
+                    <div class="flex min-w-0 items-center gap-3 pr-10 xl:pr-0">
+                        <span
+                            class="grid h-9 w-9 shrink-0 place-items-center rounded-xl border"
+                            :class="isChecking(site) ? 'border-[#BFEBD0] bg-white text-[#24A869]' : statusIconBoxClass(site.status)"
+                        >
+                            <LoaderCircle v-if="isChecking(site)" class="h-4 w-4 animate-spin" :stroke-width="2.2" />
+                            <component v-else :is="siteStatusIcon(site.status)" class="h-4 w-4" :stroke-width="2.2" />
+                        </span>
+                        <div class="min-w-0">
+                            <Link :href="`/sites/${site.id}`" class="block truncate font-semibold text-[#17231C] hover:text-[#1E9B5D]">
+                                {{ site.name }}
+                            </Link>
+                            <div class="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-[#6A7A70]">
+                                <span class="truncate">{{ site.host ?? site.url }}</span>
+                                <span class="shrink-0 text-[#B0BCB5]">•</span>
+                                <span class="truncate">{{ projectName(site) }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex min-w-0 items-center justify-between gap-3 lg:block">
+                        <span class="text-xs font-medium text-[#8A9A91] xl:hidden">Состояние</span>
+                        <div class="min-w-0 text-right xl:text-left">
+                            <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium" :class="statusClass(site.status)">
+                                {{ statusLabel(site.status) }}
+                            </span>
+                            <p
+                                class="mt-1 truncate text-xs font-medium"
+                                :class="site.status === 'ok' ? 'text-[#159653]' : site.status === 'warning' ? 'text-[#D97706]' : site.status === 'down' ? 'text-[#E11D25]' : 'text-[#6A7A70]'"
+                            >
+                                {{ problemText(site) }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex min-w-0 items-center justify-between gap-3 lg:block">
+                        <span class="text-xs font-medium text-[#8A9A91] xl:hidden">Мониторинги</span>
+                        <div class="flex flex-wrap justify-end gap-1.5 xl:justify-start">
+                            <span
+                                v-for="monitor in site.monitors.slice(0, 5)"
+                                :key="monitor.id"
+                                class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium"
+                                :class="monitorBadgeClass(monitor)"
+                            >
+                                <component :is="monitorIcon(monitor)" class="h-3 w-3" :stroke-width="2.2" />
+                                {{ monitorTypeLabel(monitor.type) }}
+                            </span>
+                            <span v-if="site.monitors.length > 5" class="rounded-full bg-[#EEF4F0] px-2 py-1 text-[11px] font-medium text-[#52645A]">
+                                +{{ site.monitors.length - 5 }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-3 lg:block">
+                        <span class="text-xs font-medium text-[#8A9A91] xl:hidden">Успешность</span>
+                        <div class="flex items-center gap-2 xl:block">
+                            <p class="text-sm font-semibold" :class="site.status === 'down' ? 'text-[#E11D25]' : 'text-[#159653]'">{{ successRateText(site) }}</p>
+                            <p class="text-xs text-[#6A7A70]">{{ responseText(site) }}</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-3">
+                        <span class="text-xs font-medium text-[#8A9A91] xl:hidden">Последняя</span>
+                        <span class="whitespace-nowrap text-xs text-[#6A7A70]">{{ relativeDate(site.last_checked_at) }}</span>
+                    </div>
+
+                    <div class="absolute right-3 top-3 xl:relative xl:right-auto xl:top-auto">
+                        <button
+                            type="button"
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-[#6A7A70] transition hover:bg-[#EEF4F0] hover:text-[#173B2A]"
+                            :aria-expanded="openActionsSiteId === site.id"
+                            title="Действия"
+                            @click="toggleActions(site.id)"
+                        >
+                            <MoreHorizontal class="h-5 w-5" :stroke-width="2" />
+                        </button>
+
+                        <div
+                            v-if="openActionsSiteId === site.id"
+                            class="absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-2xl border border-[#DDEBE3] bg-white p-1.5 shadow-[0_18px_48px_rgba(23,59,42,0.16)]"
+                        >
+                            <Link
+                                :href="`/sites/${site.id}`"
+                                class="flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-[#26332D] hover:bg-[#F3F8F5]"
+                            >
+                                <ExternalLink class="h-4 w-4 text-[#6A7A70]" :stroke-width="2" />
+                                Открыть сайт
+                            </Link>
+                            <button
+                                type="button"
+                                class="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-[#26332D] transition enabled:hover:bg-[#F3F8F5] disabled:cursor-not-allowed disabled:opacity-50"
+                                :disabled="site.enabled_monitors_count === 0 || isChecking(site)"
+                                @click="checkNow(site); openActionsSiteId = null"
+                            >
+                                <LoaderCircle v-if="isChecking(site)" class="h-4 w-4 animate-spin text-[#24A869]" :stroke-width="2" />
+                                <RotateCw v-else class="h-4 w-4 text-[#6A7A70]" :stroke-width="2" />
+                                Проверить сейчас
+                            </button>
+                        </div>
+                    </div>
+                </article>
             </section>
 
             <section

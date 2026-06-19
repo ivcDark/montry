@@ -96,8 +96,6 @@ const currentYear = new Date().getFullYear()
 const planName = computed(() => billingSummary.value?.plan?.name ?? 'Free')
 const monitorsCurrent = computed(() => billingSummary.value?.monitors.current ?? 0)
 const monitorsLimit = computed(() => billingSummary.value?.monitors.limit ?? null)
-const sitesCurrent = computed(() => billingSummary.value?.sites.current ?? 0)
-const sitesLimit = computed(() => billingSummary.value?.sites.limit ?? null)
 const userInitial = computed(() => (user?.name || user?.email || 'M').trim().slice(0, 1).toUpperCase())
 const supportForm = useForm({
     name: user?.name ?? '',
@@ -216,11 +214,11 @@ function submitProductIdea(): void {
                 <div class="mt-4 space-y-4">
                     <div>
                         <div class="flex items-center justify-between gap-3 text-sm">
-                            <span class="font-medium text-[#6A7A70]">Сайты</span>
-                            <span class="font-medium text-[#26332D]">{{ sitesCurrent }} / {{ limitLabel(sitesLimit) }}</span>
+                            <span class="font-medium text-[#6A7A70]">Мониторинги</span>
+                            <span class="font-medium text-[#26332D]">{{ monitorsCurrent }} / {{ limitLabel(monitorsLimit) }}</span>
                         </div>
                         <div class="mt-2 h-2 overflow-hidden rounded-full bg-[#E2ECE6]">
-                            <div class="h-full rounded-full bg-[#2FA568]" :style="{ width: `${usagePercent(sitesCurrent, sitesLimit)}%` }" />
+                            <div class="h-full rounded-full bg-[#2FA568]" :style="{ width: `${usagePercent(monitorsCurrent, monitorsLimit)}%` }" />
                         </div>
                     </div>
                 </div>
@@ -307,7 +305,7 @@ function submitProductIdea(): void {
                         <p class="mt-2 truncate text-sm font-medium text-[#6A7A70] lg:mt-0">{{ organization.name }}</p>
                         <div class="mt-1 flex flex-wrap items-center gap-2">
                             <span class="rounded-full bg-[#E9F8EF] px-3 py-1 text-xs font-medium text-[#1E9B5D]">Тариф {{ planName }}</span>
-                            <span class="rounded-full bg-[#F3F8F5] px-3 py-1 text-xs font-medium text-[#52645A]">Сайты: {{ sitesCurrent }} / {{ limitLabel(sitesLimit) }}</span>
+                            <span class="rounded-full bg-[#F3F8F5] px-3 py-1 text-xs font-medium text-[#52645A]">Мониторинги: {{ monitorsCurrent }} / {{ limitLabel(monitorsLimit) }}</span>
                         </div>
                     </div>
 

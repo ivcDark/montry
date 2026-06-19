@@ -24,7 +24,7 @@ import {
     History,
     LoaderCircle,
     Pause,
-    Plus,
+    Play,
     RotateCw,
     Settings,
     ShieldCheck,
@@ -47,19 +47,25 @@ type Project = {
     name: string
 }
 
-type AddonCatalogItem = {
+type MonitorTypeOption = {
+    value: string
     code: string
+    label: string
     name: string
-    unit_price_cents: number
-    unit_label?: string
-    kind?: string
+    description: string
+    is_paid: boolean
+    sort_order: number
+    default_interval_seconds: number
+    ui_meta?: {
+        title?: string
+    }
 }
 
-type CurrentPlan = {
-    code: string
-    name: string
-    price_cents?: number | null
-    limits?: Record<string, any>
+type Usage = {
+    monitors: number
+    monitor_limit: number | null
+    minimum_check_interval_seconds: number | null
+    allowed_monitor_types: string[] | null
 }
 
 type MonitorSettings = {
@@ -205,9 +211,8 @@ type MonitorDraft = {
 const props = defineProps<{
     organization: Organization
     site: Site
-    currentPlan: CurrentPlan | null
-    addonCatalog: AddonCatalogItem[]
-    currentAddons: Record<string, { quantity: number, unit_price_cents: number, currency: string }>
+    monitorTypes: MonitorTypeOption[]
+    usage: Usage
 }>()
 
 useAutoRefresh({
@@ -223,48 +228,19 @@ const checkingTimeouts = ref<Record<string, ReturnType<typeof setTimeout>>>({})
 const checkingSite = ref(false)
 const checkingSiteStartedFrom = ref<string | null>(null)
 const checkingSiteTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
-const selectedPaidAddonTypes = ref<string[]>([])
-const paymentProcessing = ref(false)
 const monitorDrafts = ref<Record<string, MonitorDraft>>(
     Object.fromEntries(props.site.monitors.map((monitor) => [monitor.id, draftFromMonitor(monitor)])),
 )
-const intervalPresets = [5, 10, 15, 30, 60, 360, 720, 1440]
-const availableIntervalPresets = computed(() => intervalPresets)
+const minimumIntervalMinutes = computed(() => Math.max(1, Math.ceil((props.usage.minimum_check_interval_seconds ?? 300) / 60)))
+const intervalPresets = [1, 5, 10, 15, 30, 60, 360, 720, 1440]
+const availableIntervalPresets = computed(() => intervalPresets.filter((minutes) => minutes >= minimumIntervalMinutes.value))
 
 const activeMonitors = computed(() => props.site.monitors.filter((monitor) => monitor.is_configured && monitor.is_available && monitor.is_enabled))
-const freeActiveMonitors = computed(() => props.site.monitors.filter((monitor) => !monitor.is_paid_addon && monitor.is_enabled))
-const freePausedMonitors = computed(() => props.site.monitors.filter((monitor) => !monitor.is_paid_addon && !monitor.is_enabled))
-const paidActiveMonitors = computed(() => props.site.monitors.filter((monitor) => monitor.is_paid_addon && monitor.is_enabled))
-const paidPausedMonitors = computed(() => props.site.monitors.filter((monitor) => monitor.is_paid_addon && !monitor.is_enabled))
-const enabledCount = computed(() => freeActiveMonitors.value.length)
-const inactiveCount = computed(() => freePausedMonitors.value.length)
-const paidActiveCount = computed(() => paidActiveMonitors.value.length)
-const paidPausedCount = computed(() => paidPausedMonitors.value.length)
+const enabledCount = computed(() => activeMonitors.value.length)
+const inactiveCount = computed(() => props.site.monitors.filter((monitor) => monitor.is_configured && monitor.is_available && !monitor.is_enabled).length)
 const availableCount = computed(() => props.site.monitors.filter((monitor) => monitor.is_available).length)
-const planCode = computed(() => props.currentPlan?.code ?? 'free')
-const displayPlan = computed(() => ({
-    name: props.currentPlan?.name ?? 'Free',
-    priceRub: props.currentPlan?.price_cents ? Math.round(props.currentPlan.price_cents / 100) : 0,
-}))
-const selectedPaidMonitors = computed(() => props.site.monitors.filter((monitor) => selectedPaidAddonTypes.value.includes(monitor.type)))
-const addonTotalRub = computed(() => selectedPaidMonitors.value.reduce((sum, monitor) => sum + addonPriceRub(monitor.type), 0))
-const currentAddonMonthlyRub = computed(() => Object.values(props.currentAddons).reduce((sum, addon) => {
-    return sum + Math.round((addon.unit_price_cents * addon.quantity) / 100)
-}, 0))
-const currentMonthlyRub = computed(() => displayPlan.value.priceRub + currentAddonMonthlyRub.value)
-const nextMonthlyRub = computed(() => currentMonthlyRub.value + addonTotalRub.value)
-const checkoutAmountRub = computed(() => addonTotalRub.value)
-const selectedAddonQuantities = computed<Record<string, number>>(() => {
-    const quantities = Object.fromEntries(
-        Object.entries(props.currentAddons).map(([code, addon]) => [code, addon.quantity]),
-    ) as Record<string, number>
-
-    for (const type of selectedPaidAddonTypes.value) {
-        quantities[type] = (quantities[type] ?? 0) + 1
-    }
-
-    return quantities
-})
+const unavailableCount = computed(() => props.site.monitors.length - availableCount.value)
+const isMonitorLimitReached = computed(() => props.usage.monitor_limit !== null && props.usage.monitors >= props.usage.monitor_limit)
 const activeIncidentCount = computed(() => props.site.incidents.filter((incident) => incident.status === 'open').length)
 const latestCheckAt = computed(() => {
     const dates = props.site.monitors
@@ -529,15 +505,13 @@ function monitorActivityClass(monitor: Monitor): string {
 }
 
 function monitorAccessLabel(monitor: Monitor): string {
-    if (monitor.is_paid_addon) return 'Платная'
-
-    return 'В тарифе'
+    return monitor.is_available ? 'В тарифе' : 'Недоступно на тарифе'
 }
 
 function monitorAccessClass(monitor: Monitor): string {
-    if (monitor.is_paid_addon) return 'border-[#E8D7A3] bg-[#FFF8E4] text-[#9A6A11]'
-
-    return 'border-[#D7E4DC] bg-white text-[#52645A]'
+    return monitor.is_available
+        ? 'border-[#D7E4DC] bg-white text-[#52645A]'
+        : 'border-[#D7DDDA] bg-[#ECEFF1] text-[#64706A]'
 }
 
 function monitorStatus(monitor: Monitor): string {
@@ -551,30 +525,22 @@ function monitorStatus(monitor: Monitor): string {
     return 'unknown'
 }
 
+function typeDefinition(type: string): MonitorTypeOption | undefined {
+    return props.monitorTypes.find((item) => item.code === type || item.value === type)
+}
+
 function typeLabel(type: string): string {
-    return {
-        http: 'Доступность сайта',
-        ssl: 'SSL',
-        domain: 'Домен',
-        dns: 'DNS',
-        robots_txt: 'Robots.txt',
-        sitemap_xml: 'Sitemap.xml',
-        tcp_port: 'TCP-порт',
-        api_endpoint: 'API endpoint',
-    }[type] ?? type.toUpperCase()
+    const definition = typeDefinition(type)
+
+    return definition?.ui_meta?.title ?? definition?.name ?? type.toUpperCase()
+}
+
+function typeDescription(type: string): string {
+    return typeDefinition(type)?.description ?? ''
 }
 
 function shortTypeLabel(type: string): string {
-    return {
-        http: 'HTTP',
-        ssl: 'SSL',
-        domain: 'Domain',
-        dns: 'DNS',
-        robots_txt: 'Robots',
-        sitemap_xml: 'Sitemap',
-        tcp_port: 'TCP',
-        api_endpoint: 'API',
-    }[type] ?? type.toUpperCase()
+    return typeDefinition(type)?.label ?? type.toUpperCase()
 }
 
 function typeIcon(type: string): typeof Globe2 {
@@ -583,62 +549,6 @@ function typeIcon(type: string): typeof Globe2 {
     if (type === 'robots_txt' || type === 'sitemap_xml') return FileText
 
     return Activity
-}
-
-function addonPriceRub(type: string): number {
-    const item = props.addonCatalog.find((addon) => addon.code === type)
-
-    if (item) {
-        return Math.round(item.unit_price_cents / 100)
-    }
-
-    const fallbackPrices: Record<string, number> = {
-        sitemap_xml: 20,
-        api_endpoint: 30,
-        tcp_port: 20,
-    }
-
-    return fallbackPrices[type] ?? 0
-}
-
-function addonUnitLabel(type: string): string {
-    if (type === 'api_endpoint') return 'endpoint'
-    if (type === 'tcp_port') return 'порт'
-
-    return 'мес'
-}
-
-function money(value: number): string {
-    return `${new Intl.NumberFormat('ru-RU').format(value)} ₽/мес`
-}
-
-function togglePaidAddonSelection(monitor: Monitor): void {
-    if (!monitor.is_paid_addon || monitor.is_available) return
-
-    selectedPaidAddonTypes.value = selectedPaidAddonTypes.value.includes(monitor.type)
-        ? selectedPaidAddonTypes.value.filter((type) => type !== monitor.type)
-        : [...selectedPaidAddonTypes.value, monitor.type]
-}
-
-function removePaidAddonSelection(type: string): void {
-    selectedPaidAddonTypes.value = selectedPaidAddonTypes.value.filter((selectedType) => selectedType !== type)
-}
-
-function checkoutPaidAddons(): void {
-    if (!selectedPaidAddonTypes.value.length || paymentProcessing.value) return
-
-    router.post('/billing/checkout', {
-        plan_code: planCode.value,
-        addons: selectedAddonQuantities.value,
-    }, {
-        preserveScroll: true,
-        onStart: () => {
-            paymentProcessing.value = true
-        },
-        onFinish: () => {
-            paymentProcessing.value = false
-        },
-    })
 }
 
 function typeClass(type: string): string {
@@ -650,8 +560,7 @@ function typeClass(type: string): string {
 }
 
 function monitorCardClass(monitor: Monitor): string {
-    if (monitor.is_paid_addon && !monitor.is_enabled) return 'border-[#E8D7A3] bg-[#FFFCF0]'
-    if (monitor.is_paid_addon) return 'border-[#E8D7A3] bg-white'
+    if (!monitor.is_available) return 'border-[#D9DEDB] bg-[#F1F4F2]'
     if (!monitor.is_enabled) return 'border-[#D7E4DC] bg-[#F5FAF7]'
 
     const status = monitorStatus(monitor)
@@ -663,31 +572,25 @@ function monitorCardClass(monitor: Monitor): string {
     return 'border-[#DDEBE3] bg-white'
 }
 
-function settingsPanelClass(monitor: Monitor): string {
-    return monitor.is_paid_addon
-        ? 'mt-5 grid gap-4 border-t border-[#EADFD0] pt-4 md:grid-cols-2'
-        : 'mt-5 grid gap-4 border-t border-[#DDEBE3] pt-4 md:grid-cols-2'
+function settingsPanelClass(_monitor: Monitor): string {
+    return 'mt-5 grid gap-4 border-t border-[#DDEBE3] pt-4 md:grid-cols-2'
 }
 
-function settingsInputClass(monitor: Monitor): string {
-    return monitor.is_paid_addon
-        ? 'h-11 w-full rounded-2xl border border-[#F6C66E]/70 bg-white px-4 text-sm outline-none focus:border-[#E08600] focus:ring-4 focus:ring-[#E08600]/15'
-        : 'h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15'
+function settingsInputClass(_monitor: Monitor): string {
+    return 'h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15'
 }
 
-function settingsTextareaClass(monitor: Monitor): string {
-    return monitor.is_paid_addon
-        ? 'w-full rounded-2xl border border-[#F6C66E]/70 bg-white px-4 py-3 text-sm outline-none focus:border-[#E08600] focus:ring-4 focus:ring-[#E08600]/15'
-        : 'w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 py-3 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15'
+function settingsTextareaClass(_monitor: Monitor): string {
+    return 'w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 py-3 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15'
 }
 
-function settingsAccentClass(monitor: Monitor): string {
-    return monitor.is_paid_addon ? 'text-[#E08600]' : 'text-[#1E9B5D]'
+function settingsAccentClass(_monitor: Monitor): string {
+    return 'text-[#1E9B5D]'
 }
 
 function intervalPresetClass(monitor: Monitor, minutes: number): string {
     if (intervalMinutes(monitorDrafts.value[monitor.id].interval_seconds) === minutes) {
-        return monitor.is_paid_addon ? 'bg-[#E08600] text-white' : 'bg-[#2FA568] text-white'
+        return 'bg-[#2FA568] text-white'
     }
 
     return 'bg-white text-[#52645A] ring-1 ring-[#DDEBE3] hover:text-[#173B2A]'
@@ -757,7 +660,7 @@ function intervalMinutes(seconds: number): number {
 }
 
 function setDraftIntervalMinutes(draft: MonitorDraft, minutes: number): void {
-    draft.interval_seconds = minutes * 60
+    draft.interval_seconds = Math.max(minutes, minimumIntervalMinutes.value) * 60
 }
 
 function formatDuration(seconds: number | null): string {
@@ -1079,6 +982,13 @@ function toggleMonitor(monitor: Monitor): void {
     })
 }
 
+function canToggleMonitor(monitor: Monitor): boolean {
+    if (!monitor.is_available) return false
+    if (monitor.is_enabled) return true
+
+    return !isMonitorLimitReached.value
+}
+
 function isChecking(monitor: Monitor): boolean {
     return monitor.is_checking || checkingMonitorIds.value.includes(monitor.id)
 }
@@ -1193,7 +1103,7 @@ function sparkClass(status: string): string {
             </Link>
         </template>
 
-        <div class="mx-auto grid max-w-7xl gap-6 px-5 py-5 sm:px-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:py-6">
+        <div class="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-5 py-5 sm:px-8 lg:py-6">
             <main class="min-w-0 space-y-6">
                 <section class="rounded-3xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
                     <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
@@ -1224,32 +1134,49 @@ function sparkClass(status: string): string {
                             </div>
                         </div>
 
-                        <div class="flex flex-wrap gap-2">
-                            <button
-                                type="button"
-                                class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#2FA568] px-4 text-sm font-medium text-white transition hover:bg-[#278C58] disabled:cursor-not-allowed disabled:opacity-70"
-                                :disabled="isSiteChecking"
-                                @click="checkSiteNow"
-                            >
-                                <LoaderCircle v-if="isSiteChecking" class="h-4 w-4 animate-spin" :stroke-width="2" />
-                                <RotateCw v-else class="h-4 w-4" :stroke-width="2" />
-                                Запустить проверку
-                            </button>
-                            <Link
-                                :href="`/sites/${site.id}/monitors/create`"
-                                class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#D4E3DA] bg-white px-4 text-sm font-medium text-[#26332D] transition hover:border-[#24A869] hover:text-[#1E9B5D]"
-                            >
-                                <Plus class="h-4 w-4" :stroke-width="2" />
-                                Добавить проверку
-                            </Link>
-                            <button
-                                type="button"
-                                class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#FECACA] bg-white px-4 text-sm font-medium text-[#E11D25] transition hover:bg-[#FFF4F4]"
-                                @click="isDeleteModalOpen = true"
-                            >
-                                <Trash2 class="h-4 w-4" :stroke-width="2" />
-                                Удалить сайт
-                            </button>
+                        <div class="xl:max-w-[620px]">
+                            <div class="flex flex-wrap gap-2 xl:justify-end">
+                                <button
+                                    type="button"
+                                    class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#2FA568] px-4 text-sm font-medium text-white transition hover:bg-[#278C58] disabled:cursor-not-allowed disabled:opacity-70"
+                                    :disabled="isSiteChecking"
+                                    @click="checkSiteNow"
+                                >
+                                    <LoaderCircle v-if="isSiteChecking" class="h-4 w-4 animate-spin" :stroke-width="2" />
+                                    <RotateCw v-else class="h-4 w-4" :stroke-width="2" />
+                                    Запустить проверку
+                                </button>
+                                <Link
+                                    :href="`/sites/${site.id}/edit`"
+                                    class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#D4E3DA] bg-white px-4 text-sm font-medium text-[#26332D] transition hover:border-[#24A869] hover:text-[#1E9B5D]"
+                                >
+                                    <Settings class="h-4 w-4" :stroke-width="2" />
+                                    Изменить
+                                </Link>
+                                <button
+                                    type="button"
+                                    class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#FECACA] bg-white px-4 text-sm font-medium text-[#E11D25] transition hover:bg-[#FFF4F4]"
+                                    @click="isDeleteModalOpen = true"
+                                >
+                                    <Trash2 class="h-4 w-4" :stroke-width="2" />
+                                    Удалить сайт
+                                </button>
+                            </div>
+
+                            <div class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-[#6A7A70] xl:justify-end">
+                                <p class="flex items-center gap-2">
+                                    <Clock3 class="h-4 w-4" :stroke-width="2" />
+                                    Последняя: {{ relativeDate(latestCheckAt) }}
+                                </p>
+                                <p class="flex items-center gap-2">
+                                    <ShieldCheck class="h-4 w-4" :stroke-width="2" />
+                                    Доступно проверок: {{ availableCount }} / {{ site.monitors.length }}
+                                </p>
+                                <p class="flex items-center gap-2">
+                                    <CalendarClock class="h-4 w-4" :stroke-width="2" />
+                                    Создан: {{ formatDate(site.created_at) }}
+                                </p>
+                            </div>
                         </div>
                     </div>
 
@@ -1322,11 +1249,11 @@ function sparkClass(status: string): string {
                     </article>
                 </section>
 
-                <section>
+                <section id="checks" class="scroll-mt-24">
                     <div class="mb-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <h2 class="text-xl font-semibold text-[#17231C]">Проверки</h2>
-                            <p class="mt-1 text-sm text-[#6A7A70]">Все проверки сайта: базовые, платные, активные и на паузе.</p>
+                            <p class="mt-1 text-sm text-[#6A7A70]">Типы и настройки соответствуют текущему тарифу. Здесь можно запускать проверки вручную и ставить их на паузу.</p>
                         </div>
 
                         <div class="flex flex-wrap gap-2 text-xs font-medium">
@@ -1336,13 +1263,8 @@ function sparkClass(status: string): string {
                             <span class="inline-flex items-center rounded-full border border-[#D7E4DC] bg-[#F1F7F3] px-3 py-1.5 text-[#6E8075]">
                                 На паузе: {{ inactiveCount }}
                             </span>
-                            <span class="inline-flex items-center gap-1.5 rounded-full border border-[#E8D7A3] bg-[#FFF8E4] px-3 py-1.5 text-[#9A6A11]">
-                                <Crown class="h-3.5 w-3.5" :stroke-width="2" />
-                                Платные активные: {{ paidActiveCount }}
-                            </span>
-                            <span class="inline-flex items-center gap-1.5 rounded-full border border-[#E8D7A3] bg-[#FFFCF0] px-3 py-1.5 text-[#9A6A11]">
-                                <Crown class="h-3.5 w-3.5" :stroke-width="2" />
-                                Платные на паузе: {{ paidPausedCount }}
+                            <span v-if="unavailableCount" class="inline-flex items-center rounded-full border border-[#D7DDDA] bg-[#ECEFF1] px-3 py-1.5 text-[#64706A]">
+                                Недоступны на тарифе: {{ unavailableCount }}
                             </span>
                         </div>
                     </div>
@@ -1359,20 +1281,20 @@ function sparkClass(status: string): string {
                                     <div class="flex min-w-0 gap-3">
                                         <span
                                             class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border"
-                                            :class="monitor.is_paid_addon ? 'border-[#E8D7A3] bg-[#FFF8E4] text-[#9A6A11]' : statusIconBoxClass(monitorStatus(monitor))"
+                                            :class="!monitor.is_available ? 'border-[#D7DDDA] bg-[#ECEFF1] text-[#64706A]' : statusIconBoxClass(monitorStatus(monitor))"
                                         >
                                             <LoaderCircle v-if="isChecking(monitor)" class="h-5 w-5 animate-spin" :stroke-width="2.2" />
-                                            <Crown v-else-if="monitor.is_paid_addon" class="h-5 w-5" :stroke-width="2.2" />
+                                            <Crown v-else-if="!monitor.is_available" class="h-5 w-5" :stroke-width="2.2" />
                                             <component v-else :is="typeIcon(monitor.type)" class="h-5 w-5" :stroke-width="2.2" />
                                         </span>
                                         <div class="min-w-0">
                                             <h3 class="truncate text-base font-semibold text-[#17231C]">{{ typeLabel(monitor.type) }}</h3>
+                                            <p v-if="typeDescription(monitor.type)" class="mt-1 line-clamp-2 text-xs leading-5 text-[#6A7A70]">{{ typeDescription(monitor.type) }}</p>
                                             <div class="mt-2 flex flex-wrap gap-2">
                                                 <span class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium" :class="monitorAccessClass(monitor)">
-                                                    <Crown v-if="monitor.is_paid_addon" class="h-3.5 w-3.5" :stroke-width="2" />
                                                     {{ monitorAccessLabel(monitor) }}
                                                 </span>
-                                                <span class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium" :class="monitorActivityClass(monitor)">
+                                                <span v-if="monitor.is_available" class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium" :class="monitorActivityClass(monitor)">
                                                     {{ monitorActivityLabel(monitor) }}
                                                 </span>
                                                 <span v-if="monitor.is_configured && monitor.is_available" class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium" :class="statusClass(monitorStatus(monitor))">
@@ -1401,16 +1323,14 @@ function sparkClass(status: string): string {
                                     <p v-if="monitor.next_check_at">Следующая: {{ formatDate(monitor.next_check_at) }}</p>
                                 </div>
 
-                                <div v-if="monitor.is_paid_addon && !monitor.is_available" class="mt-4">
-                                    <button
-                                        type="button"
-                                        class="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition"
-                                        :class="selectedPaidAddonTypes.includes(monitor.type) ? 'bg-[#E08600] text-white hover:bg-[#B7791F]' : 'border border-[#F6C66E] bg-white text-[#9A6A11] hover:bg-[#FFF8E4]'"
-                                        @click="togglePaidAddonSelection(monitor)"
+                                <div v-if="!monitor.is_available" class="mt-4">
+                                    <Link
+                                        href="/billing"
+                                        class="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#C7D2CC] bg-white px-4 text-sm font-semibold text-[#52645A] transition hover:border-[#9FB7AA] hover:text-[#173B2A]"
                                     >
-                                        <Crown class="h-4 w-4" :stroke-width="2" />
-                                        {{ selectedPaidAddonTypes.includes(monitor.type) ? 'Добавлено к тарифу' : `Добавить к тарифу +${addonPriceRub(monitor.type)} ₽/${addonUnitLabel(monitor.type)}` }}
-                                    </button>
+                                        <Crown class="h-4 w-4 text-[#C59A2D]" :stroke-width="2" />
+                                        Доступно в Pro, Team
+                                    </Link>
                                 </div>
 
                                 <div v-else class="mt-4 flex flex-wrap gap-2">
@@ -1427,10 +1347,11 @@ function sparkClass(status: string): string {
                                     <button
                                         type="button"
                                         class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#D4E3DA] bg-white px-4 text-sm font-medium text-[#26332D] transition hover:border-[#24A869] hover:text-[#1E9B5D]"
-                                        :disabled="!monitor.is_available"
+                                        :disabled="!canToggleMonitor(monitor)"
                                         @click="toggleMonitor(monitor)"
                                     >
-                                        <Pause class="h-4 w-4" :stroke-width="2" />
+                                        <Pause v-if="monitor.is_enabled" class="h-4 w-4" :stroke-width="2" />
+                                        <Play v-else class="h-4 w-4" :stroke-width="2" />
                                         {{ monitor.is_enabled ? 'Пауза' : 'Включить' }}
                                     </button>
                                     <button
@@ -1594,18 +1515,19 @@ function sparkClass(status: string): string {
                                         </template>
                                     </div>
 
-                                    <div class="mt-4 flex items-center justify-between gap-3 border-t pt-4" :class="monitor.is_paid_addon ? 'border-[#EADFD0]' : 'border-[#DDEBE3]'">
+                                    <div class="mt-4 flex items-center justify-between gap-3 border-t border-[#DDEBE3] pt-4">
                                         <button
                                             type="button"
                                             class="inline-flex items-center gap-3 rounded-2xl border border-[#DDEBE3] bg-white px-3 py-2 text-sm font-semibold text-[#26332D]"
+                                            :disabled="!monitorDrafts[monitor.id].is_enabled && isMonitorLimitReached"
                                             @click="monitorDrafts[monitor.id].is_enabled = !monitorDrafts[monitor.id].is_enabled"
                                         >
-                                            <span class="flex h-7 w-12 items-center rounded-full p-1 transition" :class="monitorDrafts[monitor.id].is_enabled ? (monitor.is_paid_addon ? 'justify-end bg-[#E08600]' : 'justify-end bg-[#2FA568]') : 'justify-start bg-[#CFE1D7]'">
+                                            <span class="flex h-7 w-12 items-center rounded-full p-1 transition" :class="monitorDrafts[monitor.id].is_enabled ? 'justify-end bg-[#2FA568]' : 'justify-start bg-[#CFE1D7]'">
                                                 <span class="h-5 w-5 rounded-full bg-white shadow-sm"></span>
                                             </span>
                                             {{ monitorDrafts[monitor.id].is_enabled ? 'Включен' : 'На паузе' }}
                                         </button>
-                                        <button type="submit" class="inline-flex h-11 items-center justify-center rounded-2xl px-5 text-sm font-bold text-white shadow-[0_14px_32px_rgba(47,165,104,0.18)] transition" :class="monitor.is_paid_addon ? 'bg-[#E08600] hover:bg-[#B7791F]' : 'bg-[#2FA568] hover:bg-[#248653]'">
+                                        <button type="submit" class="inline-flex h-11 items-center justify-center rounded-2xl bg-[#2FA568] px-5 text-sm font-bold text-white shadow-[0_14px_32px_rgba(47,165,104,0.18)] transition hover:bg-[#248653]">
                                             Сохранить
                                         </button>
                                     </div>
@@ -1719,95 +1641,7 @@ function sparkClass(status: string): string {
                 </section>
             </main>
 
-            <aside class="space-y-4 lg:sticky lg:top-24 lg:self-start">
-                <section class="rounded-3xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
-                    <h2 class="text-lg font-semibold text-[#17231C]">Статус сайта</h2>
-                    <span class="mt-4 inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium" :class="statusClass(isSiteChecking ? 'checking' : site.status)">
-                        <LoaderCircle v-if="isSiteChecking" class="mr-1.5 h-3.5 w-3.5 animate-spin" :stroke-width="2.2" />
-                        <component v-else :is="statusIcon(site.status)" class="mr-1.5 h-3.5 w-3.5" :stroke-width="2.2" />
-                        {{ statusLabel(isSiteChecking ? 'checking' : site.status) }}
-                    </span>
-                    <div class="mt-4 grid gap-3 text-sm">
-                        <p class="flex items-center gap-2 text-[#6A7A70]">
-                            <Clock3 class="h-4 w-4" :stroke-width="2" />
-                            Последняя: {{ relativeDate(latestCheckAt) }}
-                        </p>
-                        <p class="flex items-center gap-2 text-[#6A7A70]">
-                            <ShieldCheck class="h-4 w-4" :stroke-width="2" />
-                            Доступно проверок: {{ availableCount }} / {{ site.monitors.length }}
-                        </p>
-                        <p class="flex items-center gap-2 text-[#6A7A70]">
-                            <CalendarClock class="h-4 w-4" :stroke-width="2" />
-                            Создан: {{ formatDate(site.created_at) }}
-                        </p>
-                    </div>
 
-                </section>
-
-                <section v-if="selectedPaidMonitors.length" class="rounded-3xl border border-[#F6C66E] bg-white p-4 shadow-[0_10px_35px_rgba(38,51,45,0.08)]">
-                    <h2 class="text-lg font-bold text-[#173B2A]">Итого</h2>
-                    <div class="mt-4 rounded-2xl bg-[#FFFCF4] p-3">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#B7791F]">Сейчас к оплате</p>
-                        <p class="mt-1 text-xl font-bold text-[#173B2A]">{{ money(checkoutAmountRub) }}</p>
-                        <p class="mt-1 text-xs font-medium leading-5 text-[#6A7A70]">
-                            Оплачивается только стоимость новых платных проверок.
-                        </p>
-                    </div>
-
-                    <div class="mt-3 rounded-2xl bg-[#F6FBF8] p-3">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#6A7A70]">Сайт</p>
-                        <p class="mt-1 truncate text-base font-bold text-[#173B2A]">{{ site.host }}</p>
-                        <p class="mt-0.5 truncate text-xs font-medium text-[#6A7A70]">{{ site.name }}</p>
-                    </div>
-
-                    <div class="mt-4 space-y-2">
-                        <div class="flex items-center justify-between gap-3 text-xs">
-                            <span class="font-medium text-[#6A7A70]">Платные проверки</span>
-                            <span class="font-bold text-[#173B2A]">{{ selectedPaidMonitors.length }}</span>
-                        </div>
-                        <div class="flex items-center justify-between gap-3 text-xs">
-                            <span class="font-medium text-[#6A7A70]">Текущий тариф</span>
-                            <span class="font-bold text-[#173B2A]">{{ displayPlan.name }}</span>
-                        </div>
-                    </div>
-
-                    <div class="mt-4 rounded-2xl border border-[#F6C66E] bg-[#FFFCF4] p-3">
-                        <p class="text-xs font-bold text-[#173B2A]">За что платит клиент</p>
-                        <ul class="mt-2 space-y-2 text-xs font-medium text-[#6A7A70]">
-                            <li v-for="monitor in selectedPaidMonitors" :key="monitor.type" class="flex items-start justify-between gap-2">
-                                <span class="min-w-0 truncate">{{ typeLabel(monitor.type) }}</span>
-                                <span class="flex shrink-0 items-center gap-1.5 font-bold text-[#E08600]">
-                                    +{{ addonPriceRub(monitor.type) }} ₽/мес
-                                    <button type="button" class="grid h-5 w-5 place-items-center rounded-full bg-white text-[#9A6A11] ring-1 ring-[#F6C66E]/60 hover:bg-[#FFF8E4]" @click="removePaidAddonSelection(monitor.type)">
-                                        <X class="h-3 w-3" :stroke-width="2" />
-                                    </button>
-                                </span>
-                            </li>
-                        </ul>
-                    </div>
-
-                    <div class="mt-4 rounded-2xl bg-[#173B2A] p-3 text-white">
-                        <div class="flex items-end justify-between gap-2">
-                            <span class="text-xs font-medium text-white/75">Сейчас</span>
-                            <span class="text-lg font-bold">{{ money(checkoutAmountRub) }}</span>
-                        </div>
-                        <div class="mt-2 flex items-center justify-between gap-2 border-t border-white/10 pt-2">
-                            <span class="text-xs font-medium text-white/75">Дальше</span>
-                            <span class="text-sm font-bold">{{ money(nextMonthlyRub) }}</span>
-                        </div>
-                    </div>
-
-                    <button
-                        type="button"
-                        class="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-[#2FA568] px-4 py-2 text-center text-sm font-bold leading-5 text-white shadow-[0_14px_32px_rgba(47,165,104,0.22)] transition hover:bg-[#248653] disabled:cursor-not-allowed disabled:opacity-60"
-                        :disabled="paymentProcessing"
-                        @click="checkoutPaidAddons"
-                    >
-                        <span v-if="paymentProcessing">Переходим к оплате...</span>
-                        <span v-else>Оплатить {{ checkoutAmountRub }} ₽ и добавить к тарифу</span>
-                    </button>
-                </section>
-            </aside>
         </div>
 
         <div

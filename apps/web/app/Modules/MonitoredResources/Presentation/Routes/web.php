@@ -14,6 +14,12 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/sites', [MonitoredResourceController::class, 'store'])
         ->name('sites.store');
 
+    Route::get('/sites/{site}/edit', [MonitoredResourceController::class, 'edit'])
+        ->name('sites.edit');
+
+    Route::put('/sites/{site}', [MonitoredResourceController::class, 'update'])
+        ->name('sites.update');
+
     Route::get('/sites/{site}', [MonitoredResourceController::class, 'show'])
         ->name('sites.show');
 

@@ -67,37 +67,73 @@ type MonitorPayload = {
     expected: Record<string, unknown>
 }
 
+type ExistingMonitor = {
+    id: string | number
+    type: MonitorType
+    name: string
+    is_enabled: boolean
+    interval_seconds: number
+    timeout_ms: number
+    settings: Record<string, any>
+    expected: Record<string, any>
+}
+
+type ExistingSite = {
+    id: string | number
+    name: string
+    url: string
+    monitors: ExistingMonitor[]
+}
+
 const props = withDefaults(defineProps<{
     organization: Organization
     monitorTypes: MonitorTypeOption[]
     currentPlan?: CurrentPlan | null
     usage?: Usage | null
+    site?: ExistingSite | null
 }>(), {
     currentPlan: null,
     usage: null,
+    site: null,
 })
+
+const isEditing = computed(() => props.site !== null)
+const pageTitle = computed(() => isEditing.value ? 'Изменить сайт' : 'Добавить сайт')
+const remainingMonitorsLabel = computed(() => isEditing.value ? 'После сохранения останется' : 'После создания останется')
+const processingLabel = computed(() => isEditing.value ? 'Сохраняем...' : 'Создаём сайт...')
+const submitLabel = computed(() => isEditing.value ? 'Сохранить изменения' : 'Создать сайт')
+const existingMonitors = props.site?.monitors ?? []
+const monitorsByType = (type: MonitorType): ExistingMonitor[] => existingMonitors.filter((monitor) => monitor.type === type)
+const firstMonitor = (type: MonitorType): ExistingMonitor | undefined => monitorsByType(type)[0]
+const setting = (type: MonitorType, key: string, fallback: any): any => firstMonitor(type)?.settings?.[key] ?? fallback
+const expected = (type: MonitorType, key: string, fallback: any): any => firstMonitor(type)?.expected?.[key] ?? fallback
+const monitorValue = <T>(type: MonitorType, key: keyof ExistingMonitor, fallback: T): T => (firstMonitor(type)?.[key] as T | undefined) ?? fallback
 
 const minimumIntervalSecondsValue = props.usage?.minimum_check_interval_seconds ?? 300
 const minimumIntervalMinutes = Math.max(1, Math.ceil(minimumIntervalSecondsValue / 60))
-const statusCodesText = ref('200')
-const sslWarningDaysText = ref('30, 14, 7, 3, 1')
-const domainWarningDaysText = ref('30, 14, 7, 3, 1')
-const dnsRecordTypesText = ref('A, AAAA')
-const robotsStatusCodesText = ref('200')
-const sitemapStatusCodesText = ref('200')
+const statusCodesText = ref(Array.isArray(expected('http', 'status_codes', [200])) ? expected('http', 'status_codes', [200]).join(', ') : '200')
+const sslWarningDaysText = ref(Array.isArray(setting('ssl', 'warning_days', [30, 14, 7, 3, 1])) ? setting('ssl', 'warning_days', [30, 14, 7, 3, 1]).join(', ') : '30, 14, 7, 3, 1')
+const domainWarningDaysText = ref(Array.isArray(setting('domain', 'warning_days', [30, 14, 7, 3, 1])) ? setting('domain', 'warning_days', [30, 14, 7, 3, 1]).join(', ') : '30, 14, 7, 3, 1')
+const dnsRecordTypesText = ref(Array.isArray(setting('dns', 'record_types', ['A', 'AAAA'])) ? setting('dns', 'record_types', ['A', 'AAAA']).join(', ') : 'A, AAAA')
+const robotsStatusCodesText = ref(Array.isArray(expected('robots_txt', 'status_codes', [200])) ? expected('robots_txt', 'status_codes', [200]).join(', ') : '200')
+const sitemapStatusCodesText = ref(Array.isArray(expected('sitemap_xml', 'status_codes', [200])) ? expected('sitemap_xml', 'status_codes', [200]).join(', ') : '200')
 const openedAdvanced = ref<MonitorType | null>(null)
-const apiEndpoints = ref<ApiEndpointConfig[]>([
-    {
-        method: 'GET',
-        path: '/api/health',
-        status_codes: '200',
-        max_response_time_ms: 5000,
-        response_contains: '',
-    },
-])
-const tcpPorts = ref<TcpPortConfig[]>([
-    { port: 443, max_response_time_ms: 5000 },
-])
+const apiEndpoints = ref<ApiEndpointConfig[]>(monitorsByType('api_endpoint').length
+    ? monitorsByType('api_endpoint').map((monitor) => ({
+        method: String(monitor.settings.method ?? 'GET'),
+        path: String(monitor.settings.url ?? '/api/health'),
+        status_codes: Array.isArray(monitor.expected.status_codes) ? monitor.expected.status_codes.join(', ') : '200',
+        max_response_time_ms: Number(monitor.expected.max_response_time_ms ?? 5000),
+        response_contains: String(monitor.expected.response_contains ?? ''),
+    }))
+    : [{ method: 'GET', path: '/api/health', status_codes: '200', max_response_time_ms: 5000, response_contains: '' }])
+
+const tcpPorts = ref<TcpPortConfig[]>(monitorsByType('tcp_port').length
+    ? monitorsByType('tcp_port').map((monitor) => ({
+        port: Number(monitor.settings.port ?? 443),
+        max_response_time_ms: Number(monitor.expected.max_response_time_ms ?? 5000),
+    }))
+    : [{ port: 443, max_response_time_ms: 5000 }])
 
 const intervalPresets = [1, 5, 10, 15, 30, 60, 360, 720, 1440]
 const availableIntervalPresets = computed(() => intervalPresets.filter((minutes) => minutes >= minimumIntervalMinutes))
@@ -130,84 +166,84 @@ const initialAvailableSlots = initialMonitorLimit === null
     ? Number.POSITIVE_INFINITY
     : Math.max(initialMonitorLimit - (props.usage?.active_monitors ?? 0), 0)
 const initiallyEnabledTypes = new Set(
-    monitorTypeOrder
-        .filter((type) => initiallyAllowsType(type))
-        .slice(0, initialAvailableSlots),
+    props.site
+        ? existingMonitors.filter((monitor) => monitor.is_enabled).map((monitor) => monitor.type)
+        : monitorTypeOrder.filter((type) => initiallyAllowsType(type)).slice(0, initialAvailableSlots),
 )
 
 const form = useForm({
-    name: '',
-    url: '',
+    name: props.site?.name ?? '',
+    url: props.site?.url ?? '',
     monitors: {
         http: {
             is_enabled: initiallyEnabledTypes.has('http'),
-            name: 'HTTP availability',
-            interval_seconds: minimumIntervalMinutes * 60,
-            timeout_ms: 10000,
-            method: 'GET',
-            follow_redirects: true,
-            verify_ssl: true,
-            max_response_time_ms: 5000,
+            name: monitorValue('http', 'name', 'HTTP availability'),
+            interval_seconds: monitorValue('http', 'interval_seconds', minimumIntervalMinutes * 60),
+            timeout_ms: monitorValue('http', 'timeout_ms', 10000),
+            method: String(setting('http', 'method', 'GET')),
+            follow_redirects: Boolean(setting('http', 'follow_redirects', true)),
+            verify_ssl: Boolean(setting('http', 'verify_ssl', true)),
+            max_response_time_ms: Number(expected('http', 'max_response_time_ms', 5000)),
         },
         ssl: {
             is_enabled: initiallyEnabledTypes.has('ssl'),
-            name: 'SSL certificate',
-            interval_seconds: 86400,
-            timeout_ms: 10000,
-            port: 443,
-            valid: true,
+            name: monitorValue('ssl', 'name', 'SSL certificate'),
+            interval_seconds: monitorValue('ssl', 'interval_seconds', 86400),
+            timeout_ms: monitorValue('ssl', 'timeout_ms', 10000),
+            port: Number(setting('ssl', 'port', 443)),
+            valid: Boolean(expected('ssl', 'valid', true)),
         },
         domain: {
             is_enabled: initiallyEnabledTypes.has('domain'),
-            name: 'Domain expiration',
-            interval_seconds: 86400,
-            timeout_ms: 10000,
-            registered: true,
+            name: monitorValue('domain', 'name', 'Domain expiration'),
+            interval_seconds: monitorValue('domain', 'interval_seconds', 86400),
+            timeout_ms: monitorValue('domain', 'timeout_ms', 10000),
+            registered: Boolean(expected('domain', 'registered', true)),
         },
         dns: {
             is_enabled: initiallyEnabledTypes.has('dns'),
-            name: 'DNS records',
-            interval_seconds: 86400,
-            timeout_ms: 10000,
-            min_records: 1,
-            resolves: true,
-            warn_on_change: false,
+            name: monitorValue('dns', 'name', 'DNS records'),
+            interval_seconds: monitorValue('dns', 'interval_seconds', 86400),
+            timeout_ms: monitorValue('dns', 'timeout_ms', 10000),
+            min_records: Number(expected('dns', 'min_records', 1)),
+            resolves: Boolean(expected('dns', 'resolves', true)),
+            warn_on_change: Boolean(setting('dns', 'warn_on_change', false)),
         },
         robots_txt: {
             is_enabled: initiallyEnabledTypes.has('robots_txt'),
-            name: 'Robots.txt',
-            interval_seconds: 86400,
-            timeout_ms: 10000,
-            follow_redirects: true,
-            verify_ssl: true,
-            exists: true,
-            max_response_time_ms: 5000,
+            name: monitorValue('robots_txt', 'name', 'Robots.txt'),
+            interval_seconds: monitorValue('robots_txt', 'interval_seconds', 86400),
+            timeout_ms: monitorValue('robots_txt', 'timeout_ms', 10000),
+            follow_redirects: Boolean(setting('robots_txt', 'follow_redirects', true)),
+            verify_ssl: Boolean(setting('robots_txt', 'verify_ssl', true)),
+            exists: Boolean(expected('robots_txt', 'exists', true)),
+            max_response_time_ms: Number(expected('robots_txt', 'max_response_time_ms', 5000)),
         },
         sitemap_xml: {
             is_enabled: initiallyEnabledTypes.has('sitemap_xml'),
-            name: 'Sitemap.xml',
-            interval_seconds: 86400,
-            timeout_ms: 10000,
-            follow_redirects: true,
-            verify_ssl: true,
-            exists: true,
-            valid_xml: true,
-            max_response_time_ms: 5000,
+            name: monitorValue('sitemap_xml', 'name', 'Sitemap.xml'),
+            interval_seconds: monitorValue('sitemap_xml', 'interval_seconds', 86400),
+            timeout_ms: monitorValue('sitemap_xml', 'timeout_ms', 10000),
+            follow_redirects: Boolean(setting('sitemap_xml', 'follow_redirects', true)),
+            verify_ssl: Boolean(setting('sitemap_xml', 'verify_ssl', true)),
+            exists: Boolean(expected('sitemap_xml', 'exists', true)),
+            valid_xml: Boolean(expected('sitemap_xml', 'valid_xml', true)),
+            max_response_time_ms: Number(expected('sitemap_xml', 'max_response_time_ms', 5000)),
         },
         api_endpoint: {
             is_enabled: initiallyEnabledTypes.has('api_endpoint'),
-            name: 'API endpoint',
-            interval_seconds: minimumIntervalMinutes * 60,
-            timeout_ms: 10000,
-            follow_redirects: true,
-            verify_ssl: true,
+            name: monitorValue('api_endpoint', 'name', 'API endpoint'),
+            interval_seconds: monitorValue('api_endpoint', 'interval_seconds', minimumIntervalMinutes * 60),
+            timeout_ms: monitorValue('api_endpoint', 'timeout_ms', 10000),
+            follow_redirects: Boolean(setting('api_endpoint', 'follow_redirects', true)),
+            verify_ssl: Boolean(setting('api_endpoint', 'verify_ssl', true)),
         },
         tcp_port: {
             is_enabled: initiallyEnabledTypes.has('tcp_port'),
-            name: 'TCP port',
-            interval_seconds: minimumIntervalMinutes * 60,
-            timeout_ms: 10000,
-            open: true,
+            name: monitorValue('tcp_port', 'name', 'TCP port'),
+            interval_seconds: monitorValue('tcp_port', 'interval_seconds', minimumIntervalMinutes * 60),
+            timeout_ms: monitorValue('tcp_port', 'timeout_ms', 10000),
+            open: Boolean(expected('tcp_port', 'open', true)),
         },
     },
 })
@@ -335,7 +371,9 @@ const enabledPaidPlanCount = computed(() => paidPlanCards.value.filter((card) =>
 const activeApiEndpointCount = computed(() => form.monitors.api_endpoint.is_enabled && planAllowsType('api_endpoint') ? apiEndpoints.value.length : 0)
 const activeTcpPortCount = computed(() => form.monitors.tcp_port.is_enabled && planAllowsType('tcp_port') ? tcpPorts.value.length : 0)
 const activeMonitorCount = computed(() => enabledBaseCount.value + enabledPaidPlanCount.value + activeApiEndpointCount.value + activeTcpPortCount.value)
-const activeMonitorsAfterCreate = computed(() => (props.usage?.active_monitors ?? 0) + activeMonitorCount.value)
+const existingEditableActiveCount = existingMonitors.filter((monitor) => monitor.is_enabled && planAllowsType(monitor.type)).length
+const activeMonitorsOutsideSite = Math.max((props.usage?.active_monitors ?? 0) - existingEditableActiveCount, 0)
+const activeMonitorsAfterCreate = computed(() => activeMonitorsOutsideSite + activeMonitorCount.value)
 const monitorsLeftAfterCreate = computed(() => Math.max((monitorLimit.value ?? 0) - activeMonitorsAfterCreate.value, 0))
 const isMonitorLimitReached = computed(() => monitorLimit.value !== null && activeMonitorsAfterCreate.value > monitorLimit.value)
 const canAddApiEndpoint = computed(() => (
@@ -658,20 +696,23 @@ function requestPayload() {
 }
 
 function submit(): void {
-    form
-        .transform(() => requestPayload())
-        .post('/sites', {
-            preserveScroll: true,
-        })
+    form.transform(() => requestPayload())
+
+    if (isEditing.value && props.site) {
+        form.put(`/sites/${props.site.id}`, { preserveScroll: true })
+        return
+    }
+
+    form.post('/sites', { preserveScroll: true })
 }
 </script>
 
 <template>
-    <Head title="Добавить сайт" />
+    <Head :title="pageTitle" />
     <DashboardLayout
         :organization="organization"
         active-item="sites"
-        title="Добавить сайт"
+        :title="pageTitle"
         subtitle="Выберите проверки, доступные на вашем тарифе"
     >
         <form class="mx-auto max-w-7xl px-5 pb-6 pt-6 sm:px-8" @submit.prevent="submit">
@@ -1292,7 +1333,7 @@ function submit(): void {
                             :class="isMonitorLimitReached ? 'text-[#B45309]' : 'text-[#6A7A70]'"
                         >
                             <span v-if="isMonitorLimitReached">Лимит будет превышен — отключите часть проверок или смените тариф.</span>
-                            <span v-else>После создания останется {{ monitorsLeftAfterCreate }} мониторингов.</span>
+                            <span v-else>{{ remainingMonitorsLabel }} {{ monitorsLeftAfterCreate }} мониторингов.</span>
                         </p>
                         <p v-if="form.errors.monitors" class="mt-1 text-xs font-semibold text-[#EF4444]">
                             {{ form.errors.monitors }}
@@ -1301,7 +1342,7 @@ function submit(): void {
 
                     <div class="grid shrink-0 grid-cols-2 gap-3 sm:flex">
                         <Link
-                            href="/sites"
+                            :href="isEditing ? `/sites/${site?.id}` : '/sites'"
                             class="inline-flex h-11 items-center justify-center rounded-2xl border border-[#DDEBE3] bg-white px-5 text-sm font-semibold text-[#52645A] transition hover:border-[#B8D0C2] hover:bg-[#F6FBF8] hover:text-[#173B2A] sm:min-w-32"
                         >
                             Отмена
@@ -1311,8 +1352,8 @@ function submit(): void {
                             class="inline-flex h-11 items-center justify-center rounded-2xl bg-[#2FA568] px-6 text-sm font-bold text-white shadow-[0_10px_24px_rgba(47,165,104,0.22)] transition hover:bg-[#248653] disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-44"
                             :disabled="form.processing || isMonitorLimitReached"
                         >
-                            <span v-if="form.processing">Создаём сайт...</span>
-                            <span v-else>Создать сайт</span>
+                            <span v-if="form.processing">{{ processingLabel }}</span>
+                            <span v-else>{{ submitLabel }}</span>
                         </button>
                     </div>
                 </div>
