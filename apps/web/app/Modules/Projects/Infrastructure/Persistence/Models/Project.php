@@ -19,6 +19,7 @@ class Project extends Model
     protected $fillable = [
         'organization_id',
         'name',
+        'comment',
         'slug',
         'color',
         'is_default',

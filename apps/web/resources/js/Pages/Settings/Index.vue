@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
+import TariffRestriction from '@/Components/TariffRestriction.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import {
     Bell,
@@ -411,9 +412,7 @@ async function copyConnectionCommand(): Promise<void> {
                         class="absolute inset-0 flex items-center justify-center px-6 text-center"
                         aria-hidden="true"
                     >
-                        <p class="rounded-2xl bg-white/90 px-5 py-3 text-sm font-semibold text-[#4B5563] shadow-sm ring-1 ring-[#DDEBE3]">
-                            Доступно на подписке Pro и Plus
-                        </p>
+                        <TariffRestriction action="Подключить Telegram" overlay />
                     </div>
                 </section>
             </div>

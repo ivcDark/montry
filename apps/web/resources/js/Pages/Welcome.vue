@@ -58,11 +58,10 @@ const baseChecks = [
     ['Robots.txt', 'Проверяем наличие файла и базовую доступность.'],
 ]
 
-const paidChecks = [
-    ['Sitemap.xml', '+20 ₽', 'Проверка наличия sitemap.xml и ошибок в структуре.'],
-    ['API endpoint', '+30 ₽ за endpoint', 'Проверка API-метода, ожидаемого кода и доступности.'],
-    ['TCP-порт', '+20 ₽ за порт', 'Контроль доступности TCP-портов: 80, 443, 5432 и других.'],
-    ['Дополнительные сайты', '+150 ₽ за 5 сайтов', 'Пакет сайтов сверх лимита текущего тарифа.'],
+const advancedChecks = [
+    ['Sitemap.xml', 'Проверка наличия sitemap.xml и ошибок доступности.'],
+    ['API endpoint', 'Проверка API-метода, ожидаемого кода и времени ответа.'],
+    ['TCP-порт', 'Контроль доступности TCP-портов: 80, 443, 5432 и других.'],
 ]
 
 const steps = [
@@ -84,31 +83,31 @@ const plans = [
         name: 'Free',
         price: '0 ₽',
         href: '/register?plan=free',
-        description: 'Для одного личного сайта.',
-        features: ['1 сайт', 'базовые мониторинги', 'email-уведомления', 'еженедельные отчеты', 'история проверок 3 дня'],
+        description: 'Для старта и базового мониторинга.',
+        features: ['5 активных мониторингов', 'HTTP и SSL', 'email-уведомления', 'интервал от 5 минут', 'история 7 дней'],
     },
     {
         name: 'Pro',
-        price: '390 ₽ / мес',
+        price: '590 ₽ / мес',
         href: '/register?plan=pro',
-        description: 'Для специалистов и небольших команд.',
+        description: 'Для специалистов и регулярного мониторинга.',
         featured: true,
-        features: ['10 сайтов', 'базовые мониторинги', 'email и Telegram', 'еженедельные отчеты', 'проверки от 5 минут', 'история проверок 30 дней'],
+        features: ['100 активных мониторингов', 'все типы проверок', 'email и Telegram', 'интервал от 1 минуты', 'история 30 дней'],
     },
     {
-        name: 'Plus',
-        price: '690 ₽ / мес',
-        href: '/register?plan=plus',
-        description: 'Для веб-студий и агентств.',
-        features: ['30 сайтов', 'email и Telegram', 'еженедельные и месячные отчеты', 'n-дневные отчеты', 'проверки от 3 минут', 'история проверок 60 дней'],
+        name: 'Team',
+        price: '1 490 ₽ / мес',
+        href: '/register?plan=team',
+        description: 'Для веб-студий, агентств и команд.',
+        features: ['500 активных мониторингов', 'все типы проверок', 'до 10 пользователей', 'интервал от 1 минуты', 'история 90 дней'],
     },
 ]
 
 const faq = [
     ['Что входит в базовый мониторинг сайта?', 'Доступность сайта, SSL, домен, DNS и наличие robots.txt.'],
     ['Можно ли пользоваться бесплатно?', 'Да. На тарифе Free можно добавить 1 сайт и получать email-уведомления.'],
-    ['Чем отличаются платные проверки?', 'Платные проверки подключаются отдельно: sitemap.xml, API endpoint, TCP-порт и дополнительные сайты.'],
-    ['Можно ли получать уведомления в Telegram?', 'Да. Telegram доступен на тарифах Pro и Plus.'],
+    ['Какие проверки доступны?', 'HTTP и SSL доступны на Free. На Pro и Team включены все типы проверок без отдельных доплат.'],
+    ['Можно ли получать уведомления в Telegram?', 'Да. Telegram доступен на тарифах Pro и Team.'],
     ['Подойдет ли Montry для веб-студии?', 'Да. Вы сможете контролировать сайты клиентов, видеть инциденты и формировать отчеты.'],
     ['Что происходит, если сайт перестает работать?', 'Montry сохраняет инцидент, отправляет уведомление и фиксирует восстановление.'],
 ]
@@ -222,7 +221,7 @@ function submitFeedback(): void {
                     <p class="mt-3 text-sm leading-6 text-[#738479]">Montry помогает быстро узнать о сбоях и держать под контролем технические параметры сайта.</p>
                 </div>
 
-                <div class="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="mx-auto mt-9 grid max-w-4xl gap-4 sm:grid-cols-3">
                     <article v-for="[title, text] in manualCards" :key="title" class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.06)]">
                         <span class="grid h-7 w-7 place-items-center rounded-lg bg-[#E9F8EF] text-sm font-extrabold text-[#24A869]">•</span>
                         <h3 class="mt-5 text-lg font-extrabold text-[#26332D]">{{ title }}</h3>
@@ -253,15 +252,14 @@ function submitFeedback(): void {
         <section class="py-14 sm:py-16">
             <div class="mx-auto max-w-6xl px-5 sm:px-8">
                 <div class="mx-auto max-w-3xl text-center">
-                    <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Подключайте дополнительные проверки, когда они нужны</h2>
-                    <p class="mt-3 text-sm leading-6 text-[#738479]">Расширяйте мониторинг сайта без перехода на сложные тарифы.</p>
+                    <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Все типы проверок — без отдельных доплат</h2>
+                    <p class="mt-3 text-sm leading-6 text-[#738479]">На Pro и Team доступны Sitemap.xml, API endpoint, TCP-порты и другие расширенные проверки.</p>
                 </div>
 
                 <div class="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <article v-for="[title, price, text] in paidChecks" :key="title" class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.06)]">
-                        <p class="inline-flex rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-semibold text-[#4F7DE8]">Дополнительно</p>
+                    <article v-for="[title, text] in advancedChecks" :key="title" class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.06)]">
+                        <p class="inline-flex rounded-full bg-[#FFF4DC] px-3 py-1 text-xs font-bold text-[#C87800]">Pro и Team</p>
                         <h3 class="mt-4 text-lg font-extrabold text-[#26332D]">{{ title }}</h3>
-                        <p class="mt-2 text-xl font-extrabold text-[#24A869]">{{ price }}</p>
                         <p class="mt-3 text-sm leading-6 text-[#738479]">{{ text }}</p>
                     </article>
                 </div>
@@ -343,7 +341,7 @@ function submitFeedback(): void {
             <div class="mx-auto max-w-6xl px-5 sm:px-8">
                 <div class="mx-auto max-w-3xl text-center">
                     <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Простые тарифы без сложного биллинга</h2>
-                    <p class="mt-3 text-sm leading-6 text-[#738479]">Выберите количество сайтов, а дополнительные проверки подключайте только при необходимости.</p>
+                    <p class="mt-3 text-sm leading-6 text-[#738479]">Тарифы отличаются количеством мониторингов, интервалом, историей и возможностями для команды.</p>
                 </div>
 
                 <div class="mx-auto mt-9 grid max-w-5xl gap-5 lg:grid-cols-3">
@@ -373,12 +371,6 @@ function submitFeedback(): void {
                     </article>
                 </div>
 
-                <div class="mx-auto mt-8 flex max-w-xl flex-wrap justify-center gap-2 text-xs font-bold text-[#4F7DE8]">
-                    <span class="rounded-full bg-white px-3 py-1.5">Sitemap.xml — +20 ₽</span>
-                    <span class="rounded-full bg-white px-3 py-1.5">API endpoint — +30 ₽</span>
-                    <span class="rounded-full bg-white px-3 py-1.5">TCP-порт — +20 ₽</span>
-                    <span class="rounded-full bg-white px-3 py-1.5">+5 сайтов — +150 ₽</span>
-                </div>
             </div>
         </section>
 

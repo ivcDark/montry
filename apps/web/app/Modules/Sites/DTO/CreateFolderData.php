@@ -9,6 +9,7 @@ final readonly class CreateFolderData
         public string $name,
         public ?string $color,
         public ?int $sortOrder,
+        public ?string $comment = null,
     )
     {
     }

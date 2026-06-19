@@ -32,6 +32,7 @@ import {
     X,
 } from '@lucide/vue'
 import { Line } from 'vue-chartjs'
+import TariffRestriction from '@/Components/TariffRestriction.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useAutoRefresh } from '../../Composables/useAutoRefresh'
 
@@ -1324,13 +1325,7 @@ function sparkClass(status: string): string {
                                 </div>
 
                                 <div v-if="!monitor.is_available" class="mt-4">
-                                    <Link
-                                        href="/billing"
-                                        class="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#C7D2CC] bg-white px-4 text-sm font-semibold text-[#52645A] transition hover:border-[#9FB7AA] hover:text-[#173B2A]"
-                                    >
-                                        <Crown class="h-4 w-4 text-[#C59A2D]" :stroke-width="2" />
-                                        Доступно в Pro, Team
-                                    </Link>
+                                    <TariffRestriction action="Подключить проверку" />
                                 </div>
 
                                 <div v-else class="mt-4 flex flex-wrap gap-2">

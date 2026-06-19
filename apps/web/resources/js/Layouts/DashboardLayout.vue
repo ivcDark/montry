@@ -205,6 +205,28 @@ function submitProductIdea(): void {
                         </span>
                         {{ item.label }}
                     </Link>
+
+                    <button
+                        type="button"
+                        class="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium text-[#6A7A70] transition hover:bg-[#F3F8F5] hover:text-[#173B2A]"
+                        @click="openSupportModal"
+                    >
+                        <span class="grid h-8 w-8 place-items-center rounded-xl border border-[#CFE1D7] bg-[#F3F8F5] text-[#8A9A91]">
+                            <HelpCircle class="h-4 w-4" :stroke-width="2" />
+                        </span>
+                        Нужна помощь?
+                    </button>
+
+                    <button
+                        type="button"
+                        class="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium text-[#6A7A70] transition hover:bg-[#F3F8F5] hover:text-[#173B2A]"
+                        @click="openIdeaModal"
+                    >
+                        <span class="grid h-8 w-8 place-items-center rounded-xl border border-[#CFE1D7] bg-[#F3F8F5] text-[#8A9A91]">
+                            <Lightbulb class="h-4 w-4" :stroke-width="2" />
+                        </span>
+                        Есть идея?
+                    </button>
                 </nav>
             </div>
 
@@ -230,23 +252,6 @@ function submitProductIdea(): void {
                     Управлять
                 </Link>
 
-                <button
-                    type="button"
-                    class="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm font-medium text-[#52645A] transition hover:border-[#B8D0C2] hover:text-[#173B2A]"
-                    @click="openSupportModal"
-                >
-                    <HelpCircle class="h-4 w-4" :stroke-width="2" />
-                    Нужна помощь?
-                </button>
-
-                <button
-                    type="button"
-                    class="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm font-medium text-[#52645A] transition hover:border-[#B8D0C2] hover:text-[#173B2A]"
-                    @click="openIdeaModal"
-                >
-                    <Lightbulb class="h-4 w-4" :stroke-width="2" />
-                    Есть идея?
-                </button>
             </div>
 
             <div class="relative mt-3">
@@ -346,6 +351,24 @@ function submitProductIdea(): void {
                         {{ item.label }}
                     </Link>
 
+                    <button
+                        type="button"
+                        class="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-medium text-[#6A7A70] transition hover:bg-[#F3F8F5]"
+                        @click="openSupportModal"
+                    >
+                        <HelpCircle class="mr-1.5 inline h-4 w-4 align-[-3px]" :stroke-width="2" />
+                        Нужна помощь?
+                    </button>
+
+                    <button
+                        type="button"
+                        class="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-medium text-[#6A7A70] transition hover:bg-[#F3F8F5]"
+                        @click="openIdeaModal"
+                    >
+                        <Lightbulb class="mr-1.5 inline h-4 w-4 align-[-3px]" :stroke-width="2" />
+                        Есть идея?
+                    </button>
+
                     <Link
                         href="/logout"
                         method="post"
@@ -355,24 +378,6 @@ function submitProductIdea(): void {
                         <LogOut class="mr-1.5 inline h-4 w-4 align-[-3px]" :stroke-width="2" />
                         Выйти
                     </Link>
-
-                    <button
-                        type="button"
-                        class="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-medium text-[#6A7A70] transition hover:bg-[#F3F8F5]"
-                        @click="openSupportModal"
-                    >
-                        <HelpCircle class="mr-1.5 inline h-4 w-4 align-[-3px]" :stroke-width="2" />
-                        Помощь
-                    </button>
-
-                    <button
-                        type="button"
-                        class="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-medium text-[#6A7A70] transition hover:bg-[#F3F8F5]"
-                        @click="openIdeaModal"
-                    >
-                        <Lightbulb class="mr-1.5 inline h-4 w-4 align-[-3px]" :stroke-width="2" />
-                        Идея
-                    </button>
                 </nav>
             </header>
 

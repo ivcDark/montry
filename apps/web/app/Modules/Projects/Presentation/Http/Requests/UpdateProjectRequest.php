@@ -5,7 +5,7 @@ namespace App\Modules\Projects\Presentation\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-final class StoreProjectRequest extends FormRequest
+final class UpdateProjectRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -18,9 +18,11 @@ final class StoreProjectRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'comment' => ['nullable', 'string', 'max:5000'],
             'resource_ids' => ['sometimes', 'array'],
-            'resource_ids.*' => ['integer', 'distinct', Rule::exists('monitored_resources', 'id')],
-            'color' => ['nullable', 'string', 'max:32'],
-            'sort_order' => ['nullable', 'integer', 'min:0'],
+            'resource_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('monitored_resources', 'id'),
+            ],
         ];
     }
 }

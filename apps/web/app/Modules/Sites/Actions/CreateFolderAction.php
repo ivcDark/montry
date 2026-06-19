@@ -19,6 +19,7 @@ final readonly class CreateFolderAction
         return Project::query()->create([
             'organization_id' => $data->organizationId,
             'name' => $data->name,
+            'comment' => $data->comment,
             'color' => $data->color,
             'sort_order' => $data->sortOrder,
         ]);

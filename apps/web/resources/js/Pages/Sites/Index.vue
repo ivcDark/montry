@@ -19,7 +19,7 @@ import {
     Table2,
     X,
 } from '@lucide/vue'
-import FlashToast from '@/Components/FlashToast.vue'
+import TariffRestriction from '@/Components/TariffRestriction.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useAutoRefresh } from '../../Composables/useAutoRefresh'
 
@@ -103,8 +103,6 @@ const checkingSiteIds = ref<string[]>([])
 const checkingStartedFrom = ref<Record<string, string | null>>({})
 const checkingTimeouts = ref<Record<string, ReturnType<typeof setTimeout>>>({})
 const openActionsSiteId = ref<string | null>(null)
-const siteLimitToastToken = ref(0)
-const siteLimitToastMessage = ref<string | null>(null)
 
 const filters = [
     { value: 'all', label: 'Все' },
@@ -472,24 +470,10 @@ function resetFilters(): void {
     sortMode.value = 'problem_first'
 }
 
-function showSiteLimitToast(): void {
-    siteLimitToastMessage.value = 'Лимит по сайтам исчерпан. Повысьте тариф для добавления сайта.'
-    siteLimitToastToken.value += 1
-}
-
-function handleCreateSiteClick(event: MouseEvent): void {
-    if (!isSiteLimitExhausted.value) {
-        return
-    }
-
-    event.preventDefault()
-    showSiteLimitToast()
-}
 </script>
 
 <template>
     <Head title="Сайты" />
-    <FlashToast :message="siteLimitToastMessage" :token="siteLimitToastToken" variant="error" />
 
     <DashboardLayout
         :organization="organization"
@@ -506,13 +490,14 @@ function handleCreateSiteClick(event: MouseEvent): void {
                 {{ problemSitesCount }} требуют внимания
             </span>
             <Link
+                v-if="!isSiteLimitExhausted"
                 href="/sites/create"
                 class="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2FA568] px-5 text-sm font-medium text-white shadow-[0_12px_26px_rgba(47,165,104,0.18)] transition hover:bg-[#278C58]"
-                @click="handleCreateSiteClick"
             >
                 <Plus class="h-4 w-4" :stroke-width="2" />
                 Добавить сайт
             </Link>
+            <TariffRestriction v-else action="Добавить сайт" prefix="Увеличить лимит в" link-text="тарифах" />
         </template>
 
         <div class="mx-auto max-w-7xl px-5 py-5 sm:px-8 lg:py-6">
@@ -864,12 +849,13 @@ function handleCreateSiteClick(event: MouseEvent): void {
                     Добавьте первый сайт или измените фильтры, чтобы увидеть состояние мониторинга.
                 </p>
                 <Link
+                    v-if="!isSiteLimitExhausted"
                     href="/sites/create"
                     class="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-[#2FA568] px-5 text-sm font-medium text-white transition hover:bg-[#278C58]"
-                    @click="handleCreateSiteClick"
                 >
                     Добавить сайт
                 </Link>
+                <TariffRestriction v-else action="Добавить сайт" prefix="Увеличить лимит в" link-text="тарифах" class="mx-auto mt-6 w-fit" />
             </section>
         </div>
     </DashboardLayout>

@@ -11,6 +11,7 @@ import {
     Tooltip,
 } from 'chart.js'
 import { Bar, Doughnut } from 'vue-chartjs'
+import TariffRestriction from '@/Components/TariffRestriction.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
@@ -398,14 +399,12 @@ function severityClass(value: string): string {
             </section>
 
             <section v-if="!analyticsAccess.enabled" class="rounded-2xl border border-[#D8E2F0] bg-white p-6 shadow-[0_16px_44px_rgba(15,23,42,0.06)]">
-                <p class="text-sm font-bold text-[#0F6BFF]">Аналитика инцидентов</p>
-                <h2 class="mt-2 text-2xl font-extrabold text-[#111827]">Доступна на Pro и Plus</h2>
+                <p class="text-sm font-bold text-[#1E9B5D]">Аналитика инцидентов</p>
+                <h2 class="mt-2 text-2xl font-extrabold text-[#111827]">История и динамика инцидентов</h2>
                 <p class="mt-2 max-w-2xl text-sm leading-6 text-[#667085]">
-                    Смотрите динамику инцидентов, downtime, проблемные проекты и сайты за период. На текущем тарифе доступен оперативный список инцидентов без аналитических отчетов.
+                    Смотрите downtime, проблемные проекты и сайты за выбранный период. На текущем тарифе доступен оперативный список без аналитических отчётов.
                 </p>
-                <Link href="/billing" class="mt-5 inline-flex h-11 items-center rounded-xl bg-[#0F6BFF] px-5 text-sm font-extrabold text-white transition hover:bg-[#0757D8]">
-                    Перейти на тариф
-                </Link>
+                <TariffRestriction action="Открыть аналитику" class="mt-5 w-fit" />
             </section>
 
             <section v-else-if="analytics" class="grid gap-6">

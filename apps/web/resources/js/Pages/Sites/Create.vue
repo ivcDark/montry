@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
-import { Crown, Plus, Trash2 } from '@lucide/vue'
+import { Plus, Trash2 } from '@lucide/vue'
+import TariffRestriction from '@/Components/TariffRestriction.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 
 type Organization = {
@@ -1052,10 +1053,8 @@ function submit(): void {
                                                 <Plus class="h-4 w-4" :stroke-width="2" />
                                                 Добавить endpoint
                                             </button>
-                                            <p v-if="!canAddApiEndpoint" class="mt-2 text-xs font-medium text-[#8A6D3B]">
-                                                <span v-if="!form.monitors.api_endpoint.is_enabled">Включите API-мониторинг, чтобы добавить endpoint.</span>
-                                                <span v-else>Лимит активных мониторингов исчерпан.</span>
-                                            </p>
+                                            <p v-if="!canAddApiEndpoint && !form.monitors.api_endpoint.is_enabled" class="mt-2 text-xs font-medium text-[#8A6D3B]">Включите API-мониторинг, чтобы добавить endpoint.</p>
+                                            <TariffRestriction v-else-if="!canAddApiEndpoint" compact prefix="Увеличить лимит в" link-text="тарифах" class="mt-2 w-fit" />
                                         </div>
                                     </template>
 
@@ -1112,25 +1111,19 @@ function submit(): void {
                                                 <Plus class="h-4 w-4" :stroke-width="2" />
                                                 Добавить порт
                                             </button>
-                                            <p v-if="!canAddTcpPort" class="text-xs font-medium text-[#8A6D3B]">
-                                                <span v-if="!form.monitors.tcp_port.is_enabled">Включите TCP-мониторинг, чтобы добавить порт.</span>
-                                                <span v-else>Лимит активных мониторингов исчерпан.</span>
-                                            </p>
+                                            <p v-if="!canAddTcpPort && !form.monitors.tcp_port.is_enabled" class="text-xs font-medium text-[#8A6D3B]">Включите TCP-мониторинг, чтобы добавить порт.</p>
+                                            <TariffRestriction v-else-if="!canAddTcpPort" compact prefix="Увеличить лимит в" link-text="тарифах" class="mt-2 w-fit" />
                                         </div>
                                     </template>
                                 </div>
                                 </div>
 
-                                <Link
+                                <div
                                     v-if="!card.included"
-                                    href="/billing"
                                     class="absolute inset-0 z-10 flex items-center justify-center bg-[#F1F4F2]/55 p-5"
                                 >
-                                    <span class="inline-flex items-center gap-2 rounded-2xl border border-[#C7D2CC] bg-white px-4 py-3 text-sm font-bold text-[#52645A] shadow-[0_10px_30px_rgba(38,51,45,0.12)] transition hover:border-[#9FB7AA] hover:text-[#173B2A]">
-                                        <Crown class="h-5 w-5 text-[#C59A2D]" />
-                                        Доступно в Pro, Team
-                                    </span>
-                                </Link>
+                                    <TariffRestriction action="Подключить проверку" overlay />
+                                </div>
                                 </article>
                             </div>
                         </div>

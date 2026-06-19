@@ -5,6 +5,7 @@ namespace App\Modules\Billing\Application\Services;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
+use App\Modules\Projects\Infrastructure\Persistence\Models\Project;
 use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
 use App\Modules\Observability\Application\Services\BusinessEventRecorder;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -78,13 +79,39 @@ final readonly class LimitChecker
      */
     public function assertCanCreateProject(int $organizationId): void
     {
-        if ($this->booleanLimit($organizationId, 'can_create_projects', true)) {
+        $limit = $this->projectLimit($organizationId);
+
+        if ($limit === null) {
             return;
         }
 
-        $this->recordLimitHit($organizationId, 'can_create_projects');
+        $usage = $this->projectUsage($organizationId);
 
-        throw new AuthorizationException('Separate projects are not available for the current plan.');
+        if ($usage >= $limit) {
+            $this->recordLimitHit($organizationId, 'max_projects', [
+                'current_count' => $usage,
+                'limit' => $limit,
+            ]);
+
+            throw new AuthorizationException('Достигнут лимит проектов текущего тарифа.');
+        }
+    }
+
+    public function projectLimit(int $organizationId): ?int
+    {
+        return $this->limitValue($organizationId, 'max_projects');
+    }
+
+    public function projectUsage(int $organizationId): int
+    {
+        return Project::query()->where('organization_id', $organizationId)->count();
+    }
+
+    public function canCreateProject(int $organizationId): bool
+    {
+        $limit = $this->projectLimit($organizationId);
+
+        return $limit === null || $this->projectUsage($organizationId) < $limit;
     }
 
     /**
@@ -300,6 +327,11 @@ final readonly class LimitChecker
         $siteLimit = $this->effectiveSiteLimit($organizationId);
 
         return [
+            'projects' => [
+                'current' => $this->projectUsage($organizationId),
+                'limit' => $this->projectLimit($organizationId),
+                'can_create' => $this->canCreateProject($organizationId),
+            ],
             'monitors' => [
                 'current' => $this->activeMonitorUsage($organizationId),
                 'limit' => $this->activeMonitorLimit($organizationId),
