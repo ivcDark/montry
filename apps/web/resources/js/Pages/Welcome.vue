@@ -33,7 +33,7 @@ defineProps<{
 const page = usePage<PageProps>()
 const user = page.props.auth.user
 
-const ctaHref = user ? '/dashboard' : '/register'
+const ctaHref = user ? '/sites' : '/register'
 const ctaLabel = user ? 'Войти в кабинет' : 'Начать бесплатно'
 const feedbackSent = ref(false)
 const feedbackFallbackMessage = 'Спасибо, ваш вопрос отправлен администратору. Ответ придет на указанную почту.'

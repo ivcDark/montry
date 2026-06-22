@@ -91,7 +91,7 @@ final class DashboardOverviewTest extends TestCase
 
         $this
             ->actingAs($user)
-            ->get('/dashboard')
+            ->get('/sites')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Dashboard/Index', false)

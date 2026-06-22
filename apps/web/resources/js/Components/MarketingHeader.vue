@@ -30,7 +30,7 @@ const navItems = [
     { label: 'Связаться', href: '/#feedback' },
 ]
 
-const ctaHref = user ? '/dashboard' : '/register'
+const ctaHref = user ? '/sites' : '/register'
 const ctaLabel = user ? 'Перейти в кабинет' : 'Начать бесплатно'
 </script>
 

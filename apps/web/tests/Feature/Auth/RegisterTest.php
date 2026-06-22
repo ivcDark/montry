@@ -102,7 +102,7 @@ class RegisterTest extends TestCase
                 'code' => '12345',
             ]);
 
-        $response->assertRedirect('/dashboard');
+        $response->assertRedirect('/sites');
 
         $user->refresh();
         $organization = Organization::query()->where('name', 'Ivan Petrov')->firstOrFail();
@@ -403,7 +403,7 @@ class RegisterTest extends TestCase
                 'billing.intended_plan_code' => 'free',
             ])
             ->post('/register/verify-code', ['code' => '12345'])
-            ->assertRedirect('/dashboard');
+            ->assertRedirect('/sites');
 
         $this->assertDatabaseCount('payments', 0);
         $this->assertNull(session('billing.intended_plan_code'));

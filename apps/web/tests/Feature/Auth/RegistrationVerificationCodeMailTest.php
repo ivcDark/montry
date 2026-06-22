@@ -29,6 +29,6 @@ final class RegistrationVerificationCodeMailTest extends TestCase
         $this->assertStringContainsString('#24A869', $html);
         $this->assertStringContainsString('Перейти к сайтам', $html);
         $this->assertStringContainsString(url('/sites'), $html);
-        $this->assertStringNotContainsString(url('/dashboard'), $html);
+        $this->assertStringNotContainsString(url('/sites'), $html);
     }
 }

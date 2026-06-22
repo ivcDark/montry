@@ -38,7 +38,7 @@ class LoginTest extends TestCase
             'remember' => false,
         ]);
 
-        $response->assertRedirect('/dashboard');
+        $response->assertRedirect('/sites');
 
         $sessionCookie = $this->getResponseCookie($response, config('session.cookie'));
 
@@ -61,7 +61,7 @@ class LoginTest extends TestCase
             'remember' => true,
         ]);
 
-        $response->assertRedirect('/dashboard');
+        $response->assertRedirect('/sites');
 
         $rememberCookie = $this->getResponseCookie($response, Auth::guard('web')->getRecallerName());
 

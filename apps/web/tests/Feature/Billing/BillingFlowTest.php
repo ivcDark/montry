@@ -74,7 +74,7 @@ final class BillingFlowTest extends TestCase
         $this
             ->actingAs($user)
             ->post("/billing/payments/{$payment->id}/confirm")
-            ->assertRedirect('/dashboard');
+            ->assertRedirect('/sites');
 
         $payment->refresh();
         $pendingSubscription->refresh();
@@ -152,7 +152,7 @@ final class BillingFlowTest extends TestCase
         $this
             ->actingAs($user)
             ->post("/billing/payments/{$payment->id}/confirm")
-            ->assertRedirect('/dashboard');
+            ->assertRedirect('/sites');
 
         $subscription->refresh();
         $payment->refresh();
@@ -356,7 +356,7 @@ final class BillingFlowTest extends TestCase
         $this
             ->actingAs($user)
             ->post("/billing/payments/{$payment->id}/confirm")
-            ->assertRedirect('/dashboard');
+            ->assertRedirect('/sites');
 
         $this->assertDatabaseHas('subscription_items', [
             'code' => 'extra_sites_pack',
@@ -620,7 +620,7 @@ final class BillingFlowTest extends TestCase
         $this
             ->actingAs($user)
             ->post("/billing/payments/{$payment->id}/confirm")
-            ->assertRedirect('/dashboard');
+            ->assertRedirect('/sites');
 
         $scheduledDowngrade->refresh();
 
@@ -1096,7 +1096,7 @@ final class BillingFlowTest extends TestCase
 
         $this
             ->get('/billing/robokassa/success?'.http_build_query($payload))
-            ->assertRedirect('/dashboard');
+            ->assertRedirect('/sites');
 
         $payment->refresh();
         $subscription = $payment->subscription()->firstOrFail();

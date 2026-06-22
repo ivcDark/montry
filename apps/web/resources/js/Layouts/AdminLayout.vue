@@ -130,7 +130,7 @@ const toastToken = computed(() => (
                 </div>
 
                 <Link
-                    href="/dashboard"
+                    href="/sites"
                     class="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-[#CFE1D7] bg-white text-sm font-medium text-[#52645A] transition hover:border-[#B8D0C2] hover:text-[#173B2A]"
                 >
                     В кабинет
