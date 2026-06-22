@@ -300,7 +300,7 @@ final class BillingController extends Controller
 
         $checkout->confirm($payment);
 
-        return to_route('dashboard.index')
+        return to_route('sites.index')
             ->with('success', 'Тариф активирован.');
     }
 

@@ -134,7 +134,7 @@ final class RobokassaController extends Controller
         $logger->info('robokassa.success.returned', $payment, $request, 'Пользователь вернулся из Robokassa после успешной оплаты.', $payload);
 
         if ($payment->status === 'paid') {
-            return to_route('dashboard.index')
+            return to_route('sites.index')
                 ->with('success', 'Платеж подтвержден. Тариф активирован.');
         }
 
@@ -168,7 +168,7 @@ final class RobokassaController extends Controller
 
         $logger->info('robokassa.success.processed', $payment->refresh(), $request, 'Платеж Robokassa подтвержден по валидному SuccessURL.', $payload);
 
-        return to_route('dashboard.index')
+        return to_route('sites.index')
             ->with('success', 'Платеж подтвержден. Тариф активирован.');
     }
 
@@ -233,7 +233,7 @@ final class RobokassaController extends Controller
             'simulated' => true,
         ]);
 
-        return to_route('dashboard.index')
+        return to_route('sites.index')
             ->with('success', 'Тестовый платеж подтвержден. Тариф активирован.');
     }
 

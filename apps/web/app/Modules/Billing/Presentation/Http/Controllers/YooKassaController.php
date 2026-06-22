@@ -32,7 +32,7 @@ final class YooKassaController extends Controller
         }
 
         if ($payment->status === 'paid') {
-            return to_route('dashboard.index')
+            return to_route('sites.index')
                 ->with('success', 'Платеж уже подтвержден. Тариф активирован.');
         }
 
