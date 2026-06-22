@@ -1,5 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
+import { Activity, BellRing, Building2, CalendarClock, ChartNoAxesCombined, CircleCheck, ChevronDown, Clock3, Globe, Laptop, Radar, Send, TriangleAlert, UsersRound } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import MarketingHeader from '@/Components/MarketingHeader.vue'
 import MarketingFooter from '@/Components/MarketingFooter.vue'
@@ -44,10 +45,26 @@ const feedbackForm = useForm({
 })
 
 const manualCards = [
-    ['Проверяем сайты 24/7', 'Сайт и домен под присмотром даже ночью, в выходные и праздники.'],
-    ['Уведомляем о сбоях', 'Почта и Telegram помогают быстро отреагировать на проблему.'],
-    ['Следим за сроками', 'Контролируем SSL, домены и DNS, чтобы не пропустить критичные даты.'],
-    ['Формируем отчеты', 'История проверок и отчеты помогают видеть надежность сайтов.'],
+    {
+        title: 'Проверяем сайты 24/7',
+        text: 'Сайт и домен под присмотром даже ночью, в выходные и праздники.',
+        icon: Radar,
+    },
+    {
+        title: 'Уведомляем о сбоях',
+        text: 'Почта и Telegram помогают быстро отреагировать на проблему.',
+        icon: BellRing,
+    },
+    {
+        title: 'Следим за сроками',
+        text: 'Контролируем SSL, домены и DNS, чтобы не пропустить критичные даты.',
+        icon: CalendarClock,
+    },
+    {
+        title: 'Формируем отчеты',
+        text: 'История проверок и отчеты помогают видеть надежность сайтов.',
+        icon: ChartNoAxesCombined,
+    },
 ]
 
 const baseChecks = [
@@ -72,10 +89,26 @@ const steps = [
 ]
 
 const audiences = [
-    ['Владельцам сайтов', 'Следить за своим сайтом и узнавать о проблемах раньше посетителей.'],
-    ['Фрилансерам', 'Контролировать сайты клиентов и быстрее реагировать на сбои.'],
-    ['Веб-студиям', 'Держать все клиентские сайты в одном рабочем списке.'],
-    ['Небольшим IT-командам', 'Мониторить важные ресурсы без тяжелой инфраструктуры.'],
+    {
+        title: 'Владельцам сайтов',
+        text: 'Следить за своим сайтом и узнавать о проблемах раньше посетителей.',
+        icon: Globe,
+    },
+    {
+        title: 'Фрилансерам',
+        text: 'Контролировать сайты клиентов и быстрее реагировать на сбои.',
+        icon: Laptop,
+    },
+    {
+        title: 'Веб-студиям',
+        text: 'Держать все клиентские сайты в одном рабочем списке.',
+        icon: Building2,
+    },
+    {
+        title: 'Небольшим IT-командам',
+        text: 'Мониторить важные ресурсы без тяжелой инфраструктуры.',
+        icon: UsersRound,
+    },
 ]
 
 const plans = [
@@ -104,12 +137,34 @@ const plans = [
 ]
 
 const faq = [
-    ['Что входит в базовый мониторинг сайта?', 'Доступность сайта, SSL, домен, DNS и наличие robots.txt.'],
-    ['Можно ли пользоваться бесплатно?', 'Да. На тарифе Free можно добавить 1 сайт и получать email-уведомления.'],
-    ['Какие проверки доступны?', 'HTTP и SSL доступны на Free. На Pro и Team включены все типы проверок без отдельных доплат.'],
-    ['Можно ли получать уведомления в Telegram?', 'Да. Telegram доступен на тарифах Pro и Team.'],
-    ['Подойдет ли Montry для веб-студии?', 'Да. Вы сможете контролировать сайты клиентов, видеть инциденты и формировать отчеты.'],
-    ['Что происходит, если сайт перестает работать?', 'Montry сохраняет инцидент, отправляет уведомление и фиксирует восстановление.'],
+    [
+        'Нужно ли устанавливать что-то на сайт или сервер?',
+        'Нет. Достаточно добавить адрес сайта или домен в личном кабинете. Montry выполняет проверки со своей стороны, поэтому устанавливать плагины, скрипты или агенты не нужно.',
+    ],
+    [
+        'Через сколько я узнаю, что сайт перестал работать?',
+        'Это зависит от интервала мониторинга на вашем тарифе. Чтобы не тревожить из-за случайного таймаута, Montry подтверждает проблему повторными проверками и затем открывает инцидент.',
+    ],
+    [
+        'Будут ли уведомления после каждой неудачной проверки?',
+        'Нет. Уведомление отправляется при открытии подтверждённого инцидента, а не после каждой ошибки. Когда сайт восстановится, вы получите отдельное сообщение.',
+    ],
+    [
+        'Что произойдёт, когда сайт снова заработает?',
+        'Montry зафиксирует восстановление, закроет инцидент и сохранит длительность простоя в истории. Так можно понять, когда началась проблема и сколько она продолжалась.',
+    ],
+    [
+        'Как Montry предупреждает об окончании SSL и домена?',
+        'Сервис регулярно проверяет сроки и заранее предупреждает о приближении критической даты. По умолчанию используются интервалы 30, 14, 7, 3 и 1 день.',
+    ],
+    [
+        'Можно ли следить за сайтами клиентов в одном кабинете?',
+        'Да. Сайты можно объединять по проектам или клиентам, видеть их текущие статусы, историю инцидентов и отчёты в одном рабочем пространстве.',
+    ],
+    [
+        'Куда приходят уведомления?',
+        'Email доступен для базовых уведомлений. На тарифах Pro и Team можно дополнительно подключить Telegram и получать сообщения о сбоях и восстановлении там.',
+    ],
 ]
 
 function signupHref(href: string): string {
@@ -172,7 +227,7 @@ function submitFeedback(): void {
                 <div class="mx-auto w-full max-w-[460px] rounded-3xl border border-[#DDEBE3] bg-white p-6 shadow-[0_28px_70px_rgba(31,68,49,0.13)]">
                     <div class="flex items-start justify-between">
                         <div>
-                            <h2 class="text-xl font-extrabold text-[#26332D]">montry.ru</h2>
+                            <h2 class="text-xl font-bold text-[#26332D]">montry.ru</h2>
                             <p class="mt-2 text-xs font-semibold text-[#8A9A90]">Сайт</p>
                         </div>
                         <span class="rounded-full bg-[#E9F8EF] px-3 py-1 text-xs font-semibold text-[#24A869]">Работает</span>
@@ -180,15 +235,15 @@ function submitFeedback(): void {
 
                     <div class="mt-7 grid grid-cols-3 gap-3">
                         <div class="rounded-2xl border border-[#E8F0EB] p-4">
-                            <p class="text-2xl font-extrabold text-[#24A869]">99.98%</p>
+                            <p class="text-2xl font-bold text-[#24A869]">99.98%</p>
                             <p class="mt-1 text-xs font-semibold text-[#8A9A90]">uptime</p>
                         </div>
                         <div class="rounded-2xl border border-[#E8F0EB] p-4">
-                            <p class="text-2xl font-extrabold text-[#24A869]">184 мс</p>
+                            <p class="text-2xl font-bold text-[#24A869]">184 мс</p>
                             <p class="mt-1 text-xs font-semibold text-[#8A9A90]">ответ</p>
                         </div>
                         <div class="rounded-2xl border border-[#E8F0EB] p-4">
-                            <p class="text-2xl font-extrabold text-[#24A869]">0</p>
+                            <p class="text-2xl font-bold text-[#24A869]">0</p>
                             <p class="mt-1 text-xs font-semibold text-[#8A9A90]">проблем</p>
                         </div>
                     </div>
@@ -214,18 +269,26 @@ function submitFeedback(): void {
             </div>
         </section>
 
-        <section id="features" class="py-16 sm:py-20">
+        <section id="features" class="relative overflow-hidden py-16 sm:py-20">
+            <div class="pointer-events-none absolute inset-x-0 top-10 mx-auto h-72 max-w-5xl rounded-full bg-[#E9F8EF]/70 blur-3xl"></div>
+
             <div class="mx-auto max-w-6xl px-5 sm:px-8">
-                <div class="mx-auto max-w-2xl text-center">
-                    <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Контроль сайта без ручных проверок</h2>
+                <div class="relative mx-auto max-w-2xl text-center">
+                    <h2 class="text-3xl font-bold leading-tight text-[#26332D] sm:text-4xl">Контроль сайта без ручных проверок</h2>
                     <p class="mt-3 text-sm leading-6 text-[#738479]">Montry помогает быстро узнать о сбоях и держать под контролем технические параметры сайта.</p>
                 </div>
 
-                <div class="mx-auto mt-9 grid max-w-4xl gap-4 sm:grid-cols-3">
-                    <article v-for="[title, text] in manualCards" :key="title" class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.06)]">
-                        <span class="grid h-7 w-7 place-items-center rounded-lg bg-[#E9F8EF] text-sm font-extrabold text-[#24A869]">•</span>
-                        <h3 class="mt-5 text-lg font-extrabold text-[#26332D]">{{ title }}</h3>
-                        <p class="mt-2 text-sm leading-6 text-[#738479]">{{ text }}</p>
+                <div class="relative mx-auto mt-10 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <article
+                        v-for="card in manualCards"
+                        :key="card.title"
+                        class="group rounded-3xl border border-[#DDEBE3] bg-white/95 p-6 shadow-[0_14px_36px_rgba(31,68,49,0.07)] transition duration-300 hover:-translate-y-1 hover:border-[#B8DCC8] hover:shadow-[0_22px_48px_rgba(31,68,49,0.12)]"
+                    >
+                        <span class="grid h-12 w-12 place-items-center rounded-2xl bg-[#E9F8EF] text-[#24A869] transition duration-300 group-hover:bg-[#24A869] group-hover:text-white">
+                            <component :is="card.icon" :size="23" :stroke-width="2" aria-hidden="true" />
+                        </span>
+                        <h3 class="mt-6 text-lg font-semibold leading-snug text-[#26332D]">{{ card.title }}</h3>
+                        <p class="mt-3 text-sm leading-6 text-[#738479]">{{ card.text }}</p>
                     </article>
                 </div>
             </div>
@@ -234,15 +297,15 @@ function submitFeedback(): void {
         <section id="checks" class="py-10 sm:py-14">
             <div class="mx-auto max-w-6xl px-5 sm:px-8">
                 <div class="mx-auto max-w-2xl text-center">
-                    <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Базовый мониторинг уже включен</h2>
+                    <h2 class="text-3xl font-bold leading-tight text-[#26332D] sm:text-4xl">Базовый мониторинг уже включен</h2>
                     <p class="mt-3 text-sm leading-6 text-[#738479]">Добавьте сайт, и Montry сразу начнет следить за ключевыми техническими параметрами.</p>
                 </div>
 
                 <div class="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                     <article v-for="[title, text] in baseChecks" :key="title" class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
-                        <span class="grid h-7 w-7 place-items-center rounded-lg bg-[#E9F8EF] text-sm font-extrabold text-[#24A869]">✓</span>
-                        <p class="mt-4 text-xs font-extrabold text-[#24A869]">Включено</p>
-                        <h3 class="mt-1 text-base font-extrabold text-[#26332D]">{{ title }}</h3>
+                        <span class="grid h-7 w-7 place-items-center rounded-lg bg-[#E9F8EF] text-sm font-bold text-[#24A869]">✓</span>
+                        <p class="mt-4 text-xs font-bold text-[#24A869]">Включено</p>
+                        <h3 class="mt-1 text-base font-semibold text-[#26332D]">{{ title }}</h3>
                         <p class="mt-2 text-xs leading-5 text-[#738479]">{{ text }}</p>
                     </article>
                 </div>
@@ -252,14 +315,14 @@ function submitFeedback(): void {
         <section class="py-14 sm:py-16">
             <div class="mx-auto max-w-6xl px-5 sm:px-8">
                 <div class="mx-auto max-w-3xl text-center">
-                    <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Все типы проверок — без отдельных доплат</h2>
+                    <h2 class="text-3xl font-bold leading-tight text-[#26332D] sm:text-4xl">Все типы проверок — без отдельных доплат</h2>
                     <p class="mt-3 text-sm leading-6 text-[#738479]">На Pro и Team доступны Sitemap.xml, API endpoint, TCP-порты и другие расширенные проверки.</p>
                 </div>
 
-                <div class="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="mx-auto mt-9 grid max-w-4xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <article v-for="[title, text] in advancedChecks" :key="title" class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.06)]">
                         <p class="inline-flex rounded-full bg-[#FFF4DC] px-3 py-1 text-xs font-bold text-[#C87800]">Pro и Team</p>
-                        <h3 class="mt-4 text-lg font-extrabold text-[#26332D]">{{ title }}</h3>
+                        <h3 class="mt-4 text-lg font-semibold text-[#26332D]">{{ title }}</h3>
                         <p class="mt-3 text-sm leading-6 text-[#738479]">{{ text }}</p>
                     </article>
                 </div>
@@ -269,14 +332,14 @@ function submitFeedback(): void {
         <section class="py-14 sm:py-16">
             <div class="mx-auto max-w-6xl px-5 sm:px-8">
                 <div class="mx-auto max-w-2xl text-center">
-                    <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Запустить мониторинг можно за пару минут</h2>
+                    <h2 class="text-3xl font-bold leading-tight text-[#26332D] sm:text-4xl">Запустить мониторинг можно за пару минут</h2>
                     <p class="mt-3 text-sm leading-6 text-[#738479]">Четыре простых шага — от добавления сайта до уведомлений и отчетов.</p>
                 </div>
 
                 <div class="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <article v-for="([title, text], index) in steps" :key="title" class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
-                        <span class="grid h-8 w-8 place-items-center rounded-full bg-[#24A869] text-sm font-extrabold text-white">{{ index + 1 }}</span>
-                        <h3 class="mt-5 text-lg font-extrabold text-[#26332D]">{{ title }}</h3>
+                        <span class="grid h-8 w-8 place-items-center rounded-full bg-[#24A869] text-sm font-bold text-white">{{ index + 1 }}</span>
+                        <h3 class="mt-5 text-lg font-semibold text-[#26332D]">{{ title }}</h3>
                         <p class="mt-2 text-sm leading-6 text-[#738479]">{{ text }}</p>
                     </article>
                 </div>
@@ -285,52 +348,70 @@ function submitFeedback(): void {
 
         <section id="audience" class="py-14 sm:py-16">
             <div class="mx-auto max-w-6xl px-5 sm:px-8">
-                <div>
-                    <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Для тех, кто отвечает за сайты</h2>
-                    <p class="mt-3 max-w-2xl text-sm leading-6 text-[#738479]">Montry одинаково полезен владельцу сайта и команде, которая отвечает за десятки проектов.</p>
+                <div class="mx-auto max-w-2xl text-center">
+                    <h2 class="text-3xl font-bold leading-tight text-[#26332D] sm:text-4xl">Для тех, кто отвечает за сайты</h2>
+                    <p class="mt-3 text-sm leading-6 text-[#738479]">Montry одинаково полезен владельцу сайта и команде, которая отвечает за десятки проектов.</p>
                 </div>
 
                 <div class="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <article v-for="[title, text] in audiences" :key="title" class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
-                        <span class="grid h-7 w-7 place-items-center rounded-lg bg-[#E8F0FF] text-sm font-extrabold text-[#4F7DE8]">•</span>
-                        <h3 class="mt-5 text-lg font-extrabold text-[#26332D]">{{ title }}</h3>
-                        <p class="mt-2 text-sm leading-6 text-[#738479]">{{ text }}</p>
+                    <article v-for="audience in audiences" :key="audience.title" class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
+                        <span class="grid h-10 w-10 place-items-center rounded-xl bg-[#E8F0FF] text-[#4F7DE8]">
+                            <component :is="audience.icon" :size="21" :stroke-width="2" aria-hidden="true" />
+                        </span>
+                        <h3 class="mt-5 text-lg font-semibold text-[#26332D]">{{ audience.title }}</h3>
+                        <p class="mt-2 text-sm leading-6 text-[#738479]">{{ audience.text }}</p>
                     </article>
                 </div>
             </div>
         </section>
 
-        <section class="py-16 sm:py-20">
+        <section class="py-14 sm:py-16">
             <div class="mx-auto max-w-6xl px-5 sm:px-8">
                 <div class="mx-auto max-w-2xl text-center">
-                    <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Узнавайте о проблемах сразу</h2>
-                    <p class="mt-3 text-sm leading-6 text-[#738479]">Montry фиксирует инциденты, сохраняет историю и отправляет уведомления.</p>
+                    <h2 class="text-3xl font-bold leading-tight text-[#26332D] sm:text-4xl">Узнавайте о проблемах сразу</h2>
+                    <p class="mt-3 text-sm leading-6 text-[#738479]">Montry подтверждает сбой, уведомляет ответственных и фиксирует восстановление.</p>
                 </div>
 
-                <div class="mx-auto mt-9 grid max-w-4xl gap-5 md:grid-cols-[1fr_0.9fr]">
-                    <div class="rounded-2xl border border-[#DDEBE3] bg-white p-6 shadow-[0_14px_34px_rgba(31,68,49,0.07)]">
-                        <p class="text-sm font-extrabold text-[#EA6A6A]">Активный инцидент</p>
-                        <h3 class="mt-3 text-2xl font-extrabold text-[#26332D]">Сайт недоступен</h3>
-                        <dl class="mt-5 space-y-3 text-sm text-[#738479]">
-                            <div><dt class="font-bold text-[#52645A]">Сайт:</dt><dd>example.ru</dd></div>
-                            <div><dt class="font-bold text-[#52645A]">Проверка:</dt><dd>доступность сайта</dd></div>
-                            <div><dt class="font-bold text-[#52645A]">Ошибка:</dt><dd>HTTP 500</dd></div>
-                            <div><dt class="font-bold text-[#52645A]">Начался:</dt><dd>12 минут назад</dd></div>
-                        </dl>
+                <div class="mx-auto mt-8 max-w-5xl overflow-hidden rounded-2xl border border-[#DDEBE3] bg-white shadow-[0_14px_36px_rgba(31,68,49,0.07)]">
+                    <div class="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                        <div class="flex items-center gap-4">
+                            <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#FDE8E8] text-[#D95858]">
+                                <TriangleAlert :size="20" :stroke-width="2" aria-hidden="true" />
+                            </span>
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.1em] text-[#D95858]">Активный инцидент</p>
+                                <h3 class="mt-1 text-lg font-semibold text-[#26332D]">example.ru недоступен</h3>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 text-sm sm:min-w-[420px]">
+                            <div>
+                                <p class="text-xs text-[#8A9A90]">Причина</p>
+                                <p class="mt-1 font-semibold text-[#26332D]">HTTP 500</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-[#8A9A90]">Подтверждено</p>
+                                <p class="mt-1 font-semibold text-[#26332D]">2 проверками</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-[#8A9A90]">Длительность</p>
+                                <p class="mt-1 flex items-center gap-1.5 font-semibold text-[#26332D]"><Clock3 :size="14" aria-hidden="true" />12 минут</p>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="grid gap-4">
-                        <div class="flex items-center gap-3 rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
-                            <span class="h-3 w-3 rounded-full bg-[#24A869]"></span>
-                            <p class="font-extrabold text-[#26332D]">Email отправлен</p>
+                    <div class="grid border-t border-[#E8F0EB] sm:grid-cols-3">
+                        <div class="flex gap-3 p-5 sm:border-r sm:border-[#E8F0EB]">
+                            <Activity :size="19" class="mt-0.5 shrink-0 text-[#D9822B]" aria-hidden="true" />
+                            <div><h3 class="text-sm font-semibold text-[#26332D]">Только подтверждённые сбои</h3><p class="mt-1 text-xs leading-5 text-[#738479]">Без тревоги после единичной ошибки.</p></div>
                         </div>
-                        <div class="flex items-center gap-3 rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
-                            <span class="h-3 w-3 rounded-full bg-[#24A869]"></span>
-                            <p class="font-extrabold text-[#26332D]">Telegram отправлен</p>
+                        <div class="flex gap-3 border-t border-[#E8F0EB] p-5 sm:border-r sm:border-t-0">
+                            <Send :size="19" class="mt-0.5 shrink-0 text-[#4F7DE8]" aria-hidden="true" />
+                            <div><h3 class="text-sm font-semibold text-[#26332D]">Email и Telegram без спама</h3><p class="mt-1 text-xs leading-5 text-[#738479]">Одно сообщение при открытии инцидента.</p></div>
                         </div>
-                        <div class="flex items-center gap-3 rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
-                            <span class="h-3 w-3 rounded-full bg-[#24A869]"></span>
-                            <p class="font-extrabold text-[#26332D]">Инцидент записан в историю</p>
+                        <div class="flex gap-3 border-t border-[#E8F0EB] p-5 sm:border-t-0">
+                            <CircleCheck :size="19" class="mt-0.5 shrink-0 text-[#24A869]" aria-hidden="true" />
+                            <div><h3 class="text-sm font-semibold text-[#26332D]">Восстановление и история</h3><p class="mt-1 text-xs leading-5 text-[#738479]">Длительность простоя сохраняется автоматически.</p></div>
                         </div>
                     </div>
                 </div>
@@ -340,7 +421,7 @@ function submitFeedback(): void {
         <section id="pricing" class="py-16 sm:py-20">
             <div class="mx-auto max-w-6xl px-5 sm:px-8">
                 <div class="mx-auto max-w-3xl text-center">
-                    <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Простые тарифы без сложного биллинга</h2>
+                    <h2 class="text-3xl font-bold leading-tight text-[#26332D] sm:text-4xl">Простые тарифы без сложного биллинга</h2>
                     <p class="mt-3 text-sm leading-6 text-[#738479]">Тарифы отличаются количеством мониторингов, интервалом, историей и возможностями для команды.</p>
                 </div>
 
@@ -352,8 +433,8 @@ function submitFeedback(): void {
                         :class="plan.featured ? 'border-[#24A869] bg-[#F4FFF8] ring-1 ring-[#24A869]' : 'border-[#DDEBE3]'"
                     >
                         <span v-if="plan.featured" class="absolute right-5 top-5 rounded-full border border-[#BEE7CE] bg-white px-3 py-1 text-xs font-semibold text-[#24A869]">Популярный</span>
-                        <h3 class="text-2xl font-extrabold text-[#26332D]">{{ plan.name }}</h3>
-                        <p class="mt-4 text-2xl font-extrabold text-[#24A869]">{{ plan.price }}</p>
+                        <h3 class="text-2xl font-semibold text-[#26332D]">{{ plan.name }}</h3>
+                        <p class="mt-4 text-2xl font-bold text-[#24A869]">{{ plan.price }}</p>
                         <p class="mt-4 min-h-12 text-sm leading-6 text-[#738479]">{{ plan.description }}</p>
                         <ul class="mt-6 space-y-3 text-sm font-semibold text-[#52645A]">
                             <li v-for="feature in plan.features" :key="feature" class="flex gap-2">
@@ -377,7 +458,7 @@ function submitFeedback(): void {
         <section id="articles" class="py-14 sm:py-16">
             <div class="mx-auto max-w-6xl px-5 sm:px-8">
                 <div class="mx-auto flex max-w-3xl flex-col items-center text-center">
-                    <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Статьи</h2>
+                    <h2 class="text-3xl font-bold leading-tight text-[#26332D] sm:text-4xl">Статьи</h2>
                     <p class="mt-3 text-sm leading-6 text-[#738479]">Практичные материалы о мониторинге сайтов, SSL, доменов и работе с инцидентами.</p>
                     <Link href="/articles" class="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-[#24A869] px-5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(36,168,105,0.18)] transition hover:bg-[#1D9059]">
                         Посмотреть статьи
@@ -392,7 +473,7 @@ function submitFeedback(): void {
                         class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_10px_28px_rgba(31,68,49,0.05)] transition hover:-translate-y-0.5 hover:border-[#BEE7CE]"
                     >
                         <p class="text-xs font-semibold text-[#24A869]">Статья</p>
-                        <h3 class="mt-3 text-lg font-extrabold text-[#26332D]">{{ article.title }}</h3>
+                        <h3 class="mt-3 text-lg font-semibold text-[#26332D]">{{ article.title }}</h3>
                         <p class="mt-2 text-sm leading-6 text-[#738479]">{{ article.excerpt }}</p>
                     </Link>
                 </div>
@@ -404,7 +485,7 @@ function submitFeedback(): void {
                 <div class="grid gap-8 rounded-3xl border border-[#DDEBE3] bg-white p-6 shadow-[0_18px_46px_rgba(31,68,49,0.08)] md:grid-cols-[0.85fr_1.15fr] md:p-8 lg:p-10">
                     <div>
                         <p class="text-sm font-bold text-[#24A869]">Обратная связь</p>
-                        <h2 class="mt-4 text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">
+                        <h2 class="mt-4 text-3xl font-bold leading-tight text-[#26332D] sm:text-4xl">
                             Задайте вопрос или оставьте заявку
                         </h2>
                         <p class="mt-4 text-sm leading-6 text-[#738479]">
@@ -496,7 +577,7 @@ function submitFeedback(): void {
         <section class="py-16 sm:py-20">
             <div class="mx-auto max-w-6xl px-5 sm:px-8">
                 <div class="mx-auto max-w-3xl text-center">
-                    <h2 class="text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Не нужно проверять сайты вручную</h2>
+                    <h2 class="text-3xl font-bold leading-tight text-[#26332D] sm:text-4xl">Не нужно проверять сайты вручную</h2>
                     <p class="mt-3 text-sm leading-6 text-[#738479]">Один кабинет показывает статусы, историю инцидентов и отчеты для всех сайтов клиентов.</p>
                 </div>
 
@@ -516,14 +597,14 @@ function submitFeedback(): void {
                         <div class="flex items-start justify-between">
                             <div>
                                 <p class="text-xs font-bold text-[#8A9A90]">Сайт</p>
-                                <h3 class="mt-1 text-xl font-extrabold text-[#26332D]">montry.ru</h3>
+                                <h3 class="mt-1 text-xl font-semibold text-[#26332D]">montry.ru</h3>
                             </div>
                             <span class="rounded-full bg-[#E9F8EF] px-3 py-1 text-xs font-semibold text-[#24A869]">Работает</span>
                         </div>
                         <div class="mt-5 grid grid-cols-3 gap-3">
-                            <div class="rounded-2xl border border-[#E8F0EB] p-4"><p class="font-extrabold text-[#24A869]">99.98%</p><p class="mt-1 text-xs text-[#8A9A90]">uptime</p></div>
-                            <div class="rounded-2xl border border-[#E8F0EB] p-4"><p class="font-extrabold text-[#24A869]">184 мс</p><p class="mt-1 text-xs text-[#8A9A90]">ответ</p></div>
-                            <div class="rounded-2xl border border-[#E8F0EB] p-4"><p class="font-extrabold text-[#24A869]">0</p><p class="mt-1 text-xs text-[#8A9A90]">проблем</p></div>
+                            <div class="rounded-2xl border border-[#E8F0EB] p-4"><p class="font-bold text-[#24A869]">99.98%</p><p class="mt-1 text-xs text-[#8A9A90]">uptime</p></div>
+                            <div class="rounded-2xl border border-[#E8F0EB] p-4"><p class="font-bold text-[#24A869]">184 мс</p><p class="mt-1 text-xs text-[#8A9A90]">ответ</p></div>
+                            <div class="rounded-2xl border border-[#E8F0EB] p-4"><p class="font-bold text-[#24A869]">0</p><p class="mt-1 text-xs text-[#8A9A90]">проблем</p></div>
                         </div>
                         <div class="mt-5 rounded-2xl border border-[#E8F0EB] p-4 text-sm font-semibold text-[#52645A]">
                             <p class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-[#24A869]"></span>SSL действителен</p>
@@ -535,19 +616,28 @@ function submitFeedback(): void {
             </div>
         </section>
 
-        <section id="faq" class="py-16 sm:py-20">
+        <section id="faq" class="py-14 sm:py-16">
             <div class="mx-auto max-w-5xl px-5 sm:px-8">
-                <div class="grid gap-6 md:grid-cols-[220px_1fr]">
-                    <div>
-                        <h2 class="text-3xl font-extrabold text-[#26332D]">FAQ</h2>
-                        <p class="mt-3 text-sm leading-6 text-[#738479]">Ответы на частые вопросы о мониторинге, тарифах и уведомлениях.</p>
-                    </div>
-                    <div class="space-y-3">
-                        <article v-for="[question, answer] in faq" :key="question" class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_8px_22px_rgba(31,68,49,0.04)]">
-                            <h3 class="text-base font-extrabold text-[#26332D]">{{ question }}</h3>
-                            <p class="mt-2 text-sm leading-6 text-[#738479]">{{ answer }}</p>
-                        </article>
-                    </div>
+                <div class="mx-auto max-w-2xl text-center">
+                    <h2 class="text-3xl font-bold text-[#26332D]">Частые вопросы</h2>
+                    <p class="mt-3 text-sm leading-6 text-[#738479]">Коротко о настройке, уведомлениях и работе мониторинга.</p>
+                </div>
+
+                <div class="mx-auto mt-8 max-w-3xl overflow-hidden rounded-2xl border border-[#DDEBE3] bg-white shadow-[0_10px_28px_rgba(31,68,49,0.05)]">
+                    <details
+                        v-for="([question, answer], index) in faq"
+                        :key="question"
+                        :open="index === 0"
+                        class="group border-b border-[#E8F0EB] last:border-b-0"
+                    >
+                        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-left sm:px-6 [&::-webkit-details-marker]:hidden">
+                            <span class="text-sm font-semibold leading-6 text-[#26332D] sm:text-base">{{ question }}</span>
+                            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#F0F7F3] text-[#24A869]">
+                                <ChevronDown :size="17" class="transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
+                            </span>
+                        </summary>
+                        <p class="px-5 pb-5 pr-16 text-sm leading-6 text-[#738479] sm:px-6 sm:pb-6 sm:pr-20">{{ answer }}</p>
+                    </details>
                 </div>
             </div>
         </section>
@@ -556,7 +646,7 @@ function submitFeedback(): void {
             <div class="mx-auto max-w-6xl px-5 sm:px-8">
                 <div class="grid gap-8 rounded-3xl border border-[#DDEBE3] bg-[#E9F8EF] p-8 shadow-[0_18px_46px_rgba(31,68,49,0.08)] md:grid-cols-[1fr_270px] md:items-center">
                     <div>
-                        <h2 class="max-w-xl text-3xl font-extrabold leading-tight text-[#26332D] sm:text-4xl">Начните следить за сайтом уже сегодня</h2>
+                        <h2 class="max-w-xl text-3xl font-bold leading-[1.2] text-[#26332D] sm:text-4xl">Начните следить за сайтом уже сегодня</h2>
                         <p class="mt-4 max-w-2xl text-sm leading-6 text-[#52645A]">Добавьте первый сайт бесплатно и получите базовый мониторинг без сложной настройки.</p>
                         <div class="mt-6 flex flex-col gap-3 sm:flex-row">
                             <Link :href="ctaHref" class="inline-flex h-11 items-center justify-center rounded-xl bg-[#24A869] px-5 text-sm font-semibold text-white transition hover:bg-[#1D9059]">{{ ctaLabel }}</Link>
@@ -565,7 +655,7 @@ function submitFeedback(): void {
                     </div>
                     <div class="rounded-2xl border border-[#DDEBE3] bg-white p-5 shadow-[0_14px_34px_rgba(31,68,49,0.07)]">
                         <p class="text-xs font-semibold text-[#24A869]">Сайт работает</p>
-                        <h3 class="mt-3 text-xl font-extrabold text-[#26332D]">montry.ru</h3>
+                        <h3 class="mt-3 text-xl font-semibold text-[#26332D]">montry.ru</h3>
                         <p class="mt-2 text-xs text-[#8A9A90]">uptime 99.98% · 184 мс</p>
                     </div>
                 </div>
