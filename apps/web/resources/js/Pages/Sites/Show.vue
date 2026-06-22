@@ -32,6 +32,7 @@ import {
     X,
 } from '@lucide/vue'
 import { Line } from 'vue-chartjs'
+import CheckIntervalControl from '@/Components/CheckIntervalControl.vue'
 import TariffRestriction from '@/Components/TariffRestriction.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useAutoRefresh } from '../../Composables/useAutoRefresh'
@@ -233,8 +234,6 @@ const monitorDrafts = ref<Record<string, MonitorDraft>>(
     Object.fromEntries(props.site.monitors.map((monitor) => [monitor.id, draftFromMonitor(monitor)])),
 )
 const minimumIntervalMinutes = computed(() => Math.max(1, Math.ceil((props.usage.minimum_check_interval_seconds ?? 300) / 60)))
-const intervalPresets = [1, 5, 10, 15, 30, 60, 360, 720, 1440]
-const availableIntervalPresets = computed(() => intervalPresets.filter((minutes) => minutes >= minimumIntervalMinutes.value))
 
 const activeMonitors = computed(() => props.site.monitors.filter((monitor) => monitor.is_configured && monitor.is_available && monitor.is_enabled))
 const enabledCount = computed(() => activeMonitors.value.length)
@@ -589,14 +588,6 @@ function settingsAccentClass(_monitor: Monitor): string {
     return 'text-[#1E9B5D]'
 }
 
-function intervalPresetClass(monitor: Monitor, minutes: number): string {
-    if (intervalMinutes(monitorDrafts.value[monitor.id].interval_seconds) === minutes) {
-        return 'bg-[#2FA568] text-white'
-    }
-
-    return 'bg-white text-[#52645A] ring-1 ring-[#DDEBE3] hover:text-[#173B2A]'
-}
-
 function formatDate(value: string | null): string {
     if (!value) return 'еще не было'
 
@@ -648,20 +639,8 @@ function intervalText(seconds: number): string {
     return `Каждые ${minutes} мин`
 }
 
-function intervalPresetLabel(minutes: number): string {
-    if (minutes === 60) return '1 час'
-    if (minutes === 1440) return '1 день'
-    if (minutes < 60) return `${minutes} мин`
-
-    return `${minutes / 60} ч`
-}
-
 function intervalMinutes(seconds: number): number {
     return Math.round(seconds / 60)
-}
-
-function setDraftIntervalMinutes(draft: MonitorDraft, minutes: number): void {
-    draft.interval_seconds = Math.max(minutes, minimumIntervalMinutes.value) * 60
 }
 
 function formatDuration(seconds: number | null): string {
@@ -1386,22 +1365,11 @@ function sparkClass(status: string): string {
                                                 <input :id="`${monitor.id}-time`" v-model.number="monitorDrafts[monitor.id].max_response_time_ms" min="1" type="number" :class="settingsInputClass(monitor)">
                                             </div>
                                             <div class="md:col-span-2">
-                                                <div class="mb-3 flex items-center justify-between gap-3">
-                                                    <span class="text-sm font-semibold text-[#26332D]">Частота проверки</span>
-                                                    <span class="text-sm font-bold" :class="settingsAccentClass(monitor)">{{ intervalText(monitorDrafts[monitor.id].interval_seconds) }}</span>
-                                                </div>
-                                                <div class="flex flex-wrap gap-2">
-                                                    <button
-                                                        v-for="minutes in availableIntervalPresets"
-                                                        :key="`${monitor.id}-${minutes}`"
-                                                        type="button"
-                                                        class="rounded-full px-3 py-2 text-xs font-bold transition"
-                                                        :class="intervalPresetClass(monitor, minutes)"
-                                                        @click="setDraftIntervalMinutes(monitorDrafts[monitor.id], minutes)"
-                                                    >
-                                                        {{ intervalPresetLabel(minutes) }}
-                                                    </button>
-                                                </div>
+                                                <CheckIntervalControl
+                                                    v-model="monitorDrafts[monitor.id].interval_seconds"
+                                                    :input-id="`${monitor.id}-interval-minutes`"
+                                                    :minimum-minutes="minimumIntervalMinutes"
+                                                />
                                             </div>
                                         </template>
 

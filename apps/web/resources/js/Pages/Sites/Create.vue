@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
 import { Plus, Trash2 } from '@lucide/vue'
+import CheckIntervalControl from '@/Components/CheckIntervalControl.vue'
 import TariffRestriction from '@/Components/TariffRestriction.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 
@@ -135,9 +136,6 @@ const tcpPorts = ref<TcpPortConfig[]>(monitorsByType('tcp_port').length
         max_response_time_ms: Number(monitor.expected.max_response_time_ms ?? 5000),
     }))
     : [{ port: 443, max_response_time_ms: 5000 }])
-
-const intervalPresets = [1, 5, 10, 15, 30, 60, 360, 720, 1440]
-const availableIntervalPresets = computed(() => intervalPresets.filter((minutes) => minutes >= minimumIntervalMinutes))
 
 const tariffCatalog: Record<string, { name: string; priceRub: number; monitorLimit: number; historyDays: number; intervalText: string }> = {
     free: { name: 'Free', priceRub: 0, monitorLimit: 5, historyDays: 7, intervalText: 'от 5 минут' },
@@ -490,10 +488,6 @@ function intervalMinutes(seconds: number): number {
     return Math.round(seconds / 60)
 }
 
-function setIntervalMinutes(target: { interval_seconds: number }, minutes: number): void {
-    target.interval_seconds = Math.max(minutes, minimumIntervalMinutes) * 60
-}
-
 function intervalText(seconds: number): string {
     const minutes = intervalMinutes(seconds)
 
@@ -832,15 +826,11 @@ function submit(): void {
                                             <input id="http-time" v-model.number="form.monitors.http.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
                                         </div>
                                         <div class="md:col-span-2">
-                                            <div class="mb-3 flex items-center justify-between gap-3">
-                                                <span class="text-sm font-semibold text-[#26332D]">Частота проверки</span>
-                                                <span class="text-sm font-bold text-[#1E9B5D]">{{ intervalText(form.monitors.http.interval_seconds) }}</span>
-                                            </div>
-                                            <div class="flex flex-wrap gap-2">
-                                                <button v-for="minutes in availableIntervalPresets" :key="`http-${minutes}`" type="button" class="rounded-full px-3 py-2 text-xs font-bold transition" :class="intervalMinutes(form.monitors.http.interval_seconds) === minutes ? 'bg-[#2FA568] text-white' : 'bg-white text-[#52645A] ring-1 ring-[#DDEBE3] hover:text-[#173B2A]'" @click="setIntervalMinutes(form.monitors.http, minutes)">
-                                                    {{ minutes === 60 ? '1 час' : minutes === 1440 ? '1 день' : minutes < 60 ? `${minutes} мин` : `${minutes / 60} ч` }}
-                                                </button>
-                                            </div>
+                                            <CheckIntervalControl
+                                                v-model="form.monitors.http.interval_seconds"
+                                                input-id="http-interval-minutes"
+                                                :minimum-minutes="minimumIntervalMinutes"
+                                            />
                                         </div>
                                     </template>
 
@@ -1165,16 +1155,12 @@ function submit(): void {
                                         <input id="http-time" v-model.number="form.monitors.http.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
                                     </div>
                                     <div class="md:col-span-2">
-                                        <div class="mb-3 flex items-center justify-between gap-3">
-                                            <span class="text-sm font-semibold text-[#26332D]">Частота проверки</span>
-                                            <span class="text-sm font-bold text-[#1E9B5D]">{{ intervalText(form.monitors.http.interval_seconds) }}</span>
+                                            <CheckIntervalControl
+                                                v-model="form.monitors.http.interval_seconds"
+                                                input-id="http-interval-minutes"
+                                                :minimum-minutes="minimumIntervalMinutes"
+                                            />
                                         </div>
-                                        <div class="flex flex-wrap gap-2">
-                                            <button v-for="minutes in availableIntervalPresets" :key="`http-${minutes}`" type="button" class="rounded-full px-3 py-2 text-xs font-bold transition" :class="intervalMinutes(form.monitors.http.interval_seconds) === minutes ? 'bg-[#2FA568] text-white' : 'bg-white text-[#52645A] ring-1 ring-[#DDEBE3] hover:text-[#173B2A]'" @click="setIntervalMinutes(form.monitors.http, minutes)">
-                                                {{ minutes === 60 ? '1 час' : minutes === 1440 ? '1 день' : minutes < 60 ? `${minutes} мин` : `${minutes / 60} ч` }}
-                                            </button>
-                                        </div>
-                                    </div>
                                 </div>
                             </article>
 

@@ -6,16 +6,14 @@ import FlashToast from '@/Components/FlashToast.vue'
 import {
     Activity,
     BarChart3,
-    BookOpen,
     ChevronDown,
-    CreditCard,
     FolderKanban,
     Globe2,
     HelpCircle,
     Lightbulb,
     LifeBuoy,
     LogOut,
-    Mail,
+    PanelsTopLeft,
     Send,
     Settings,
     X,
@@ -79,6 +77,7 @@ withDefaults(defineProps<{
 const navigation: NavigationItem[] = [
     { key: 'sites', label: 'Сайты', href: '/sites', icon: Globe2 },
     { key: 'projects', label: 'Проекты', href: '/projects', icon: FolderKanban },
+    { key: 'status-pages', label: 'Публичные страницы', href: '/status-pages', icon: PanelsTopLeft },
     { key: 'reports', label: 'Отчеты', href: '/reports', icon: BarChart3 },
     { key: 'settings', label: 'Настройки', href: '/settings', icon: Settings },
 ]
@@ -299,7 +298,7 @@ function submitProductIdea(): void {
             </div>
         </aside>
 
-        <section class="min-w-0">
+        <section class="flex min-h-screen min-w-0 flex-col">
             <header class="sticky top-0 z-20 border-b border-[#DDEBE3] bg-white/95 px-5 py-4 backdrop-blur sm:px-8 lg:hidden">
                 <div class="mx-auto flex max-w-7xl items-center justify-between gap-4">
                     <div class="min-w-0">
@@ -388,90 +387,49 @@ function submitProductIdea(): void {
 
             <slot />
 
-            <footer class="border-t border-[#DDEBE3] bg-white/70 px-5 py-8 sm:px-8">
-                <div class="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1.2fr_2fr]">
-                    <div>
+            <footer class="mt-auto border-t border-[#DDEBE3] bg-white/70 px-5 py-6 sm:px-8">
+                <div class="mx-auto max-w-7xl">
+                    <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                         <div class="flex items-center gap-3">
                             <BrandMark class="h-8 w-8" />
                             <p class="text-lg font-bold text-[#173B2A]">Montry</p>
                         </div>
 
-                        <p class="mt-5 text-sm text-[#6A7A70]">© {{ currentYear }} Montry</p>
+                        <nav class="grid gap-x-10 gap-y-5 text-sm sm:grid-cols-3" aria-label="Ссылки в подвале">
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#8A9A91]">Кабинет</p>
+                                <div class="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                                    <Link href="/sites/create" class="font-medium text-[#52645A] transition hover:text-[#173B2A]">Добавить сайт</Link>
+                                    <Link href="/billing" class="font-medium text-[#52645A] transition hover:text-[#173B2A]">Тариф</Link>
+                                    <Link href="/settings" class="font-medium text-[#52645A] transition hover:text-[#173B2A]">Настройки</Link>
+                                </div>
+                            </div>
+
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#8A9A91]">Документы</p>
+                                <div class="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                                    <Link href="/offers" class="font-medium text-[#52645A] transition hover:text-[#173B2A]">Оферта</Link>
+                                    <Link href="/user-agreement" class="font-medium text-[#52645A] transition hover:text-[#173B2A]">Соглашение</Link>
+                                    <Link href="/articles" class="font-medium text-[#52645A] transition hover:text-[#173B2A]">Статьи</Link>
+                                </div>
+                            </div>
+
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#8A9A91]">Связь</p>
+                                <div class="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                                    <button type="button" class="font-medium text-[#52645A] transition hover:text-[#173B2A]" @click="openSupportModal">Поддержка</button>
+                                    <button type="button" class="font-medium text-[#52645A] transition hover:text-[#173B2A]" @click="openIdeaModal">Предложить идею</button>
+                                </div>
+                            </div>
+                        </nav>
                     </div>
 
-                    <div class="grid gap-6 text-sm sm:grid-cols-2 xl:grid-cols-4">
-                        <div>
-                            <p class="font-bold text-[#26332D]">Кабинет</p>
-                            <div class="mt-4 grid gap-3">
-                                <Link href="/sites/create" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
-                                    <Globe2 class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
-                                    Добавить сайт
-                                </Link>
-                                <Link href="/billing" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
-                                    <CreditCard class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
-                                    Тариф и лимиты
-                                </Link>
-                                <Link href="/settings" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
-                                    <Settings class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
-                                    Настройки
-                                </Link>
-                            </div>
-                        </div>
+                    <div class="mt-6 flex flex-col gap-3 border-t border-[#E7F0EB] pt-4 text-xs leading-5 text-[#7B8B82] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                        <p>© {{ currentYear }} Montry</p>
 
-                        <div>
-                            <p class="font-bold text-[#26332D]">Документы</p>
-                            <div class="mt-4 grid gap-3">
-                                <Link href="/offers" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
-                                    <BookOpen class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
-                                    Публичная оферта
-                                </Link>
-                                <Link href="/user-agreement" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
-                                    <BookOpen class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
-                                    Пользовательское соглашение
-                                </Link>
-                                <Link href="/articles" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
-                                    <BookOpen class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
-                                    Статьи
-                                </Link>
-                            </div>
-                        </div>
-
-                        <div>
-                            <p class="font-bold text-[#26332D]">Связь</p>
-                            <div class="mt-4 grid gap-3">
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center gap-2 text-left font-medium text-[#52645A] transition hover:text-[#173B2A]"
-                                    @click="openSupportModal"
-                                >
-                                    <LifeBuoy class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
-                                    Написать в поддержку
-                                </button>
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center gap-2 text-left font-medium text-[#52645A] transition hover:text-[#173B2A]"
-                                    @click="openIdeaModal"
-                                >
-                                    <Lightbulb class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
-                                    Предложить идею
-                                </button>
-                                <a href="mailto:vladimir@vl-iv.ru" class="inline-flex items-center gap-2 font-medium text-[#52645A] transition hover:text-[#173B2A]">
-                                    <Mail class="h-4 w-4 text-[#1E9B5D]" :stroke-width="2" />
-                                    vladimir@vl-iv.ru
-                                </a>
-                            </div>
-                        </div>
-
-                        <div>
-                            <p class="font-bold text-[#26332D]">Реквизиты</p>
-                            <div class="mt-4 grid gap-2 leading-6 text-[#52645A]">
-                                <p class="font-medium">Иванов Владимир Юрьевич</p>
-                                <p>Самозанятый</p>
-                                <p>ИНН 562503808625</p>
-                                <a href="mailto:vladimir@vl-iv.ru" class="font-medium text-[#1E9B5D] transition hover:text-[#173B2A]">
-                                    vladimir@vl-iv.ru
-                                </a>
-                            </div>
+                        <div class="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3">
+                            <p>Иванов Владимир Юрьевич · Самозанятый · ИНН 562503808625</p>
+                            <a href="mailto:vladimir@vl-iv.ru" class="font-medium text-[#1E8C57] transition hover:text-[#173B2A]">vladimir@vl-iv.ru</a>
                         </div>
                     </div>
                 </div>

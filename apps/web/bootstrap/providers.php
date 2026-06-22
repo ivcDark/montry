@@ -17,6 +17,7 @@ use App\Modules\Organizations\Providers\OrganizationsModuleServiceProvider;
 use App\Modules\Projects\Infrastructure\Providers\ProjectsModuleServiceProvider;
 use App\Modules\Reports\Infrastructure\Providers\ReportsModuleServiceProvider;
 use App\Modules\Sites\Providers\SitesModuleServiceProvider;
+use App\Modules\StatusPages\Infrastructure\Providers\StatusPagesModuleServiceProvider;
 use App\Modules\WorkerGateway\Infrastructure\Providers\WorkerGatewayModuleServiceProvider;
 use App\Providers\AppServiceProvider;
 
@@ -36,6 +37,7 @@ return [
     ArticlesModuleServiceProvider::class,
     ObservabilityServiceProvider::class,
     ReportsModuleServiceProvider::class,
+    StatusPagesModuleServiceProvider::class,
     WorkerGatewayModuleServiceProvider::class,
     AdminModuleServiceProvider::class,
 
