@@ -1382,12 +1382,30 @@ function sparkClass(status: string): string {
                                                 <label :for="`${monitor.id}-days`" class="mb-2 block text-sm font-semibold text-[#26332D]">Дни предупреждений</label>
                                                 <input :id="`${monitor.id}-days`" v-model="monitorDrafts[monitor.id].warning_days" type="text" :class="settingsInputClass(monitor)">
                                             </div>
+                                            <div class="md:col-span-2">
+                                                <CheckIntervalControl
+                                                    v-model="monitorDrafts[monitor.id].interval_seconds"
+                                                    :input-id="`${monitor.id}-interval-minutes`"
+                                                    :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                                />
+                                            </div>
                                         </template>
 
                                         <template v-else-if="monitor.type === 'domain'">
                                             <div class="md:col-span-2">
                                                 <label :for="`${monitor.id}-days`" class="mb-2 block text-sm font-semibold text-[#26332D]">Дни предупреждений</label>
                                                 <input :id="`${monitor.id}-days`" v-model="monitorDrafts[monitor.id].warning_days" type="text" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div class="md:col-span-2">
+                                                <CheckIntervalControl
+                                                    v-model="monitorDrafts[monitor.id].interval_seconds"
+                                                    :input-id="`${monitor.id}-interval-minutes`"
+                                                    :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                                />
                                             </div>
                                         </template>
 
@@ -1412,6 +1430,15 @@ function sparkClass(status: string): string {
                                                     <span class="mt-1 block text-xs leading-5 text-[#6A7A70]">Сравнивать DNS-записи с предыдущей успешной проверкой.</span>
                                                 </span>
                                             </label>
+                                            <div class="md:col-span-2">
+                                                <CheckIntervalControl
+                                                    v-model="monitorDrafts[monitor.id].interval_seconds"
+                                                    :input-id="`${monitor.id}-interval-minutes`"
+                                                    :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                                />
+                                            </div>
                                         </template>
 
                                         <template v-else-if="monitor.type === 'robots_txt'">
@@ -1423,6 +1450,15 @@ function sparkClass(status: string): string {
                                                 <label :for="`${monitor.id}-time`" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
                                                 <input :id="`${monitor.id}-time`" v-model.number="monitorDrafts[monitor.id].max_response_time_ms" min="1" type="number" :class="settingsInputClass(monitor)">
                                             </div>
+                                            <div class="md:col-span-2">
+                                                <CheckIntervalControl
+                                                    v-model="monitorDrafts[monitor.id].interval_seconds"
+                                                    :input-id="`${monitor.id}-interval-minutes`"
+                                                    :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                                />
+                                            </div>
                                         </template>
 
                                         <template v-else-if="monitor.type === 'sitemap_xml'">
@@ -1433,6 +1469,15 @@ function sparkClass(status: string): string {
                                             <div>
                                                 <label :for="`${monitor.id}-time`" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
                                                 <input :id="`${monitor.id}-time`" v-model.number="monitorDrafts[monitor.id].max_response_time_ms" min="1" type="number" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div class="md:col-span-2">
+                                                <CheckIntervalControl
+                                                    v-model="monitorDrafts[monitor.id].interval_seconds"
+                                                    :input-id="`${monitor.id}-interval-minutes`"
+                                                    :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                                />
                                             </div>
                                         </template>
 
@@ -1464,6 +1509,15 @@ function sparkClass(status: string): string {
                                                 <label :for="`${monitor.id}-contains`" class="mb-2 block text-sm font-semibold text-[#26332D]">Ответ должен содержать</label>
                                                 <input :id="`${monitor.id}-contains`" v-model="monitorDrafts[monitor.id].response_contains" type="text" placeholder="опционально" :class="settingsInputClass(monitor)">
                                             </div>
+                                            <div class="md:col-span-2">
+                                                <CheckIntervalControl
+                                                    v-model="monitorDrafts[monitor.id].interval_seconds"
+                                                    :input-id="`${monitor.id}-interval-minutes`"
+                                                    :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                                />
+                                            </div>
                                         </template>
 
                                         <template v-else-if="monitor.type === 'tcp_port'">
@@ -1474,6 +1528,15 @@ function sparkClass(status: string): string {
                                             <div>
                                                 <label :for="`${monitor.id}-time`" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
                                                 <input :id="`${monitor.id}-time`" v-model.number="monitorDrafts[monitor.id].max_response_time_ms" min="1" type="number" :class="settingsInputClass(monitor)">
+                                            </div>
+                                            <div class="md:col-span-2">
+                                                <CheckIntervalControl
+                                                    v-model="monitorDrafts[monitor.id].interval_seconds"
+                                                    :input-id="`${monitor.id}-interval-minutes`"
+                                                    :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                                />
                                             </div>
                                         </template>
                                     </div>

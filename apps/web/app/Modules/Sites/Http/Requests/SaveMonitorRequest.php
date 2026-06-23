@@ -20,12 +20,21 @@ final class SaveMonitorRequest extends FormRequest
             'type' => ['required', 'string', Rule::in(app(MonitorTypeCatalog::class)->allCodes())],
             'name' => ['required', 'string', 'max:255'],
             'is_enabled' => ['required', 'boolean'],
-            'interval_seconds' => ['required', 'integer', 'min:30', 'max:86400'],
+            'interval_seconds' => $this->intervalRules(),
             'timeout_ms' => ['required', 'integer', 'min:1000', 'max:60000'],
 
             'settings' => ['required', 'array'],
             ...$this->settingsRules(),
         ];
+    }
+
+    private function intervalRules(): array
+    {
+        if ($this->input('type') === MonitorType::Http->value) {
+            return ['required', 'integer', 'min:60', 'max:86400', 'multiple_of:60'];
+        }
+
+        return ['required', 'integer', 'min:86400', 'max:604800', 'multiple_of:86400'];
     }
 
     private function settingsRules(): array

@@ -232,7 +232,7 @@ const form = useForm({
         api_endpoint: {
             is_enabled: initiallyEnabledTypes.has('api_endpoint'),
             name: monitorValue('api_endpoint', 'name', 'API endpoint'),
-            interval_seconds: monitorValue('api_endpoint', 'interval_seconds', minimumIntervalMinutes * 60),
+            interval_seconds: monitorValue('api_endpoint', 'interval_seconds', 86400),
             timeout_ms: monitorValue('api_endpoint', 'timeout_ms', 10000),
             follow_redirects: Boolean(setting('api_endpoint', 'follow_redirects', true)),
             verify_ssl: Boolean(setting('api_endpoint', 'verify_ssl', true)),
@@ -240,7 +240,7 @@ const form = useForm({
         tcp_port: {
             is_enabled: initiallyEnabledTypes.has('tcp_port'),
             name: monitorValue('tcp_port', 'name', 'TCP port'),
-            interval_seconds: monitorValue('tcp_port', 'interval_seconds', minimumIntervalMinutes * 60),
+            interval_seconds: monitorValue('tcp_port', 'interval_seconds', 86400),
             timeout_ms: monitorValue('tcp_port', 'timeout_ms', 10000),
             open: Boolean(expected('tcp_port', 'open', true)),
         },
@@ -843,12 +843,30 @@ function submit(): void {
                                             <label for="ssl-days" class="mb-2 block text-sm font-semibold text-[#26332D]">Дни предупреждений</label>
                                             <input id="ssl-days" v-model="sslWarningDaysText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
                                         </div>
+                                        <div class="md:col-span-2">
+                                            <CheckIntervalControl
+                                                v-model="form.monitors.ssl.interval_seconds"
+                                                input-id="ssl-interval-minutes"
+                                                :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                            />
+                                        </div>
                                     </template>
 
                                     <template v-else-if="card.type === 'domain'">
                                         <div class="md:col-span-2">
                                             <label for="domain-days" class="mb-2 block text-sm font-semibold text-[#26332D]">Дни предупреждений</label>
                                             <input id="domain-days" v-model="domainWarningDaysText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <CheckIntervalControl
+                                                v-model="form.monitors.domain.interval_seconds"
+                                                input-id="domain-interval-minutes"
+                                                :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                            />
                                         </div>
                                     </template>
 
@@ -861,6 +879,15 @@ function submit(): void {
                                             <label for="dns-min" class="mb-2 block text-sm font-semibold text-[#26332D]">Минимум записей</label>
                                             <input id="dns-min" v-model.number="form.monitors.dns.min_records" min="0" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
                                         </div>
+                                        <div class="md:col-span-2">
+                                            <CheckIntervalControl
+                                                v-model="form.monitors.dns.interval_seconds"
+                                                input-id="dns-interval-minutes"
+                                                :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                            />
+                                        </div>
                                     </template>
 
                                     <template v-else-if="card.type === 'robots_txt'">
@@ -871,6 +898,15 @@ function submit(): void {
                                         <div>
                                             <label for="robots-time" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
                                             <input id="robots-time" v-model.number="form.monitors.robots_txt.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <CheckIntervalControl
+                                                v-model="form.monitors.robots_txt.interval_seconds"
+                                                input-id="robots-interval-minutes"
+                                                :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                            />
                                         </div>
                                     </template>
                                 </div>
@@ -917,6 +953,15 @@ function submit(): void {
                                             <label for="domain-days-paid" class="mb-2 block text-sm font-semibold text-[#26332D]">Дни предупреждений</label>
                                             <input id="domain-days-paid" v-model="domainWarningDaysText" type="text" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
                                         </div>
+                                        <div class="md:col-span-2">
+                                            <CheckIntervalControl
+                                                v-model="form.monitors.domain.interval_seconds"
+                                                input-id="domain-interval-minutes-paid"
+                                                :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                            />
+                                        </div>
                                     </template>
 
                                     <template v-else-if="card.type === 'dns'">
@@ -939,6 +984,15 @@ function submit(): void {
                                                 <span class="mt-1 block text-xs leading-5 text-[#6A7A70]">Montry сравнит результат с предыдущей успешной проверкой и покажет, какие записи добавились или исчезли.</span>
                                             </span>
                                         </label>
+                                        <div class="md:col-span-2">
+                                            <CheckIntervalControl
+                                                v-model="form.monitors.dns.interval_seconds"
+                                                input-id="dns-interval-minutes-paid"
+                                                :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                            />
+                                        </div>
                                     </template>
 
                                     <template v-else-if="card.type === 'robots_txt'">
@@ -950,6 +1004,15 @@ function submit(): void {
                                             <label for="robots-time-paid" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
                                             <input id="robots-time-paid" v-model.number="form.monitors.robots_txt.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
                                         </div>
+                                        <div class="md:col-span-2">
+                                            <CheckIntervalControl
+                                                v-model="form.monitors.robots_txt.interval_seconds"
+                                                input-id="robots-interval-minutes-paid"
+                                                :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                            />
+                                        </div>
                                     </template>
 
                                     <template v-else-if="card.type === 'sitemap_xml'">
@@ -960,6 +1023,15 @@ function submit(): void {
                                         <div>
                                             <label for="sitemap-time" class="mb-2 block text-sm font-semibold text-[#26332D]">Макс. время ответа, мс</label>
                                             <input id="sitemap-time" v-model.number="form.monitors.sitemap_xml.max_response_time_ms" min="1" type="number" class="h-11 w-full rounded-2xl border border-[#CFE1D7] bg-white px-4 text-sm outline-none focus:border-[#2FA568] focus:ring-4 focus:ring-[#2FA568]/15">
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <CheckIntervalControl
+                                                v-model="form.monitors.sitemap_xml.interval_seconds"
+                                                input-id="sitemap-interval-minutes"
+                                                :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                            />
                                         </div>
                                     </template>
 
@@ -1046,6 +1118,15 @@ function submit(): void {
                                             <p v-if="!canAddApiEndpoint && !form.monitors.api_endpoint.is_enabled" class="mt-2 text-xs font-medium text-[#8A6D3B]">Включите API-мониторинг, чтобы добавить endpoint.</p>
                                             <TariffRestriction v-else-if="!canAddApiEndpoint" compact prefix="Увеличить лимит в" link-text="тарифах" class="mt-2 w-fit" />
                                         </div>
+                                        <div class="md:col-span-2">
+                                            <CheckIntervalControl
+                                                v-model="form.monitors.api_endpoint.interval_seconds"
+                                                input-id="api-endpoint-interval-minutes"
+                                                :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                            />
+                                        </div>
                                     </template>
 
                                     <template v-else-if="card.type === 'tcp_port'">
@@ -1103,6 +1184,15 @@ function submit(): void {
                                             </button>
                                             <p v-if="!canAddTcpPort && !form.monitors.tcp_port.is_enabled" class="text-xs font-medium text-[#8A6D3B]">Включите TCP-мониторинг, чтобы добавить порт.</p>
                                             <TariffRestriction v-else-if="!canAddTcpPort" compact prefix="Увеличить лимит в" link-text="тарифах" class="mt-2 w-fit" />
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <CheckIntervalControl
+                                                v-model="form.monitors.tcp_port.interval_seconds"
+                                                input-id="tcp-port-interval-minutes"
+                                                :minimum-minutes="1440"
+                                                :maximum-minutes="10080"
+                                                unit="days"
+                                            />
                                         </div>
                                     </template>
                                 </div>

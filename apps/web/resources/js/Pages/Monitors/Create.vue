@@ -40,7 +40,8 @@ const warningDaysText = ref('30, 14, 7, 3, 1')
 const dnsRecordTypesText = ref('A, AAAA')
 const dnsNameserversText = ref('')
 const headersText = ref('')
-const intervalPresets = [5, 10, 15, 30, 60, 360, 720, 1440]
+const httpIntervalPresets = [5, 10, 15, 30, 60, 360, 720, 1440]
+const dayIntervalPresets = [1, 2, 3, 4, 5, 6, 7]
 
 const rootUrl = computed(() => siteRootUrl(props.site.url))
 const initialType = props.monitorTypes[0]?.code ?? props.monitorTypes[0]?.value ?? 'http'
@@ -80,6 +81,8 @@ const form = useForm({
 })
 
 const selectedType = computed(() => props.monitorTypes.find((type) => (type.code ?? type.value) === form.type))
+const isHttpMonitor = computed(() => form.type === 'http')
+const intervalPresets = computed(() => isHttpMonitor.value ? httpIntervalPresets : dayIntervalPresets)
 
 const typeHints: Record<string, { title: string, description: string, result: string }> = {
     http: {
@@ -215,7 +218,7 @@ function selectType(type: string): void {
 
     if (type === 'api_endpoint') {
         form.name = 'API endpoint check'
-        form.interval_seconds = 300
+        form.interval_seconds = 86400
         form.settings.method = 'GET'
         form.settings.url = props.site.url
         form.settings.headers = {}
@@ -231,7 +234,7 @@ function selectType(type: string): void {
 
     if (type === 'tcp_port') {
         form.name = 'TCP port check'
-        form.interval_seconds = 300
+        form.interval_seconds = 86400
         form.settings.host = props.site.host
         form.settings.port = props.site.port ?? 443
         form.expected.open = true
@@ -274,11 +277,31 @@ function intervalMinutes(seconds: number): number {
     return Math.round(seconds / 60)
 }
 
-function setIntervalMinutes(minutes: number): void {
-    form.interval_seconds = minutes * 60
+function intervalDays(seconds: number): number {
+    return Math.round(seconds / 86400)
+}
+
+function intervalValue(seconds: number): number {
+    return isHttpMonitor.value ? intervalMinutes(seconds) : intervalDays(seconds)
+}
+
+function setIntervalValue(value: number): void {
+    form.interval_seconds = value * (isHttpMonitor.value ? 60 : 86400)
+}
+
+function intervalPresetLabel(value: number): string {
+    if (!isHttpMonitor.value) return `${value} дн.`
+
+    return value === 60 ? '1 час' : value === 1440 ? '1 день' : value < 60 ? `${value} мин` : `${value / 60} ч`
 }
 
 function intervalText(seconds: number): string {
+    if (!isHttpMonitor.value) {
+        const days = intervalDays(seconds)
+
+        return days === 1 ? 'Раз в день' : `Раз в ${days} дн.`
+    }
+
     const minutes = intervalMinutes(seconds)
 
     if (minutes === 60) return 'Каждый час'
@@ -526,25 +549,25 @@ function submit(): void {
                                 <div class="rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
                                     <div class="flex flex-wrap gap-2">
                                         <button
-                                            v-for="minutes in intervalPresets"
-                                            :key="minutes"
+                                            v-for="interval in intervalPresets"
+                                            :key="interval"
                                             type="button"
                                             class="h-8 rounded-full px-3 text-xs font-extrabold transition"
-                                            :class="intervalMinutes(form.interval_seconds) === minutes ? 'bg-[#0F6BFF] text-white' : 'bg-white text-[#667085] hover:bg-[#EAF2FF] hover:text-[#0F6BFF]'"
-                                            @click="setIntervalMinutes(minutes)"
+                                            :class="intervalValue(form.interval_seconds) === interval ? 'bg-[#0F6BFF] text-white' : 'bg-white text-[#667085] hover:bg-[#EAF2FF] hover:text-[#0F6BFF]'"
+                                            @click="setIntervalValue(interval)"
                                         >
-                                            {{ minutes === 60 ? '1 час' : minutes === 1440 ? '1 день' : minutes < 60 ? `${minutes} мин` : `${minutes / 60} ч` }}
+                                            {{ intervalPresetLabel(interval) }}
                                         </button>
                                     </div>
                                     <input
                                         id="interval"
-                                        :value="intervalMinutes(form.interval_seconds)"
+                                        :value="intervalValue(form.interval_seconds)"
                                         type="range"
-                                        min="5"
-                                        max="1440"
+                                        :min="isHttpMonitor ? 5 : 1"
+                                        :max="isHttpMonitor ? 1440 : 7"
                                         step="1"
                                         class="mt-4 w-full accent-[#0F6BFF]"
-                                        @input="setIntervalMinutes(Number(($event.target as HTMLInputElement).value))"
+                                        @input="setIntervalValue(Number(($event.target as HTMLInputElement).value))"
                                     >
                                 </div>
                                 <p v-if="form.errors.interval_seconds" class="mt-2 text-xs font-semibold text-[#EF4444]">{{ form.errors.interval_seconds }}</p>
