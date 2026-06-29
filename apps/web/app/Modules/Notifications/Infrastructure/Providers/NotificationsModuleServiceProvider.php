@@ -11,6 +11,7 @@ use App\Modules\Notifications\Application\Listeners\SendIncidentOpenedNotificati
 use App\Modules\Notifications\Application\Listeners\SendIncidentResolvedNotification;
 use App\Modules\Notifications\Application\Listeners\SendSslExpiringNotification;
 use App\Modules\Notifications\Application\Senders\EmailNotificationSender;
+use App\Modules\Notifications\Application\Senders\MaxNotificationSender;
 use App\Modules\Notifications\Application\Senders\TelegramNotificationSender;
 use App\Modules\Notifications\Application\Services\NotificationDispatcher;
 use App\Modules\Observability\Application\Services\BusinessEventRecorder;
@@ -29,6 +30,7 @@ final class NotificationsModuleServiceProvider extends ServiceProvider
                 [
                     $app->make(EmailNotificationSender::class),
                     $app->make(TelegramNotificationSender::class),
+                    $app->make(MaxNotificationSender::class),
                 ],
                 $app->make(BusinessEventRecorder::class),
                 $app->make(DeadLetterRecorder::class),
@@ -51,3 +53,5 @@ final class NotificationsModuleServiceProvider extends ServiceProvider
         Event::listen(DomainExpiring::class, SendDomainExpiringNotification::class);
     }
 }
+
+

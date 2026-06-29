@@ -222,7 +222,7 @@ Membership пользователя в организации.
 - timestamps
 - soft deletes
 
-MVP-типы: `email`, `telegram`.
+MVP-типы: `email`, `telegram`, `max`.
 
 ### `notification_rules`
 

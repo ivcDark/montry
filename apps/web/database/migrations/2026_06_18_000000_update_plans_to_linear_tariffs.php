@@ -36,7 +36,7 @@ return new class extends Migration
                 'allowed_monitor_types' => ['types' => $allTypes],
                 'history_retention_days' => ['days' => 30],
                 'minimum_check_interval_seconds' => ['seconds' => 60],
-                'notification_channels' => ['channels' => ['email', 'telegram']],
+                'notification_channels' => ['channels' => ['email', 'telegram', 'max']],
                 'can_create_projects' => ['enabled' => true],
             ]);
 
@@ -60,7 +60,7 @@ return new class extends Migration
                 'allowed_monitor_types' => ['types' => $allTypes],
                 'history_retention_days' => ['days' => 90],
                 'minimum_check_interval_seconds' => ['seconds' => 60],
-                'notification_channels' => ['channels' => ['email', 'telegram']],
+                'notification_channels' => ['channels' => ['email', 'telegram', 'max']],
                 'can_create_projects' => ['enabled' => true],
             ]);
         });
@@ -97,7 +97,7 @@ return new class extends Migration
                 'allowed_monitor_types' => ['types' => $allTypes],
                 'history_retention_days' => ['days' => 30],
                 'minimum_check_interval_seconds' => ['seconds' => 300],
-                'notification_channels' => ['channels' => ['email', 'telegram']],
+                'notification_channels' => ['channels' => ['email', 'telegram', 'max']],
                 'can_create_projects' => ['enabled' => false],
             ]);
 
@@ -112,7 +112,7 @@ return new class extends Migration
                 'allowed_monitor_types' => ['types' => $allTypes],
                 'history_retention_days' => ['days' => 60],
                 'minimum_check_interval_seconds' => ['seconds' => 180],
-                'notification_channels' => ['channels' => ['email', 'telegram']],
+                'notification_channels' => ['channels' => ['email', 'telegram', 'max']],
                 'can_create_projects' => ['enabled' => true],
             ]);
 
@@ -152,3 +152,4 @@ return new class extends Migration
         }
     }
 };
+

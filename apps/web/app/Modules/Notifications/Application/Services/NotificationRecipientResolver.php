@@ -33,7 +33,7 @@ final readonly class NotificationRecipientResolver
             ->with('user')
             ->where('organization_id', $organizationId)
             ->where('enabled', true)
-            ->whereIn('type', ['email', 'telegram']);
+            ->whereIn('type', ['email', 'telegram', 'max']);
 
         if ($hasEventRules) {
             $query->where(function ($query) use ($ruleChannelIds, $eventType): void {
@@ -58,3 +58,4 @@ final readonly class NotificationRecipientResolver
             ->values();
     }
 }
+

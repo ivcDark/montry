@@ -25,6 +25,11 @@ class User extends Authenticatable
         'telegram_chat_id',
         'telegram_username',
         'telegram_connected_at',
+        'max_notifications_enabled',
+        'max_connection_token',
+        'max_chat_id',
+        'max_username',
+        'max_connected_at',
     ];
 
     protected $hidden = [
@@ -46,6 +51,8 @@ class User extends Authenticatable
             'is_blocked' => 'boolean',
             'telegram_notifications_enabled' => 'boolean',
             'telegram_connected_at' => 'datetime',
+            'max_notifications_enabled' => 'boolean',
+            'max_connected_at' => 'datetime',
         ];
     }
 
@@ -59,3 +66,4 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 }
+

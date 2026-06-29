@@ -348,6 +348,7 @@ final readonly class LimitChecker
                 ]])
                 ->all(),
             'telegram_available' => $this->canUseNotificationChannel($organizationId, 'telegram'),
+            'max_available' => $this->canUseNotificationChannel($organizationId, 'max'),
             'minimum_check_interval_seconds' => $this->minimumCheckIntervalSeconds($organizationId),
             'history_retention_days' => $this->historyRetentionDays($organizationId),
         ];
@@ -458,3 +459,4 @@ final readonly class LimitChecker
         ));
     }
 }
+

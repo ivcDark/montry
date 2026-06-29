@@ -52,7 +52,7 @@ final class BillingPlanSeeder extends Seeder
                     'allowed_monitor_types' => ['types' => $allMonitorTypes],
                     'history_retention_days' => ['days' => 30],
                     'minimum_check_interval_seconds' => ['seconds' => 60],
-                    'notification_channels' => ['channels' => ['email', 'telegram']],
+                    'notification_channels' => ['channels' => ['email', 'telegram', 'max']],
                     'max_projects' => ['limit' => null],
                     'can_create_projects' => ['enabled' => true],
                 ],
@@ -68,7 +68,7 @@ final class BillingPlanSeeder extends Seeder
                     'allowed_monitor_types' => ['types' => $allMonitorTypes],
                     'history_retention_days' => ['days' => 90],
                     'minimum_check_interval_seconds' => ['seconds' => 60],
-                    'notification_channels' => ['channels' => ['email', 'telegram']],
+                    'notification_channels' => ['channels' => ['email', 'telegram', 'max']],
                     'max_projects' => ['limit' => null],
                     'can_create_projects' => ['enabled' => true],
                 ],
@@ -97,3 +97,4 @@ final class BillingPlanSeeder extends Seeder
         }
     }
 }
+

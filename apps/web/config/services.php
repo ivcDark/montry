@@ -49,6 +49,18 @@ return [
         'webhook_url' => env('TELEGRAM_WEBHOOK_URL'),
     ],
 
+    'max' => [
+        'bot_token' => env('MAX_BOT_TOKEN'),
+        'bot_username' => env('MAX_BOT_USERNAME'),
+        'bot_url' => env('MAX_BOT_URL'),
+        'webhook_secret' => env('MAX_WEBHOOK_SECRET'),
+        'webhook_url' => env('MAX_WEBHOOK_URL'),
+        'api_base_url' => env('MAX_API_BASE_URL', 'https://botapi.max.ru'),
+        'send_message_url' => env('MAX_SEND_MESSAGE_URL'),
+        'auth_mode' => env('MAX_API_AUTH_MODE', 'query'),
+        'token_query_parameter' => env('MAX_TOKEN_QUERY_PARAMETER', 'access_token'),
+    ],
+
     'yandex' => [
         'client_id' => env('YANDEX_CLIENT_ID'),
         'client_secret' => env('YANDEX_CLIENT_SECRET'),
@@ -92,3 +104,4 @@ return [
     ],
 
 ];
+
