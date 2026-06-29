@@ -31,7 +31,7 @@ final class NotificationDispatcher
             return;
         }
 
-        $channels = $this->recipientResolver->resolve($message->organizationId, $message->eventType);
+        $channels = $this->recipientResolver->resolve($message->organizationId, $message->eventType, $message->payload);
 
         foreach ($channels as $channel) {
             if ($this->alreadySent($channel, $message)) {

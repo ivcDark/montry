@@ -26,6 +26,9 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/sites/{site}/check-now', [SiteManualCheckController::class, 'store'])
         ->name('sites.check-now');
 
+    Route::patch('/sites/{site}/notification-channels/{channel}', [MonitoredResourceController::class, 'updateNotificationChannel'])
+        ->name('sites.notification-channels.update');
+
     Route::delete('/sites/{site}', [MonitoredResourceController::class, 'destroy'])
         ->name('sites.destroy');
 });

@@ -30,12 +30,14 @@ class MonitoredResource extends Model
         'path',
         'status',
         'notes',
+        'notification_channels',
     ];
 
     protected function casts(): array
     {
         return [
             'port' => 'integer',
+            'notification_channels' => 'array',
         ];
     }
 

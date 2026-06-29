@@ -16,6 +16,8 @@ import {
     AlertTriangle,
     CalendarClock,
     Check,
+    Mail,
+    MessageCircle,
     ChevronDown,
     Clock3,
     Crown,
@@ -99,6 +101,14 @@ type LatestResult = {
     normalized_result: Record<string, unknown>
 }
 
+type NotificationChannel = {
+    type: 'email' | 'telegram' | 'max'
+    label: string
+    enabled: boolean
+    connected: boolean
+    active: boolean
+}
+
 type Monitor = {
     id: string
     type: string
@@ -177,6 +187,7 @@ type Site = {
     availability_response_chart: AvailabilityResponseChart
     recent_checks: CheckResult[]
     incidents: Incident[]
+    notification_channels: NotificationChannel[]
 }
 
 type MonitorDraft = {
@@ -230,9 +241,57 @@ const checkingTimeouts = ref<Record<string, ReturnType<typeof setTimeout>>>({})
 const checkingSite = ref(false)
 const checkingSiteStartedFrom = ref<string | null>(null)
 const checkingSiteTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
+const savingNotificationChannel = ref<string | null>(null)
 const monitorDrafts = ref<Record<string, MonitorDraft>>(
     Object.fromEntries(props.site.monitors.map((monitor) => [monitor.id, draftFromMonitor(monitor)])),
 )
+function notificationIcon(type: string) {
+    if (type === 'email') return Mail
+
+    return MessageCircle
+}
+
+function notificationToggleClass(channel: NotificationChannel): string {
+    if (channel.active) {
+        return 'border-[#BEE7CE] bg-[#ECFDF3] text-[#168A4D]'
+    }
+
+    if (channel.enabled && !channel.connected) {
+        return 'border-[#F7D59A] bg-[#FFF7E8] text-[#B45309]'
+    }
+
+    return 'border-[#DDEBE3] bg-white text-[#8A9A91]'
+}
+
+function notificationToggleTitle(channel: NotificationChannel): string {
+    if (channel.active) {
+        return `${channel.label}: уведомления об инцидентах включены для сайта`
+    }
+
+    if (channel.enabled && !channel.connected) {
+        return `${channel.label}: включено для сайта, но канал не подключен в настройках`
+    }
+
+    return `${channel.label}: уведомления об инцидентах выключены для сайта`
+}
+
+function toggleNotificationChannel(channel: NotificationChannel): void {
+    if (savingNotificationChannel.value) {
+        return
+    }
+
+    savingNotificationChannel.value = channel.type
+
+    router.patch(`/sites/${props.site.id}/notification-channels/${channel.type}`, {
+        enabled: !channel.enabled,
+    }, {
+        preserveScroll: true,
+        only: ['site'],
+        onFinish: () => {
+            savingNotificationChannel.value = null
+        },
+    })
+}
 const minimumIntervalMinutes = computed(() => Math.max(1, Math.ceil((props.usage.minimum_check_interval_seconds ?? 300) / 60)))
 
 const activeMonitors = computed(() => props.site.monitors.filter((monitor) => monitor.is_configured && monitor.is_available && monitor.is_enabled))
@@ -1156,6 +1215,28 @@ function sparkClass(status: string): string {
                                     <CalendarClock class="h-4 w-4" :stroke-width="2" />
                                     Создан: {{ formatDate(site.created_at) }}
                                 </p>
+                            </div>
+
+                            <div class="mt-4 rounded-2xl border border-[#DDEBE3] bg-[#F6FBF8] p-3">
+                                <p class="text-xs font-semibold uppercase tracking-normal text-[#6A7A70] xl:text-right">
+                                    Каналы уведомлений об инцидентах
+                                </p>
+                                <div class="mt-2 flex flex-wrap gap-2 xl:justify-end">
+                                    <button
+                                        v-for="channel in site.notification_channels"
+                                        :key="channel.type"
+                                        type="button"
+                                        class="inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition hover:border-[#24A869] disabled:cursor-wait disabled:opacity-70"
+                                        :class="notificationToggleClass(channel)"
+                                        :title="notificationToggleTitle(channel)"
+                                        :disabled="savingNotificationChannel !== null"
+                                        @click="toggleNotificationChannel(channel)"
+                                    >
+                                        <LoaderCircle v-if="savingNotificationChannel === channel.type" class="h-3.5 w-3.5 animate-spin" :stroke-width="2.2" />
+                                        <component v-else :is="notificationIcon(channel.type)" class="h-3.5 w-3.5" :stroke-width="2.2" />
+                                        {{ channel.label }}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

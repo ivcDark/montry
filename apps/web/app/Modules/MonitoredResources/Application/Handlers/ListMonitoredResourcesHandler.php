@@ -3,14 +3,22 @@
 namespace App\Modules\MonitoredResources\Application\Handlers;
 
 use App\Modules\MonitoredResources\Application\Queries\ListMonitoredResourcesQuery;
+use App\Modules\MonitoredResources\Application\Services\SiteNotificationChannels;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use Illuminate\Support\Collection;
 
 final class ListMonitoredResourcesHandler
 {
+    public function __construct(
+        private readonly SiteNotificationChannels $siteNotificationChannels,
+    ) {
+    }
+
     public function handle(ListMonitoredResourcesQuery $query): Collection
     {
+        $connectedNotificationTypes = $this->siteNotificationChannels->connectedTypes($query->organizationId);
+
         return MonitoredResource::query()
             ->with([
                 'project:id,name',
@@ -47,6 +55,7 @@ final class ListMonitoredResourcesHandler
                     ->sortDesc()
                     ->first()
                     ?->toISOString(),
+                'notification_channels' => $this->siteNotificationChannels->payload($resource, $connectedNotificationTypes),
                 'project' => $resource->project
                     ? [
                         'id' => $resource->project->id,

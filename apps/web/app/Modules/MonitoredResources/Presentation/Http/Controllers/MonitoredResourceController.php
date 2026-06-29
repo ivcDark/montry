@@ -10,6 +10,7 @@ use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Incidents\Infrastructure\Persistence\Models\Incident;
 use App\Modules\MonitoredResources\Application\Handlers\ListMonitoredResourcesHandler;
 use App\Modules\MonitoredResources\Application\Queries\ListMonitoredResourcesQuery;
+use App\Modules\MonitoredResources\Application\Services\SiteNotificationChannels;
 use App\Modules\MonitoredResources\Infrastructure\Persistence\Models\MonitoredResource;
 use App\Modules\MonitoredResources\Presentation\Http\Requests\StoreMonitoredResourceRequest;
 use App\Modules\Monitoring\Application\Services\MonitorTypeCatalog;
@@ -242,7 +243,7 @@ final class MonitoredResourceController extends Controller
 
         return redirect()
             ->route('sites.show', $site)
-            ->with('success', '???? ???????.');
+            ->with('success', 'Сайт обновлён.');
     }
 
     public function show(
@@ -251,6 +252,7 @@ final class MonitoredResourceController extends Controller
         GetCurrentOrganization $getCurrentOrganization,
         MonitorTypeCatalog $monitorTypes,
         LimitChecker $limits,
+        SiteNotificationChannels $siteNotificationChannels,
     ): Response {
         $organization = $getCurrentOrganization->handle($request->user());
         $site->load([
@@ -367,6 +369,7 @@ final class MonitoredResourceController extends Controller
                 'problem_label' => $this->problemLabel($site),
                 'created_at' => $site->created_at?->toISOString(),
                 'updated_at' => $site->updated_at?->toISOString(),
+                'notification_channels' => $siteNotificationChannels->payload($site),
                 'project' => $site->project
                     ? [
                         'id' => $site->project->id,
@@ -390,6 +393,36 @@ final class MonitoredResourceController extends Controller
         ]);
     }
 
+    public function updateNotificationChannel(
+        Request $request,
+        MonitoredResource $site,
+        string $channel,
+        GetCurrentOrganization $getCurrentOrganization,
+        SiteNotificationChannels $siteNotificationChannels,
+    ): RedirectResponse {
+        $organization = $getCurrentOrganization->handle($request->user());
+
+        if ($site->organization_id !== $organization->id) {
+            throw new NotFoundHttpException;
+        }
+
+        if (! in_array($channel, SiteNotificationChannels::CHANNELS, true)) {
+            throw new NotFoundHttpException;
+        }
+
+        $validated = $request->validate([
+            'enabled' => ['required', 'boolean'],
+        ]);
+
+        $settings = $siteNotificationChannels->settings($site);
+        $settings[$channel] = (bool) $validated['enabled'];
+
+        $site->forceFill([
+            'notification_channels' => $settings,
+        ])->save();
+
+        return back()->with('success', 'Настройки уведомлений сайта сохранены.');
+    }
     public function destroy(
         Request $request,
         MonitoredResource $site,

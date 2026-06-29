@@ -9,6 +9,8 @@ import {
     FileDown,
     Globe2,
     LayoutGrid,
+    Mail,
+    MessageCircle,
     LoaderCircle,
     MoreHorizontal,
     Minus,
@@ -54,6 +56,14 @@ type LatestResult = {
     normalized_result: Record<string, unknown>
 }
 
+type NotificationChannel = {
+    type: 'email' | 'telegram' | 'max'
+    label: string
+    enabled: boolean
+    connected: boolean
+    active: boolean
+}
+
 type Monitor = {
     id: string
     type: string
@@ -77,6 +87,7 @@ type Site = {
     monitors_count: number
     enabled_monitors_count: number
     last_checked_at: string | null
+    notification_channels: NotificationChannel[]
     project: Project | null
     monitors: Monitor[]
 }
@@ -210,6 +221,35 @@ onUnmounted(() => {
     Object.values(checkingTimeouts.value).forEach(clearTimeout)
 })
 
+function notificationIcon(type: string) {
+    if (type === 'email') return Mail
+
+    return MessageCircle
+}
+
+function notificationBadgeClass(channel: NotificationChannel): string {
+    if (channel.active) {
+        return 'border-[#BEE7CE] bg-[#ECFDF3] text-[#168A4D]'
+    }
+
+    if (channel.enabled && !channel.connected) {
+        return 'border-[#F7D59A] bg-[#FFF7E8] text-[#B45309]'
+    }
+
+    return 'border-[#DDEBE3] bg-[#F3F8F5] text-[#8A9A91]'
+}
+
+function notificationTitle(channel: NotificationChannel): string {
+    if (channel.active) {
+        return `${channel.label}: уведомления включены для сайта`
+    }
+
+    if (channel.enabled && !channel.connected) {
+        return `${channel.label}: включено для сайта, но канал не подключен в настройках`
+    }
+
+    return `${channel.label}: выключено для сайта`
+}
 function statusPriority(status: string): number {
     if (status === 'down') return 0
     if (status === 'warning') return 1
@@ -687,9 +727,20 @@ function resetFilters(): void {
                             <component v-else :is="siteStatusIcon(site.status)" class="h-4 w-4" :stroke-width="2.2" />
                         </span>
                         <div class="min-w-0">
-                            <Link :href="`/sites/${site.id}`" class="block truncate font-semibold text-[#17231C] hover:text-[#1E9B5D]">
-                                {{ site.name }}
-                            </Link>
+                            <div class="flex min-w-0 flex-wrap items-center gap-2">
+                                <Link :href="`/sites/${site.id}`" class="block truncate font-semibold text-[#17231C] hover:text-[#1E9B5D]">
+                                    {{ site.name }}
+                                </Link>
+                                <span
+                                    v-for="channel in site.notification_channels"
+                                    :key="`${site.id}-${channel.type}`"
+                                    class="inline-flex h-6 w-6 items-center justify-center rounded-full border"
+                                    :class="notificationBadgeClass(channel)"
+                                    :title="notificationTitle(channel)"
+                                >
+                                    <component :is="notificationIcon(channel.type)" class="h-3.5 w-3.5" :stroke-width="2.2" />
+                                </span>
+                            </div>
                             <div class="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-[#6A7A70]">
                                 <span class="truncate">{{ site.host ?? site.url }}</span>
                                 <span class="shrink-0 text-[#B0BCB5]">•</span>
@@ -793,7 +844,18 @@ function resetFilters(): void {
                 >
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                            <h3 class="truncate text-lg font-semibold text-[#17231C]">{{ site.name }}</h3>
+                            <div class="flex min-w-0 flex-wrap items-center gap-2">
+                                <h3 class="truncate text-lg font-semibold text-[#17231C]">{{ site.name }}</h3>
+                                <span
+                                    v-for="channel in site.notification_channels"
+                                    :key="`${site.id}-card-${channel.type}`"
+                                    class="inline-flex h-6 w-6 items-center justify-center rounded-full border"
+                                    :class="notificationBadgeClass(channel)"
+                                    :title="notificationTitle(channel)"
+                                >
+                                    <component :is="notificationIcon(channel.type)" class="h-3.5 w-3.5" :stroke-width="2.2" />
+                                </span>
+                            </div>
                             <p class="mt-1 truncate text-sm text-[#6A7A70]">{{ site.host ?? site.url }}</p>
                         </div>
                         <span class="shrink-0 rounded-full px-3 py-1 text-xs font-medium" :class="statusClass(site.status)">
