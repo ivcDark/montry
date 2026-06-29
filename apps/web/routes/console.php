@@ -5,6 +5,11 @@ use App\Modules\Billing\Application\Services\ProcessPastDueSubscriptions;
 use App\Modules\Billing\Application\Services\SendSubscriptionRenewalReminders;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Subscription;
 use App\Modules\Incidents\Application\Services\SendWeeklyIncidentDigests;
+use App\Modules\Incidents\Infrastructure\Persistence\Models\Incident;
+use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
+use App\Modules\Notifications\Application\Services\IncidentNotificationMessageFactory;
+use App\Modules\Notifications\Application\Services\NotificationDispatcher;
+use App\Modules\Notifications\Application\Services\SyncEmailNotificationChannels;
 use App\Modules\Monitoring\Application\Services\PruneMonitoringHistory;
 use App\Modules\Observability\Infrastructure\ClickHouse\ClickHouseBusinessEventExporter;
 use App\Modules\Observability\Infrastructure\Persistence\Models\AnalyticsEventExport;
@@ -19,6 +24,43 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Artisan::command('notifications:sync-email-channels {organization_id? : Organization id to sync} {--all : Sync all organizations}', function (SyncEmailNotificationChannels $syncEmailChannels): int {
+    $organizationId = $this->argument('organization_id');
+
+    if ($this->option('all')) {
+        $ids = Organization::query()->pluck('id');
+    } elseif ($organizationId !== null) {
+        $ids = collect([(int) $organizationId]);
+    } else {
+        $this->error('Pass organization_id or --all.');
+
+        return self::FAILURE;
+    }
+
+    foreach ($ids as $id) {
+        $syncEmailChannels->handleOrganization((int) $id);
+    }
+
+    $this->info('Synced email notification channels for '.$ids->count().' organization(s).');
+
+    return self::SUCCESS;
+})->purpose('Create or update default email notification channels for active organization users.');
+
+Artisan::command('notifications:resend-incident-opened {incident_id : Incident id}', function (NotificationDispatcher $dispatcher, IncidentNotificationMessageFactory $messages): int {
+    $incident = Incident::query()->find((int) $this->argument('incident_id'));
+
+    if ($incident === null) {
+        $this->error('Incident not found.');
+
+        return self::FAILURE;
+    }
+
+    $dispatcher->dispatch($messages->opened($incident));
+
+    $this->info("Dispatched opened notification for incident {$incident->id}.");
+
+    return self::SUCCESS;
+})->purpose('Re-dispatch an opened incident notification through configured notification channels.');
 Artisan::command('billing:send-renewal-reminders', function (SendSubscriptionRenewalReminders $reminders): int {
     $sent = $reminders->handle();
 

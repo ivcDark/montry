@@ -11,6 +11,7 @@ final readonly class NotificationRecipientResolver
 {
     public function __construct(
         private LimitChecker $limits,
+        private SyncEmailNotificationChannels $syncEmailChannels,
     ) {}
 
     /**
@@ -18,6 +19,8 @@ final readonly class NotificationRecipientResolver
      */
     public function resolve(int $organizationId, string $eventType): Collection
     {
+        $this->syncEmailChannels->handleOrganization($organizationId);
+
         $hasEventRules = NotificationRule::query()
             ->where('organization_id', $organizationId)
             ->where('event_type', $eventType)
