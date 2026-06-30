@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 
 final class VkOAuthClient
 {
-    public function authorizationUrl(string $state): string
+    public function authorizationUrl(string $state, string $codeChallenge): string
     {
         $clientId = $this->clientId();
 
@@ -20,28 +20,33 @@ final class VkOAuthClient
             ]);
         }
 
-        $params = [
+        return $this->authorizeUrl() . '?' . http_build_query([
             'response_type' => 'code',
             'client_id' => $clientId,
             'redirect_uri' => $this->redirectUri(),
             'scope' => $this->scope(),
             'state' => $state,
-            'display' => 'page',
-            'v' => $this->apiVersion(),
-        ];
-
-        return $this->authorizeUrl() . '?' . http_build_query($params);
+            'code_challenge' => $codeChallenge,
+            'code_challenge_method' => 'S256',
+        ]);
     }
 
-    public function userFromCode(string $code): VkUserData
+    public function userFromCode(string $code, string $codeVerifier, ?string $deviceId): VkUserData
     {
-        $tokenPayload = $this->exchangeCodeForToken($code);
-
-        $id = (string) Arr::get($tokenPayload, 'user_id', '');
-        $email = Str::lower((string) Arr::get($tokenPayload, 'email', ''));
+        $tokenPayload = $this->exchangeCodeForToken($code, $codeVerifier, $deviceId);
         $accessToken = (string) Arr::get($tokenPayload, 'access_token', '');
 
-        if ($id === '' || $email === '' || $accessToken === '') {
+        if ($accessToken === '') {
+            throw ValidationException::withMessages([
+                'vk' => 'VK не вернул токен доступа.',
+            ]);
+        }
+
+        $profile = $this->fetchUserInfo($accessToken);
+        $id = (string) (Arr::get($tokenPayload, 'user_id') ?: Arr::get($profile, 'user_id') ?: Arr::get($profile, 'id', ''));
+        $email = Str::lower((string) (Arr::get($tokenPayload, 'email') ?: Arr::get($profile, 'email', '')));
+
+        if ($id === '' || $email === '') {
             throw ValidationException::withMessages([
                 'vk' => 'VK не передал email аккаунта. Разрешите доступ к email и попробуйте снова.',
             ]);
@@ -50,21 +55,32 @@ final class VkOAuthClient
         return new VkUserData(
             id: $id,
             email: $email,
-            name: $this->resolveName($id, $email, $accessToken),
+            name: $this->resolveName($profile, $email),
         );
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function exchangeCodeForToken(string $code): array
+    private function exchangeCodeForToken(string $code, string $codeVerifier, ?string $deviceId): array
     {
-        $response = Http::get($this->tokenUrl(), [
+        $params = [
+            'grant_type' => 'authorization_code',
             'client_id' => $this->clientId(),
-            'client_secret' => $this->clientSecret(),
             'redirect_uri' => $this->redirectUri(),
             'code' => $code,
-        ]);
+            'code_verifier' => $codeVerifier,
+        ];
+
+        if ($this->clientSecret() !== '') {
+            $params['client_secret'] = $this->clientSecret();
+        }
+
+        if ($deviceId !== null && $deviceId !== '') {
+            $params['device_id'] = $deviceId;
+        }
+
+        $response = Http::asForm()->post($this->tokenUrl(), $params);
 
         if (! $response->successful()) {
             throw ValidationException::withMessages([
@@ -83,29 +99,46 @@ final class VkOAuthClient
         return $payload;
     }
 
-    private function resolveName(string $id, string $email, string $accessToken): string
+    /**
+     * @return array<string, mixed>
+     */
+    private function fetchUserInfo(string $accessToken): array
     {
-        $response = Http::get($this->userInfoUrl(), [
-            'user_ids' => $id,
-            'fields' => 'screen_name',
+        $response = Http::asForm()->post($this->userInfoUrl(), [
+            'client_id' => $this->clientId(),
             'access_token' => $accessToken,
-            'v' => $this->apiVersion(),
         ]);
 
         if (! $response->successful()) {
-            return Str::before($email, '@') ?: 'Пользователь VK';
+            return [];
         }
 
         $payload = $response->json();
 
         if (! is_array($payload) || isset($payload['error'])) {
-            return Str::before($email, '@') ?: 'Пользователь VK';
+            return [];
+        }
+
+        $user = Arr::get($payload, 'user');
+
+        if (is_array($user)) {
+            return $user;
         }
 
         $profile = Arr::first((array) Arr::get($payload, 'response', []));
 
-        if (! is_array($profile)) {
-            return Str::before($email, '@') ?: 'Пользователь VK';
+        return is_array($profile) ? $profile : [];
+    }
+
+    /**
+     * @param array<string, mixed> $profile
+     */
+    private function resolveName(array $profile, string $email): string
+    {
+        $name = trim((string) Arr::get($profile, 'name', ''));
+
+        if ($name !== '') {
+            return $name;
         }
 
         $name = trim(implode(' ', array_filter([
@@ -144,21 +177,16 @@ final class VkOAuthClient
 
     private function authorizeUrl(): string
     {
-        return (string) config('services.vk.authorize_url', 'https://oauth.vk.com/authorize');
+        return (string) config('services.vk.authorize_url', 'https://id.vk.com/authorize');
     }
 
     private function tokenUrl(): string
     {
-        return (string) config('services.vk.token_url', 'https://oauth.vk.com/access_token');
+        return (string) config('services.vk.token_url', 'https://id.vk.com/oauth2/auth');
     }
 
     private function userInfoUrl(): string
     {
-        return (string) config('services.vk.user_info_url', 'https://api.vk.com/method/users.get');
-    }
-
-    private function apiVersion(): string
-    {
-        return (string) config('services.vk.api_version', '5.199');
+        return (string) config('services.vk.user_info_url', 'https://id.vk.com/oauth2/user_info');
     }
 }

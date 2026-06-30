@@ -16,6 +16,7 @@ use Illuminate\Validation\ValidationException;
 final class VkAuthController extends Controller
 {
     private const STATE_SESSION_KEY = 'auth.vk.state';
+    private const CODE_VERIFIER_SESSION_KEY = 'auth.vk.code_verifier';
 
     public function redirect(
         Request $request,
@@ -25,9 +26,12 @@ final class VkAuthController extends Controller
         $planIntent->captureFromRequest($request);
 
         $state = Str::random(40);
-        $request->session()->put(self::STATE_SESSION_KEY, $state);
+        $codeVerifier = Str::random(96);
 
-        return redirect()->away($client->authorizationUrl($state));
+        $request->session()->put(self::STATE_SESSION_KEY, $state);
+        $request->session()->put(self::CODE_VERIFIER_SESSION_KEY, $codeVerifier);
+
+        return redirect()->away($client->authorizationUrl($state, $this->codeChallenge($codeVerifier)));
     }
 
     public function callback(
@@ -41,20 +45,30 @@ final class VkAuthController extends Controller
         }
 
         $expectedState = $request->session()->pull(self::STATE_SESSION_KEY);
+        $codeVerifier = $request->session()->pull(self::CODE_VERIFIER_SESSION_KEY);
         $actualState = $request->query('state');
 
         if (! is_string($expectedState) || ! is_string($actualState) || ! hash_equals($expectedState, $actualState)) {
             return $this->redirectWithError('Не удалось проверить ответ VK. Попробуйте войти снова.');
         }
 
+        if (! is_string($codeVerifier) || $codeVerifier === '') {
+            return $this->redirectWithError('Не удалось проверить параметры авторизации VK. Попробуйте войти снова.');
+        }
+
         $code = $request->query('code');
+        $deviceId = $request->query('device_id');
 
         if (! is_string($code) || $code === '') {
             return $this->redirectWithError('VK не передал код авторизации.');
         }
 
         try {
-            $user = $authenticateVkUser->handle($client->userFromCode($code));
+            $user = $authenticateVkUser->handle($client->userFromCode(
+                code: $code,
+                codeVerifier: $codeVerifier,
+                deviceId: is_string($deviceId) ? $deviceId : null,
+            ));
         } catch (ValidationException $exception) {
             return redirect()
                 ->route('login')
@@ -78,5 +92,10 @@ final class VkAuthController extends Controller
             ->withErrors([
                 'vk' => $message,
             ]);
+    }
+
+    private function codeChallenge(string $codeVerifier): string
+    {
+        return rtrim(strtr(base64_encode(hash('sha256', $codeVerifier, true)), '+/', '-_'), '=');
     }
 }
