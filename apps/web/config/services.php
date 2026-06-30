@@ -71,6 +71,17 @@ return [
         'user_info_url' => env('YANDEX_USER_INFO_URL', 'https://login.yandex.ru/info'),
     ],
 
+    'vk' => [
+        'client_id' => env('VK_CLIENT_ID'),
+        'client_secret' => env('VK_CLIENT_SECRET'),
+        'redirect_uri' => env('VK_REDIRECT_URI', rtrim((string) env('APP_URL', 'http://localhost'), '/') . '/auth/vk/callback'),
+        'scope' => env('VK_SCOPE', 'email'),
+        'authorize_url' => env('VK_AUTHORIZE_URL', 'https://oauth.vk.com/authorize'),
+        'token_url' => env('VK_TOKEN_URL', 'https://oauth.vk.com/access_token'),
+        'user_info_url' => env('VK_USER_INFO_URL', 'https://api.vk.com/method/users.get'),
+        'api_version' => env('VK_API_VERSION', '5.199'),
+    ],
+
     'google' => [
         'enabled' => env('GOOGLE_AUTH_ENABLED', false),
     ],

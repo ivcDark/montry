@@ -4,6 +4,7 @@ use App\Modules\Auth\Http\Controllers\LoginController;
 use App\Modules\Auth\Http\Controllers\LogoutController;
 use App\Modules\Auth\Http\Controllers\RegisterController;
 use App\Modules\Auth\Http\Controllers\RegisterVerificationController;
+use App\Modules\Auth\Http\Controllers\VkAuthController;
 use App\Modules\Auth\Http\Controllers\YandexAuthController;
 use Illuminate\Support\Facades\Route;
 
@@ -19,6 +20,12 @@ Route::middleware('guest')->group(function (): void {
 
     Route::get('/auth/yandex/callback', [YandexAuthController::class, 'callback'])
         ->name('auth.yandex.callback');
+
+    Route::get('/auth/vk/redirect', [VkAuthController::class, 'redirect'])
+        ->name('auth.vk.redirect');
+
+    Route::get('/auth/vk/callback', [VkAuthController::class, 'callback'])
+        ->name('auth.vk.callback');
 
     Route::get('/register', [RegisterController::class, 'create'])
         ->name('register');

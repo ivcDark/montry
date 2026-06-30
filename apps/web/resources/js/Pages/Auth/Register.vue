@@ -8,12 +8,14 @@ const props = defineProps<{
     googleAuthEnabled?: boolean
 }>()
 
-const page = usePage<{ errors?: { yandex?: string; google?: string } }>()
+const page = usePage<{ errors?: { yandex?: string; vk?: string; google?: string } }>()
 
 const loginHref = computed(() => props.intendedPlanCode ? `/login?plan=${props.intendedPlanCode}` : '/login')
 const yandexHref = computed(() => props.intendedPlanCode ? `/auth/yandex/redirect?plan=${props.intendedPlanCode}` : '/auth/yandex/redirect')
+const vkHref = computed(() => props.intendedPlanCode ? `/auth/vk/redirect?plan=${props.intendedPlanCode}` : '/auth/vk/redirect')
 const googleHref = computed(() => props.intendedPlanCode ? `/auth/google/redirect?plan=${props.intendedPlanCode}` : '/auth/google/redirect')
 const yandexError = computed(() => page.props.errors?.yandex)
+const vkError = computed(() => page.props.errors?.vk)
 const googleError = computed(() => page.props.errors?.google)
 
 const form = useForm({
@@ -113,6 +115,14 @@ function submit() {
                         </a>
 
                         <a
+                            :href="vkHref"
+                            class="inline-flex h-13 items-center justify-center gap-3 rounded-xl border border-[#BCD7FF] bg-white px-5 text-sm font-semibold text-[#26332D] transition hover:border-[#0077FF]/50 hover:bg-[#F5FAFF] focus:outline-none focus:ring-2 focus:ring-[#0077FF]/15 focus:ring-offset-2"
+                        >
+                            <span class="grid h-6 w-6 place-items-center rounded-full bg-[#0077FF] text-xs font-bold text-white">VK</span>
+                            Зарегистрироваться через VK
+                        </a>
+
+                        <a
                             v-if="googleAuthEnabled"
                             :href="googleHref"
                             class="inline-flex h-13 items-center justify-center gap-3 rounded-xl border border-[#DDEBE3] bg-white px-5 text-sm font-semibold text-[#26332D] transition hover:border-[#B8D0C2] hover:bg-[#FBFDFC] focus:outline-none focus:ring-2 focus:ring-[#24A869]/15 focus:ring-offset-2"
@@ -122,6 +132,7 @@ function submit() {
                         </a>
 
                         <p v-if="yandexError" class="text-sm font-semibold text-[#D94B4B]">{{ yandexError }}</p>
+                        <p v-if="vkError" class="text-sm font-semibold text-[#D94B4B]">{{ vkError }}</p>
                         <p v-if="googleError" class="text-sm font-semibold text-[#D94B4B]">{{ googleError }}</p>
                     </div>
 

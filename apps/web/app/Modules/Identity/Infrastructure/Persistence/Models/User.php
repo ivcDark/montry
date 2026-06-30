@@ -18,6 +18,7 @@ class User extends Authenticatable
         'email',
         'password',
         'yandex_id',
+        'vk_id',
         'is_admin',
         'is_blocked',
         'telegram_notifications_enabled',
