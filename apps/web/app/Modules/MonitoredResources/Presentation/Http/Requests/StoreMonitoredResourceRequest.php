@@ -29,6 +29,7 @@ final class StoreMonitoredResourceRequest extends FormRequest
             'monitors.*.name' => ['required_with:monitors', 'string', 'max:255'],
             'monitors.*.is_enabled' => ['required_with:monitors', 'boolean'],
             'monitors.*.interval_seconds' => ['required_with:monitors', 'integer', 'min:60', 'max:86400', 'multiple_of:60'],
+            'monitors.*.failure_threshold' => ['sometimes', 'integer', 'min:0', 'max:20'],
             'monitors.*.timeout_ms' => ['required_with:monitors', 'integer', 'min:1000', 'max:60000'],
             'monitors.*.settings' => ['required_with:monitors', 'array'],
             'monitors.*.expected' => ['sometimes', 'array'],

@@ -77,6 +77,7 @@ final readonly class UpdateSiteAction
                 enabled: (bool) $payload['is_enabled'],
                 intervalSeconds: (int) $payload['interval_seconds'],
                 timeoutMs: (int) $payload['timeout_ms'],
+                failureThreshold: isset($payload['failure_threshold']) ? (int) $payload['failure_threshold'] : null,
                 settings: $payload['settings'],
                 expected: $payload['expected'] ?? [],
             ));
@@ -93,6 +94,7 @@ final readonly class UpdateSiteAction
             enabled: (bool) $payload['is_enabled'],
             intervalSeconds: (int) $payload['interval_seconds'],
             timeoutMs: (int) $payload['timeout_ms'],
+            failureThreshold: isset($payload['failure_threshold']) ? (int) $payload['failure_threshold'] : null,
             settings: $payload['settings'],
             expected: $payload['expected'] ?? [],
         ));

@@ -25,6 +25,7 @@ class Monitor extends Model
         'enabled',
         'status',
         'interval_seconds',
+        'failure_threshold',
         'timeout_ms',
         'settings',
         'expected',
@@ -43,6 +44,7 @@ class Monitor extends Model
         return [
             'enabled' => 'boolean',
             'interval_seconds' => 'integer',
+            'failure_threshold' => 'integer',
             'timeout_ms' => 'integer',
             'settings' => 'array',
             'expected' => 'array',

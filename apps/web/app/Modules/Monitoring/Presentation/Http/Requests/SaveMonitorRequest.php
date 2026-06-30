@@ -22,6 +22,7 @@ final class SaveMonitorRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'is_enabled' => ['required', 'boolean'],
             'interval_seconds' => $this->intervalRules(),
+            'failure_threshold' => ['sometimes', 'integer', 'min:0', 'max:20'],
             'timeout_ms' => ['required', 'integer', 'min:1000', 'max:60000'],
             'settings' => ['required', 'array'],
             'expected' => ['sometimes', 'array'],

@@ -10,6 +10,7 @@ final readonly class UpdateMonitorCommand
         public bool $enabled,
         public int $intervalSeconds,
         public int $timeoutMs,
+        public ?int $failureThreshold = null,
         public array $settings = [],
         public array $expected = [],
     ) {

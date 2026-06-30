@@ -36,6 +36,7 @@ final readonly class UpdateMonitorHandler
         $monitor->name = $command->name;
         $monitor->enabled = $command->enabled;
         $monitor->interval_seconds = $command->intervalSeconds;
+        $monitor->failure_threshold = $command->failureThreshold ?? (int) ($monitor->failure_threshold ?? 0);
         $monitor->timeout_ms = $command->timeoutMs;
         $monitor->settings = $definition->normalizeSettings(
             $definition->validateSettings($command->settings ?: ($monitor->settings ?? $definition->defaultSettings())),

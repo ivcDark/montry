@@ -137,6 +137,7 @@ final class MonitorTypeCatalog
             'name' => (string) $row['name'],
             'is_enabled' => (bool) ($row['default_enabled'] ?? false),
             'interval_seconds' => max($defaultInterval, $minimumInterval),
+            'failure_threshold' => MonitorFailureThresholds::defaultForType((string) $row['code']),
             'timeout_ms' => (int) ($row['default_timeout_ms'] ?? 10000),
             'settings' => $this->resolveTemplate((array) ($row['default_settings'] ?? []), $site),
             'expected' => $this->resolveTemplate((array) ($row['default_expected'] ?? []), $site),

@@ -5,6 +5,7 @@ namespace App\Modules\Monitoring\Application\Handlers;
 use App\Modules\Billing\Application\Services\LimitChecker;
 use App\Modules\Monitoring\Application\Commands\CreateMonitorCommand;
 use App\Modules\Monitoring\Application\Services\CheckTypeRegistry;
+use App\Modules\Monitoring\Application\Services\MonitorFailureThresholds;
 use App\Modules\Monitoring\Domain\Contracts\MonitorRepositoryInterface;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\Monitor;
 use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
@@ -35,6 +36,7 @@ final readonly class CreateMonitorHandler
             'enabled' => $command->enabled,
             'status' => 'unknown',
             'interval_seconds' => $command->intervalSeconds,
+            'failure_threshold' => $command->failureThreshold ?? MonitorFailureThresholds::defaultForType($definition->type()),
             'timeout_ms' => $command->timeoutMs,
             'settings' => $definition->normalizeSettings(
                 $definition->validateSettings($command->settings ?: $definition->defaultSettings()),
@@ -54,6 +56,7 @@ final readonly class CreateMonitorHandler
                 'monitored_resource_id' => $monitor->monitored_resource_id,
                 'type' => $monitor->type,
                 'interval_seconds' => $monitor->interval_seconds,
+                'failure_threshold' => $monitor->failure_threshold,
                 'timeout_ms' => $monitor->timeout_ms,
                 'enabled' => $monitor->enabled,
             ],

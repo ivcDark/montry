@@ -5,6 +5,7 @@ namespace App\Modules\Incidents\Application\Services;
 use App\Modules\Incidents\Domain\Events\IncidentOpened;
 use App\Modules\Incidents\Domain\Events\IncidentResolved;
 use App\Modules\Incidents\Infrastructure\Persistence\Models\Incident;
+use App\Modules\Monitoring\Application\Services\MonitorFailureThresholds;
 use App\Modules\Monitoring\Infrastructure\Persistence\Models\CheckResult;
 use App\Modules\Observability\Application\DTO\RecordBusinessEventData;
 use App\Modules\Observability\Application\Services\BusinessEventRecorder;
@@ -14,7 +15,7 @@ final readonly class IncidentResolver
 {
     public function __construct(
         private BusinessEventRecorder $events,
-        private int $failureThreshold = 2,
+        private MonitorFailureThresholds $failureThresholds,
         private int $recoveryThreshold = 1,
     ) {}
 
@@ -35,7 +36,7 @@ final readonly class IncidentResolver
             return $this->resolveOpenIncident($checkResult);
         }
 
-        if ((int) $monitor->consecutive_failures < $this->failureThreshold) {
+        if ((int) $monitor->consecutive_failures < $this->failureThresholds->forMonitor($monitor)) {
             return null;
         }
 

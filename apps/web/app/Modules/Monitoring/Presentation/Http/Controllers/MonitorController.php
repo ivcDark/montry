@@ -61,6 +61,7 @@ final class MonitorController extends Controller
                 enabled: $validated['is_enabled'],
                 intervalSeconds: $validated['interval_seconds'],
                 timeoutMs: $validated['timeout_ms'],
+                failureThreshold: $validated['failure_threshold'] ?? null,
                 settings: $validated['settings'],
                 expected: $validated['expected'] ?? [],
             ));
@@ -102,6 +103,7 @@ final class MonitorController extends Controller
                 'name' => $siteMonitor->name,
                 'is_enabled' => $siteMonitor->is_enabled,
                 'interval_seconds' => $siteMonitor->interval_seconds,
+                'failure_threshold' => $siteMonitor->failure_threshold,
                 'timeout_ms' => $siteMonitor->timeout_ms,
                 'settings' => $siteMonitor->settings ?? [],
                 'expected' => $siteMonitor->expected ?? [],
@@ -130,6 +132,7 @@ final class MonitorController extends Controller
                 enabled: $validated['is_enabled'],
                 intervalSeconds: $validated['interval_seconds'],
                 timeoutMs: $validated['timeout_ms'],
+                failureThreshold: $validated['failure_threshold'] ?? null,
                 settings: $validated['settings'],
                 expected: $validated['expected'] ?? [],
             ));

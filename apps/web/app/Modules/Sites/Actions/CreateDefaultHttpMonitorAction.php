@@ -24,6 +24,7 @@ final readonly class CreateDefaultHttpMonitorAction
             enabled: true,
             intervalSeconds: 60,
             timeoutMs: 10000,
+            failureThreshold: 2,
             settings: [
                 'method' => 'GET',
                 'url' => $site->target,

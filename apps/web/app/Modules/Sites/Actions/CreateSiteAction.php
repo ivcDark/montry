@@ -68,6 +68,7 @@ final readonly class CreateSiteAction
                     enabled: (bool) $monitor['is_enabled'],
                     intervalSeconds: (int) $monitor['interval_seconds'],
                     timeoutMs: (int) $monitor['timeout_ms'],
+                    failureThreshold: isset($monitor['failure_threshold']) ? (int) $monitor['failure_threshold'] : null,
                     settings: $monitor['settings'],
                     expected: $monitor['expected'] ?? [],
                 ));
