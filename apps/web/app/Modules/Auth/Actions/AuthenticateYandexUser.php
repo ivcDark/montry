@@ -4,6 +4,7 @@ namespace App\Modules\Auth\Actions;
 
 use App\Modules\Auth\DTO\YandexUserData;
 use App\Modules\Auth\Mail\RegistrationCompletedMail;
+use App\Modules\Auth\Support\YandexEmail;
 use App\Modules\Billing\Application\Services\AssignFreeSubscription;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Organizations\Actions\CreateOrganizationForUser;
@@ -52,11 +53,17 @@ final readonly class AuthenticateYandexUser
                     'yandex_id' => $data->id,
                 ]);
             } else {
-                $user->forceFill([
+                $updates = [
                     'name' => $user->name ?: $data->name,
                     'email_verified_at' => $user->email_verified_at ?? now(),
                     'yandex_id' => $user->yandex_id ?: $data->id,
-                ])->save();
+                ];
+
+                if ($this->emailCanBeUsedByUser($user, $data->email)) {
+                    $updates['email'] = $data->email;
+                }
+
+                $user->forceFill($updates)->save();
             }
 
             if ((bool) $user->is_blocked) {
@@ -81,7 +88,7 @@ final readonly class AuthenticateYandexUser
 
     private function findUserByEmailOrYandexAlias(string $email): ?User
     {
-        $candidates = $this->emailCandidates($email);
+        $candidates = YandexEmail::candidates($email);
 
         return User::query()
             ->whereIn('email', $candidates)
@@ -89,21 +96,11 @@ final readonly class AuthenticateYandexUser
             ->first();
     }
 
-    /**
-     * @return list<string>
-     */
-    private function emailCandidates(string $email): array
+    private function emailCanBeUsedByUser(User $user, string $email): bool
     {
-        $email = Str::lower($email);
-        $candidates = [$email];
-
-        [$localPart, $domain] = array_pad(explode('@', $email, 2), 2, null);
-
-        if ($localPart !== null && in_array($domain, ['yandex.ru', 'yandex.com'], true)) {
-            $candidates[] = "{$localPart}@yandex.ru";
-            $candidates[] = "{$localPart}@yandex.com";
-        }
-
-        return array_values(array_unique($candidates));
+        return ! User::query()
+            ->whereKeyNot($user->id)
+            ->whereIn('email', YandexEmail::candidates($email))
+            ->exists();
     }
 }

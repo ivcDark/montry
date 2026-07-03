@@ -46,7 +46,7 @@ return [
     ],
 
     'email_verification' => [
-        'enabled' => env('REGISTRATION_EMAIL_VERIFICATION_ENABLED', true),
+        'enabled' => env('REGISTRATION_EMAIL_VERIFICATION_ENABLED', false),
         'code_length' => 5,
         'ttl_minutes' => 10,
         'max_attempts' => 5,

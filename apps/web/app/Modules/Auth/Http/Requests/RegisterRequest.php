@@ -3,6 +3,9 @@
 namespace App\Modules\Auth\Http\Requests;
 
 use App\Modules\Auth\DTO\RegisterUserData;
+use App\Modules\Auth\Support\YandexEmail;
+use App\Modules\Identity\Infrastructure\Persistence\Models\User;
+use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 
@@ -23,7 +26,14 @@ final class RegisterRequest extends FormRequest
                 'lowercase',
                 'email:rfc,dns',
                 'max:255',
-                'unique:users,email',
+                function (string $attribute, mixed $value, Closure $fail): void {
+                    $email = YandexEmail::canonicalize((string) $value);
+                    $candidates = YandexEmail::candidates($email);
+
+                    if (User::query()->whereIn('email', $candidates)->exists()) {
+                        $fail('Данный Email уже занят');
+                    }
+                },
             ],
             'password' => [
                 'required',
@@ -54,7 +64,7 @@ final class RegisterRequest extends FormRequest
     {
         return new RegisterUserData(
             name: $this->string('name')->toString(),
-            email: $this->string('email')->toString(),
+            email: YandexEmail::canonicalize($this->string('email')->toString()),
             password: $this->string('password')->toString(),
         );
     }

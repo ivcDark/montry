@@ -100,14 +100,26 @@ final class MaxWebhookController extends Controller
 
     private function startToken(string $text): ?string
     {
-        if (! Str::startsWith($text, '/start')) {
+        if ($text === '') {
             return null;
         }
 
-        $parts = preg_split('/\s+/', $text, 2);
-        $token = trim((string) ($parts[1] ?? ''));
+        if (Str::startsWith($text, '/start')) {
+            $parts = preg_split('/\s+/', $text, 2);
+            $token = trim((string) ($parts[1] ?? ''));
 
-        return $token !== '' ? $token : null;
+            return $token !== '' ? $token : null;
+        }
+
+        if (preg_match('/(?:^|[?&\s])start=([^\s&]+)/', $text, $matches) === 1) {
+            return trim(rawurldecode($matches[1]));
+        }
+
+        if (preg_match('/^[A-Za-z0-9]{48}$/', $text) === 1) {
+            return $text;
+        }
+
+        return null;
     }
 
     /**
@@ -159,9 +171,9 @@ final class MaxWebhookController extends Controller
 
         try {
             $request = Http::acceptJson()->timeout(5);
-            $authMode = (string) config('services.max.auth_mode', 'query');
+            $authMode = (string) config('services.max.auth_mode', 'header');
 
-            if ($authMode === 'bearer') {
+            if (in_array($authMode, ['header', 'bearer'], true)) {
                 $request = $request->withToken($token);
             } else {
                 $tokenParameter = (string) config('services.max.token_query_parameter', 'access_token');
@@ -170,12 +182,13 @@ final class MaxWebhookController extends Controller
                 ]);
             }
 
-            $request->post($this->sendMessageUrl(), [
-                'recipient' => [
+            $request
+                ->withQueryParameters([
                     'chat_id' => $chatId,
-                ],
-                'text' => $text,
-            ]);
+                ])
+                ->post($this->sendMessageUrl(), [
+                    'text' => $text,
+                ]);
         } catch (ConnectionException) {
             //
         }
@@ -189,6 +202,6 @@ final class MaxWebhookController extends Controller
             return $url;
         }
 
-        return rtrim((string) config('services.max.api_base_url', 'https://botapi.max.ru'), '/') . '/messages';
+        return rtrim((string) config('services.max.api_base_url', 'https://platform-api2.max.ru'), '/') . '/messages';
     }
 }

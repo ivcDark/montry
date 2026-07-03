@@ -3,6 +3,7 @@
 namespace App\Modules\Auth\Services;
 
 use App\Modules\Auth\DTO\YandexUserData;
+use App\Modules\Auth\Support\YandexEmail;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -26,6 +27,10 @@ final class YandexOAuthClient
             'redirect_uri' => $this->redirectUri(),
             'state' => $state,
         ];
+
+        if ($this->forceConfirm()) {
+            $params['force_confirm'] = 'yes';
+        }
 
         $scope = $this->scope();
 
@@ -61,7 +66,7 @@ final class YandexOAuthClient
         }
 
         $id = (string) Arr::get($payload, 'id', '');
-        $email = Str::lower((string) Arr::get($payload, 'default_email', ''));
+        $email = YandexEmail::canonicalize((string) Arr::get($payload, 'default_email', ''));
         $name = $this->resolveName($payload, $email);
 
         if ($id === '' || $email === '') {
@@ -137,6 +142,11 @@ final class YandexOAuthClient
     private function scope(): string
     {
         return (string) config('services.yandex.scope', 'login:info,login:email');
+    }
+
+    private function forceConfirm(): bool
+    {
+        return filter_var(config('services.yandex.force_confirm', true), FILTER_VALIDATE_BOOL);
     }
 
     private function authorizeUrl(): string

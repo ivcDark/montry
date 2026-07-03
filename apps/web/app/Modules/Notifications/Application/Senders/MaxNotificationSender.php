@@ -29,10 +29,10 @@ final class MaxNotificationSender implements NotificationSenderInterface
         }
 
         $this->request($token)
+            ->withQueryParameters([
+                'chat_id' => (string) $chatId,
+            ])
             ->post($this->sendMessageUrl(), [
-                'recipient' => [
-                    'chat_id' => (string) $chatId,
-                ],
                 'text' => $message->body,
             ])
             ->throw();
@@ -41,9 +41,9 @@ final class MaxNotificationSender implements NotificationSenderInterface
     private function request(string $token): PendingRequest
     {
         $request = Http::acceptJson()->timeout(10);
-        $authMode = (string) config('services.max.auth_mode', 'query');
+        $authMode = (string) config('services.max.auth_mode', 'header');
 
-        if ($authMode === 'bearer') {
+        if (in_array($authMode, ['header', 'bearer'], true)) {
             return $request->withToken($token);
         }
 
@@ -62,6 +62,6 @@ final class MaxNotificationSender implements NotificationSenderInterface
             return $url;
         }
 
-        return rtrim((string) config('services.max.api_base_url', 'https://botapi.max.ru'), '/') . '/messages';
+        return rtrim((string) config('services.max.api_base_url', 'https://platform-api2.max.ru'), '/') . '/messages';
     }
 }
