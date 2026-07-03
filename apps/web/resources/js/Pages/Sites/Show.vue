@@ -17,7 +17,7 @@ import {
     CalendarClock,
     Check,
     Mail,
-    MessageCircle,
+    MessageSquareText,
     ChevronDown,
     Clock3,
     Crown,
@@ -28,6 +28,7 @@ import {
     Pause,
     Play,
     RotateCw,
+    Send,
     Settings,
     ShieldCheck,
     Trash2,
@@ -37,6 +38,7 @@ import { Line } from 'vue-chartjs'
 import CheckIntervalControl from '@/Components/CheckIntervalControl.vue'
 import TariffRestriction from '@/Components/TariffRestriction.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
+import { monitorResultText } from '@/Support/monitorResultText'
 import { useAutoRefresh } from '../../Composables/useAutoRefresh'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
@@ -247,8 +249,10 @@ const monitorDrafts = ref<Record<string, MonitorDraft>>(
 )
 function notificationIcon(type: string) {
     if (type === 'email') return Mail
+    if (type === 'telegram') return Send
+    if (type === 'max') return MessageSquareText
 
-    return MessageCircle
+    return MessageSquareText
 }
 
 function notificationToggleClass(channel: NotificationChannel): string {
@@ -739,66 +743,12 @@ function resultText(monitor: Monitor): string {
     if (!monitor.is_available) return 'Недоступно на текущем тарифе'
     if (!monitor.is_enabled) return 'Проверка выключена и не запускается по расписанию'
     if (!result) return 'Нет результата'
-    if (result.error_message) return result.error_message
 
-    if (['http', 'api_endpoint', 'robots_txt', 'sitemap_xml'].includes(monitor.type)) {
-        const code = result.status_code ? `HTTP ${result.status_code}` : 'HTTP'
-        const time = result.response_time_ms ? ` · ${result.response_time_ms} мс` : ''
-
-        return `${code}${time}`
-    }
-
-    if (monitor.type === 'dns') {
-        const records = result.normalized_result.records
-        const count = Array.isArray(records) ? records.length : 0
-
-        return count ? `${count} DNS записей` : statusLabel(result.status)
-    }
-
-    if (monitor.type === 'tcp_port') {
-        const open = result.normalized_result.open === true ? 'порт открыт' : 'порт закрыт'
-        const time = result.response_time_ms ? ` · ${result.response_time_ms} мс` : ''
-
-        return `${open}${time}`
-    }
-
-    const days = result.normalized_result.days_until_expiration
-
-    if (typeof days === 'number') {
-        return `${days} ${dayWord(days)} до истечения`
-    }
-
-    return statusLabel(result.status)
+    return monitorResultText(monitor.type, result, statusLabel)
 }
 
 function checkResultText(result: CheckResult): string {
-    if (result.error_message) return result.error_message
-    if (['http', 'api_endpoint', 'robots_txt', 'sitemap_xml'].includes(result.check_type)) {
-        const code = result.status_code ? `HTTP ${result.status_code}` : 'HTTP'
-        const time = result.response_time_ms ? ` · ${result.response_time_ms} мс` : ''
-
-        return `${code}${time}`
-    }
-
-    if (result.check_type === 'dns') {
-        const records = result.normalized_result.records
-        const count = Array.isArray(records) ? records.length : 0
-
-        return count ? `${count} DNS записей` : statusLabel(result.status)
-    }
-
-    if (result.check_type === 'tcp_port') {
-        const open = result.normalized_result.open === true ? 'порт открыт' : 'порт закрыт'
-        const time = result.response_time_ms ? ` · ${result.response_time_ms} мс` : ''
-
-        return `${open}${time}`
-    }
-
-    const days = result.normalized_result.days_until_expiration
-
-    if (typeof days === 'number') return `${days} ${dayWord(days)}`
-
-    return statusLabel(result.status)
+    return monitorResultText(result.check_type, result, statusLabel)
 }
 
 function parseNumberList(value: string): number[] {
@@ -1217,16 +1167,16 @@ function sparkClass(status: string): string {
                                 </p>
                             </div>
 
-                            <div class="mt-4 rounded-2xl border border-[#DDEBE3] bg-[#F6FBF8] p-3">
-                                <p class="text-xs font-semibold uppercase tracking-normal text-[#6A7A70] xl:text-right">
+                            <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#DDEBE3] bg-[#F6FBF8] px-3 py-2 sm:flex-nowrap">
+                                <p class="text-xs font-semibold text-[#6A7A70] sm:whitespace-nowrap">
                                     Каналы уведомлений об инцидентах
                                 </p>
-                                <div class="mt-2 flex flex-wrap gap-2 xl:justify-end">
+                                <div class="flex shrink-0 flex-wrap gap-2 sm:flex-nowrap">
                                     <button
                                         v-for="channel in site.notification_channels"
                                         :key="channel.type"
                                         type="button"
-                                        class="inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition hover:border-[#24A869] disabled:cursor-wait disabled:opacity-70"
+                                        class="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-xl border px-3 text-xs font-semibold transition hover:border-[#24A869] disabled:cursor-wait disabled:opacity-70"
                                         :class="notificationToggleClass(channel)"
                                         :title="notificationToggleTitle(channel)"
                                         :disabled="savingNotificationChannel !== null"

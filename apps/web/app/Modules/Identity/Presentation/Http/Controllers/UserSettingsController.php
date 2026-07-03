@@ -4,6 +4,7 @@ namespace App\Modules\Identity\Presentation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Billing\Application\Services\LimitChecker;
+use App\Modules\Identity\Application\Actions\DeleteUserProfile;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Identity\Presentation\Http\Requests\UpdateMaxSettingsRequest;
 use App\Modules\Identity\Presentation\Http\Requests\UpdateProfileSettingsRequest;
@@ -13,6 +14,7 @@ use App\Modules\Notifications\Application\Services\SyncTelegramNotificationChann
 use App\Modules\Sites\Actions\GetCurrentOrganization;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -73,6 +75,22 @@ final class UserSettingsController extends Controller
         return redirect()
             ->route('settings.index')
             ->with('success', 'Настройки профиля сохранены.');
+    }
+
+    public function destroyProfile(Request $request, DeleteUserProfile $deleteUserProfile): RedirectResponse
+    {
+        $user = $request->user();
+
+        $deleteUserProfile->handle($user);
+
+        Auth::guard('web')->logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()
+            ->route('home')
+            ->with('success', 'Профиль удален. Рабочие данные аккаунта удалены безвозвратно.');
     }
 
     public function updateTelegram(

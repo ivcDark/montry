@@ -5,12 +5,15 @@ import TariffRestriction from '@/Components/TariffRestriction.vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import {
     Bell,
+    AlertTriangle,
     CheckCircle2,
     Clipboard,
     Mail,
     MessageCircle,
     Save,
     ShieldCheck,
+    Trash2,
+    X,
     UserRound,
 } from '@lucide/vue'
 
@@ -47,6 +50,7 @@ const props = defineProps<{
 }>()
 
 const copiedChannel = ref<ChannelKey | null>(null)
+const isDeleteProfileModalOpen = ref(false)
 
 const profileForm = useForm({
     name: props.settings.profile.name,
@@ -59,6 +63,8 @@ const telegramForm = useForm({
 const maxForm = useForm({
     max_notifications_enabled: props.settings.max.notifications_enabled,
 })
+
+const deleteProfileForm = useForm({})
 
 const channelForms = {
     telegram: telegramForm,
@@ -100,6 +106,27 @@ const enabledChannelsLabel = computed(() => channelCards.value
 function submitProfile(): void {
     profileForm.patch('/settings/profile', {
         preserveScroll: true,
+    })
+}
+
+function openDeleteProfileModal(): void {
+    isDeleteProfileModalOpen.value = true
+}
+
+function closeDeleteProfileModal(): void {
+    if (deleteProfileForm.processing) {
+        return
+    }
+
+    isDeleteProfileModalOpen.value = false
+}
+
+function deleteProfile(): void {
+    deleteProfileForm.delete('/settings/profile', {
+        preserveScroll: true,
+        onSuccess: () => {
+            isDeleteProfileModalOpen.value = false
+        },
     })
 }
 
@@ -364,6 +391,27 @@ async function copyConnectionCommand(key: ChannelKey): Promise<void> {
                             </button>
                         </div>
                     </form>
+
+                    <div class="mt-7 rounded-2xl border border-[#F4B4B4] bg-[#FFF5F5] p-4">
+                        <div class="flex items-start gap-3">
+                            <AlertTriangle class="mt-0.5 h-5 w-5 shrink-0 text-[#DC2626]" :stroke-width="2" />
+                            <div class="min-w-0">
+                                <p class="text-sm font-semibold text-[#991B1B]">Удаление профиля</p>
+                                <p class="mt-2 text-sm leading-6 text-[#7F1D1D]">
+                                    Если профиль будет удален, все связанные с ним сайты, мониторинги и результаты проверок будут удалены безвозвратно.
+                                </p>
+                                <button
+                                    type="button"
+                                    class="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#DC2626] px-5 text-sm font-semibold text-white transition hover:bg-[#B91C1C] disabled:cursor-not-allowed disabled:opacity-60"
+                                    :disabled="deleteProfileForm.processing"
+                                    @click="openDeleteProfileModal"
+                                >
+                                    <Trash2 class="h-4 w-4" :stroke-width="2" />
+                                    Удалить профиль
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </section>
 
                 <div class="grid gap-6">
@@ -478,5 +526,62 @@ async function copyConnectionCommand(key: ChannelKey): Promise<void> {
                 </div>
             </div>
         </section>
+
+        <div
+            v-if="isDeleteProfileModalOpen"
+            class="fixed inset-0 z-50 grid place-items-center bg-[#0F1F17]/55 px-4 py-6 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-profile-title"
+        >
+            <div class="w-full max-w-lg overflow-hidden rounded-3xl border border-[#F4B4B4] bg-white shadow-[0_24px_80px_rgba(23,59,42,0.2)]">
+                <div class="flex items-start justify-between gap-4 border-b border-[#F8D7D7] bg-[#FFF5F5] p-5">
+                    <div class="flex items-start gap-3">
+                        <span class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-[#DC2626] ring-1 ring-[#F4B4B4]">
+                            <AlertTriangle class="h-5 w-5" :stroke-width="2" />
+                        </span>
+                        <div>
+                            <h2 id="delete-profile-title" class="text-lg font-semibold text-[#991B1B]">Удалить профиль?</h2>
+                            <p class="mt-1 text-sm leading-6 text-[#7F1D1D]">Это действие нельзя отменить.</p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-[#7F1D1D] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="deleteProfileForm.processing"
+                        aria-label="Закрыть окно"
+                        @click="closeDeleteProfileModal"
+                    >
+                        <X class="h-5 w-5" :stroke-width="2" />
+                    </button>
+                </div>
+
+                <div class="grid gap-5 p-5">
+                    <p class="text-sm leading-6 text-[#26332D]">
+                        После подтверждения профиль, организация, сайты, подключенные мониторинги, инциденты, уведомления и результаты проверок будут удалены безвозвратно. История оплат тарифов останется для статистики.
+                    </p>
+
+                    <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                        <button
+                            type="button"
+                            class="inline-flex h-11 items-center justify-center rounded-2xl border border-[#CFE1D7] bg-white px-5 text-sm font-semibold text-[#26332D] transition hover:border-[#9BC9AE] hover:text-[#173B2A] disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="deleteProfileForm.processing"
+                            @click="closeDeleteProfileModal"
+                        >
+                            Отмена
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#DC2626] px-5 text-sm font-semibold text-white transition hover:bg-[#B91C1C] disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="deleteProfileForm.processing"
+                            @click="deleteProfile"
+                        >
+                            <Trash2 class="h-4 w-4" :stroke-width="2" />
+                            {{ deleteProfileForm.processing ? 'Удаляем...' : 'Да, удалить профиль' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </DashboardLayout>
 </template>

@@ -10,7 +10,7 @@ import {
     Globe2,
     LayoutGrid,
     Mail,
-    MessageCircle,
+    MessageSquareText,
     LoaderCircle,
     MoreHorizontal,
     Minus,
@@ -18,6 +18,7 @@ import {
     Plus,
     RotateCw,
     Search,
+    Send,
     Table2,
     X,
 } from '@lucide/vue'
@@ -223,8 +224,10 @@ onUnmounted(() => {
 
 function notificationIcon(type: string) {
     if (type === 'email') return Mail
+    if (type === 'telegram') return Send
+    if (type === 'max') return MessageSquareText
 
-    return MessageCircle
+    return MessageSquareText
 }
 
 function notificationBadgeClass(channel: NotificationChannel): string {

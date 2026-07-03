@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
+import { monitorResultText } from '@/Support/monitorResultText'
 import { useAutoRefresh } from '../../Composables/useAutoRefresh'
 
 type Organization = {
@@ -211,28 +212,8 @@ function resultText(monitor: Monitor): string {
 
     if (monitor.is_checking) return 'идет проверка'
     if (!result) return 'нет результата'
-    if (result.error_message) return result.error_message
 
-    if (monitor.type === 'http') {
-        const statusCode = result.status_code ? `${result.status_code}` : 'HTTP'
-        const responseTime = result.response_time_ms ? ` · ${result.response_time_ms} мс` : ''
-
-        return `${statusCode}${responseTime}`
-    }
-
-    if (monitor.type === 'ssl') {
-        const days = result.normalized_result.days_until_expiration
-
-        return typeof days === 'number' ? `истекает через ${days} дней` : statusLabel(monitor)
-    }
-
-    if (monitor.type === 'domain') {
-        const days = result.normalized_result.days_until_expiration
-
-        return typeof days === 'number' ? `истекает через ${days} дней` : statusLabel(monitor)
-    }
-
-    return result.status
+    return monitorResultText(monitor.type, result, (status) => statusLabel({ ...monitor, status }))
 }
 
 function targetText(monitor: Monitor): string {

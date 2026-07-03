@@ -10,6 +10,9 @@ Route::middleware('auth')->group(function (): void {
     Route::patch('/settings/profile', [UserSettingsController::class, 'updateProfile'])
         ->name('settings.profile.update');
 
+    Route::delete('/settings/profile', [UserSettingsController::class, 'destroyProfile'])
+        ->name('settings.profile.destroy');
+
     Route::patch('/settings/telegram', [UserSettingsController::class, 'updateTelegram'])
         ->name('settings.telegram.update');
 
@@ -22,4 +25,3 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/settings/max/confirm', [UserSettingsController::class, 'confirmMax'])
         ->name('settings.max.confirm');
 });
-
