@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import TariffRestriction from '@/Components/TariffRestriction.vue'
@@ -558,7 +558,7 @@ async function copyConnectionCommand(key: ChannelKey): Promise<void> {
 
                 <div class="grid gap-5 p-5">
                     <p class="text-sm leading-6 text-[#26332D]">
-                        После подтверждения профиль, организация, сайты, подключенные мониторинги, инциденты, уведомления и результаты проверок будут удалены безвозвратно. История оплат тарифов останется для статистики.
+                        После подтверждения профиль, сайты, подключенные мониторинги, инциденты, уведомления и результаты проверок будут удалены безвозвратно.
                     </p>
 
                     <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
