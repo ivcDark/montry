@@ -237,7 +237,7 @@ function helperText(key: ChannelKey, label: string): string {
     }
 
     if (shouldShowConnect(key) && (settings.bot_username || settings.setup_url)) {
-        return `Montri сохраняет настройку и открывает ${label}-бота с кодом подключения.`
+        return `Montri сохраняет настройку и открывает ${label}-бота с кодом подключения. Если чат открылся без ответа бота, отправьте команду ниже вручную.`
     }
 
     if (shouldShowConnect(key) && settings.connection_token) {
@@ -486,7 +486,7 @@ async function copyConnectionCommand(key: ChannelKey): Promise<void> {
                                         </p>
                                     </div>
 
-                                    <div v-if="shouldShowConnect(channel.key) && connectionCommand(channel.key) && !channel.settings.setup_url" class="grid gap-2">
+                                    <div v-if="shouldShowConnect(channel.key) && connectionCommand(channel.key)" class="grid gap-2">
                                         <span class="text-sm font-semibold text-[#26332D]">Команда для бота</span>
                                         <div class="flex flex-col gap-3 sm:flex-row">
                                             <code class="min-h-11 flex-1 rounded-2xl bg-[#F3F8F5] px-4 py-3 text-sm font-semibold text-[#173B2A] break-all ring-1 ring-[#DDEBE3]">
