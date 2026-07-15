@@ -55,7 +55,7 @@ return [
         'bot_url' => env('MAX_BOT_URL'),
         'webhook_secret' => env('MAX_WEBHOOK_SECRET'),
         'webhook_url' => env('MAX_WEBHOOK_URL'),
-        'api_base_url' => env('MAX_API_BASE_URL', 'https://platform-api2.max.ru'),
+        'api_base_url' => env('MAX_API_BASE_URL', 'https://botapi.max.ru'),
         'send_message_url' => env('MAX_SEND_MESSAGE_URL'),
         'auth_mode' => env('MAX_API_AUTH_MODE', 'header'),
         'token_query_parameter' => env('MAX_TOKEN_QUERY_PARAMETER', 'access_token'),
@@ -67,8 +67,8 @@ return [
         'redirect_uri' => env('YANDEX_REDIRECT_URI', rtrim((string) env('APP_URL', 'http://localhost'), '/') . '/auth/yandex/callback'),
         'scope' => env('YANDEX_SCOPE', 'login:info,login:email'),
         'force_confirm' => env('YANDEX_FORCE_CONFIRM', true),
-        'authorize_url' => env('YANDEX_AUTHORIZE_URL', 'https://oauth.yandex.com/authorize'),
-        'token_url' => env('YANDEX_TOKEN_URL', 'https://oauth.yandex.com/token'),
+        'authorize_url' => env('YANDEX_AUTHORIZE_URL', 'https://oauth.yandex.ru/authorize'),
+        'token_url' => env('YANDEX_TOKEN_URL', 'https://oauth.yandex.ru/token'),
         'user_info_url' => env('YANDEX_USER_INFO_URL', 'https://login.yandex.ru/info'),
     ],
 
@@ -115,4 +115,3 @@ return [
     ],
 
 ];
-

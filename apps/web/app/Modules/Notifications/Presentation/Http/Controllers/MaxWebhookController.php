@@ -173,8 +173,12 @@ final class MaxWebhookController extends Controller
             $request = Http::acceptJson()->timeout(5);
             $authMode = (string) config('services.max.auth_mode', 'header');
 
-            if (in_array($authMode, ['header', 'bearer'], true)) {
+            if ($authMode === 'bearer') {
                 $request = $request->withToken($token);
+            } elseif ($authMode === 'header') {
+                $request = $request->withHeaders([
+                    'Authorization' => $token,
+                ]);
             } else {
                 $tokenParameter = (string) config('services.max.token_query_parameter', 'access_token');
                 $request = $request->withQueryParameters([
@@ -202,6 +206,6 @@ final class MaxWebhookController extends Controller
             return $url;
         }
 
-        return rtrim((string) config('services.max.api_base_url', 'https://platform-api2.max.ru'), '/') . '/messages';
+        return rtrim((string) config('services.max.api_base_url', 'https://botapi.max.ru'), '/') . '/messages';
     }
 }

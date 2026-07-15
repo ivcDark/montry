@@ -185,6 +185,55 @@ Artisan::command('telegram:set-webhook {--url= : Public HTTPS webhook URL}', fun
     return self::SUCCESS;
 })->purpose('Register Telegram Bot API webhook for incoming bot updates.');
 
+Artisan::command('max:set-webhook {--url= : Public HTTPS webhook URL}', function (): int {
+    $token = trim((string) config('services.max.bot_token', ''));
+    $url = trim((string) ($this->option('url') ?: config('services.max.webhook_url') ?: route('max.webhook')));
+    $apiBaseUrl = rtrim((string) config('services.max.api_base_url', 'https://botapi.max.ru'), '/');
+    $authMode = (string) config('services.max.auth_mode', 'header');
+
+    if ($token === '') {
+        $this->error('MAX_BOT_TOKEN is not configured.');
+
+        return self::FAILURE;
+    }
+
+    if (! str_starts_with($url, 'https://')) {
+        $this->error('Max webhook URL must start with https://. Pass --url= or set MAX_WEBHOOK_URL.');
+
+        return self::FAILURE;
+    }
+
+    $request = Http::acceptJson()->timeout(10);
+
+    if ($authMode === 'bearer') {
+        $request = $request->withToken($token);
+    } elseif ($authMode === 'header') {
+        $request = $request->withHeaders([
+            'Authorization' => $token,
+        ]);
+    } else {
+        $tokenParameter = (string) config('services.max.token_query_parameter', 'access_token');
+        $request = $request->withQueryParameters([
+            $tokenParameter !== '' ? $tokenParameter : 'access_token' => $token,
+        ]);
+    }
+
+    $response = $request->post($apiBaseUrl.'/subscriptions', [
+        'url' => $url,
+        'update_types' => ['message_created'],
+    ]);
+
+    if ($response->failed()) {
+        $this->error('Max webhook setup failed: '.$response->body());
+
+        return self::FAILURE;
+    }
+
+    $this->info("Max webhook set to {$url}.");
+
+    return self::SUCCESS;
+})->purpose('Register Max Bot API webhook for incoming bot updates.');
+
 Artisan::command('observability:export-business-events {--batch= : Maximum business events to export}', function (ClickHouseBusinessEventExporter $exporter): int {
     $batch = $this->option('batch');
     $result = $exporter->export($batch !== null ? (int) $batch : null);

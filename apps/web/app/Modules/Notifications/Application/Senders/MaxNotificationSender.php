@@ -43,8 +43,14 @@ final class MaxNotificationSender implements NotificationSenderInterface
         $request = Http::acceptJson()->timeout(10);
         $authMode = (string) config('services.max.auth_mode', 'header');
 
-        if (in_array($authMode, ['header', 'bearer'], true)) {
+        if ($authMode === 'bearer') {
             return $request->withToken($token);
+        }
+
+        if ($authMode === 'header') {
+            return $request->withHeaders([
+                'Authorization' => $token,
+            ]);
         }
 
         $tokenParameter = (string) config('services.max.token_query_parameter', 'access_token');
@@ -62,6 +68,6 @@ final class MaxNotificationSender implements NotificationSenderInterface
             return $url;
         }
 
-        return rtrim((string) config('services.max.api_base_url', 'https://platform-api2.max.ru'), '/') . '/messages';
+        return rtrim((string) config('services.max.api_base_url', 'https://botapi.max.ru'), '/') . '/messages';
     }
 }

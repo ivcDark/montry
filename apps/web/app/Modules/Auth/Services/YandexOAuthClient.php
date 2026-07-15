@@ -151,12 +151,12 @@ final class YandexOAuthClient
 
     private function authorizeUrl(): string
     {
-        return (string) config('services.yandex.authorize_url', 'https://oauth.yandex.com/authorize');
+        return (string) config('services.yandex.authorize_url', 'https://oauth.yandex.ru/authorize');
     }
 
     private function tokenUrl(): string
     {
-        return (string) config('services.yandex.token_url', 'https://oauth.yandex.com/token');
+        return (string) config('services.yandex.token_url', 'https://oauth.yandex.ru/token');
     }
 
     private function userInfoUrl(): string
