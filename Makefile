@@ -16,7 +16,7 @@ REDIS = $(COMPOSE) exec redis
 	web-logs scheduler-logs queue-logs result-consumer-logs \
 	observability-up observability-down observability-logs grafana-ui prometheus-ui loki-ui tempo-ui clickhouse-shell \
 	backup-postgres verify-postgres-backup \
-	prod-check-env prod-build-frontend prod-build prod-up prod-down prod-restart prod-logs prod-ps prod-migrate prod-optimize-clear prod-deploy prod-update \
+	prod-check-env prod-build-frontend prod-build prod-up prod-down prod-restart prod-logs prod-ps prod-migrate prod-optimize-clear prod-register-webhooks prod-deploy prod-update \
 	poller-build poller-logs poller-test poller-run poller-run-mock poller-manual-logs poller-http-logs poller-seo-logs poller-ssl-logs poller-domain-logs \
 	poller-shell postgres-shell redis-cli rabbitmq-ui mailpit-ui \
 	scale-http scale-seo
@@ -92,6 +92,9 @@ prod-migrate: prod-check-env
 prod-optimize-clear: prod-check-env
 	$(PROD_COMPOSE) run --rm web php artisan optimize:clear
 
+prod-register-webhooks: prod-check-env
+	$(PROD_COMPOSE) run --rm web php artisan max:set-webhook
+
 prod-deploy: prod-check-env
 	$(MAKE) prod-build-frontend
 	$(MAKE) prod-build
@@ -104,6 +107,7 @@ prod-deploy: prod-check-env
 prod-update: prod-check-env
 	git pull --ff-only origin master
 	$(MAKE) prod-deploy
+	$(MAKE) prod-register-webhooks
 
 observability-up:
 	$(COMPOSE) --profile observability up -d
