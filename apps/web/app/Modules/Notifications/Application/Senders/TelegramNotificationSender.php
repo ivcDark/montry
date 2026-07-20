@@ -4,11 +4,15 @@ namespace App\Modules\Notifications\Application\Senders;
 
 use App\Modules\Notifications\Application\DTO\NotificationMessage;
 use App\Modules\Notifications\Infrastructure\Persistence\Models\NotificationChannel;
-use Illuminate\Support\Facades\Http;
+use App\Modules\Notifications\Infrastructure\Telegram\TelegramHttpClient;
 use RuntimeException;
 
-final class TelegramNotificationSender implements NotificationSenderInterface
+final readonly class TelegramNotificationSender implements NotificationSenderInterface
 {
+    public function __construct(
+        private TelegramHttpClient $telegram,
+    ) {}
+
     public function supports(NotificationChannel $channel): bool
     {
         return $channel->type === 'telegram';
@@ -27,9 +31,8 @@ final class TelegramNotificationSender implements NotificationSenderInterface
             throw new RuntimeException('Telegram notification channel has no chat_id.');
         }
 
-        Http::asForm()
-            ->timeout(10)
-            ->post("https://api.telegram.org/bot{$token}/sendMessage", [
+        $this->telegram->request()
+            ->post($this->telegram->botApiUrl($token, 'sendMessage'), [
                 'chat_id' => (string) $chatId,
                 'text' => $message->body,
                 'disable_web_page_preview' => true,

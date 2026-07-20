@@ -47,6 +47,7 @@ return [
         'bot_username' => env('TELEGRAM_BOT_USERNAME'),
         'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
         'webhook_url' => env('TELEGRAM_WEBHOOK_URL'),
+        'http_proxy' => env('TELEGRAM_HTTP_PROXY'),
     ],
 
     'max' => [

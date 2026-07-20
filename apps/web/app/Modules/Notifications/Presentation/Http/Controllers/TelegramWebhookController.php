@@ -5,15 +5,19 @@ namespace App\Modules\Notifications\Presentation\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Identity\Infrastructure\Persistence\Models\User;
 use App\Modules\Notifications\Application\Services\SyncTelegramNotificationChannels;
+use App\Modules\Notifications\Infrastructure\Telegram\TelegramHttpClient;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 final class TelegramWebhookController extends Controller
 {
+    public function __construct(
+        private TelegramHttpClient $telegram,
+    ) {}
+
     public function __invoke(Request $request, SyncTelegramNotificationChannels $syncTelegramChannels): Response
     {
         $secret = (string) config('services.telegram.webhook_secret', '');
@@ -101,9 +105,8 @@ final class TelegramWebhookController extends Controller
         }
 
         try {
-            Http::asForm()
-                ->timeout(5)
-                ->post("https://api.telegram.org/bot{$token}/sendMessage", [
+            $this->telegram->request(5)
+                ->post($this->telegram->botApiUrl($token, 'sendMessage'), [
                     'chat_id' => $chatId,
                     'text' => $text,
                 ]);

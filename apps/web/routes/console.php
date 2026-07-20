@@ -10,6 +10,7 @@ use App\Modules\Identity\Infrastructure\Persistence\Models\Organization;
 use App\Modules\Notifications\Application\Services\IncidentNotificationMessageFactory;
 use App\Modules\Notifications\Application\Services\NotificationDispatcher;
 use App\Modules\Notifications\Application\Services\SyncEmailNotificationChannels;
+use App\Modules\Notifications\Infrastructure\Telegram\TelegramHttpClient;
 use App\Modules\Monitoring\Application\Services\PruneMonitoringHistory;
 use App\Modules\Observability\Infrastructure\ClickHouse\ClickHouseBusinessEventExporter;
 use App\Modules\Observability\Infrastructure\Persistence\Models\AnalyticsEventExport;
@@ -145,7 +146,7 @@ Artisan::command('billing:activate-scheduled-subscriptions', function (ApplySubs
 })->purpose('Activate scheduled billing downgrades and apply new plan limits.');
 
 
-Artisan::command('telegram:set-webhook {--url= : Public HTTPS webhook URL}', function (): int {
+Artisan::command('telegram:set-webhook {--url= : Public HTTPS webhook URL}', function (TelegramHttpClient $telegram): int {
     $token = trim((string) config('services.telegram.bot_token', ''));
     $url = trim((string) ($this->option('url') ?: config('services.telegram.webhook_url') ?: route('telegram.webhook')));
     $secret = trim((string) config('services.telegram.webhook_secret', ''));
@@ -171,8 +172,8 @@ Artisan::command('telegram:set-webhook {--url= : Public HTTPS webhook URL}', fun
         $payload['secret_token'] = $secret;
     }
 
-    $response = Http::timeout(10)
-        ->post("https://api.telegram.org/bot{$token}/setWebhook", $payload);
+    $response = $telegram->request()
+        ->post($telegram->botApiUrl($token, 'setWebhook'), $payload);
 
     if ($response->failed()) {
         $this->error('Telegram webhook setup failed: ' . $response->body());
