@@ -54,4 +54,46 @@ final class ArticlePagesTest extends TestCase
             ->get('/articles/hidden-article')
             ->assertNotFound();
     }
+
+    public function test_article_page_includes_related_published_articles(): void
+    {
+        $current = Article::query()->create([
+            'title' => 'Текущая статья',
+            'slug' => 'current-article',
+            'excerpt' => 'Анонс текущей статьи.',
+            'body' => "## Заголовок\n\nТекст текущей статьи.\n\n- пункт один\n- пункт два",
+            'is_published' => true,
+            'published_at' => now()->subDay(),
+            'sort_order' => 1,
+        ]);
+
+        Article::query()->create([
+            'title' => 'Связанная статья',
+            'slug' => 'related-article',
+            'excerpt' => 'Анонс связанной статьи.',
+            'body' => 'Текст связанной статьи.',
+            'is_published' => true,
+            'published_at' => now()->subDays(2),
+            'sort_order' => 2,
+        ]);
+
+        Article::query()->create([
+            'title' => 'Скрытая статья',
+            'slug' => 'hidden-related',
+            'excerpt' => 'Анонс скрытой статьи.',
+            'body' => 'Текст скрытой статьи.',
+            'is_published' => false,
+            'sort_order' => 3,
+        ]);
+
+        $this
+            ->get('/articles/'.$current->slug)
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Articles/Show', false)
+                ->where('article.slug', 'current-article')
+                ->has('related', 1)
+                ->where('related.0.slug', 'related-article')
+            );
+    }
 }

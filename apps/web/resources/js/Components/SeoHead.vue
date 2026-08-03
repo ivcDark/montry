@@ -8,9 +8,11 @@ const props = withDefaults(defineProps<{
     path: string
     indexable?: boolean
     ogType?: string
+    jsonLd?: Record<string, unknown> | Record<string, unknown>[] | null
 }>(), {
     indexable: true,
     ogType: 'website',
+    jsonLd: null,
 })
 
 type PageProps = {
@@ -32,6 +34,14 @@ const robots = computed(() => (
         ? 'index, follow'
         : 'noindex, nofollow'
 ))
+const ogImage = computed(() => `${baseUrl.value}/images/og-default.png`)
+const jsonLdPayload = computed(() => {
+    if (!props.jsonLd) {
+        return null
+    }
+
+    return JSON.stringify(props.jsonLd)
+})
 </script>
 
 <template>
@@ -45,8 +55,17 @@ const robots = computed(() => (
         <meta head-key="og:type" property="og:type" :content="ogType">
         <meta head-key="og:site_name" property="og:site_name" content="Montry">
         <meta head-key="og:locale" property="og:locale" content="ru_RU">
-        <meta head-key="twitter:card" name="twitter:card" content="summary">
+        <meta head-key="og:image" property="og:image" :content="ogImage">
+        <meta head-key="twitter:card" name="twitter:card" content="summary_large_image">
         <meta head-key="twitter:title" name="twitter:title" :content="fullTitle">
         <meta head-key="twitter:description" name="twitter:description" :content="description">
+        <meta head-key="twitter:image" name="twitter:image" :content="ogImage">
+        <component
+            :is="'script'"
+            v-if="jsonLdPayload"
+            head-key="json-ld"
+            type="application/ld+json"
+            v-text="jsonLdPayload"
+        />
     </Head>
 </template>

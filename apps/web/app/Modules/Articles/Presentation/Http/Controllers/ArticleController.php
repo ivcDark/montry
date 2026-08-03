@@ -32,8 +32,19 @@ final class ArticleController extends Controller
             ->where('slug', $slug)
             ->firstOrFail();
 
+        $related = Article::query()
+            ->published()
+            ->where('id', '!=', $article->id)
+            ->orderBy('sort_order')
+            ->orderByDesc('published_at')
+            ->limit(3)
+            ->get()
+            ->map(fn (Article $relatedArticle): array => $this->articlePayload($relatedArticle, includeBody: false))
+            ->values();
+
         return Inertia::render('Articles/Show', [
             'article' => $this->articlePayload($article, includeBody: true),
+            'related' => $related,
         ]);
     }
 
