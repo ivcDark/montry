@@ -65,7 +65,9 @@ function resend() {
 </script>
 
 <template>
-    <Head title="Подтверждение email" />
+    <Head title="Подтверждение email">
+        <meta head-key="robots" name="robots" content="noindex, nofollow">
+    </Head>
 
     <main class="min-h-screen bg-[#F6F8FB] font-sans text-[#111827]">
         <MarketingHeader context-label="Подтверждение" />

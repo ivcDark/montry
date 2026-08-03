@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
+import { Link } from '@inertiajs/vue3'
 import MarketingHeader from '@/Components/MarketingHeader.vue'
+import SeoHead from '@/Components/SeoHead.vue'
 import MarketingFooter from '@/Components/MarketingFooter.vue'
 
 type Section = {
@@ -69,7 +70,11 @@ const requisites = [
 </script>
 
 <template>
-    <Head title="Пользовательское соглашение" />
+    <SeoHead
+        title="Пользовательское соглашение"
+        description="Пользовательское соглашение сервиса мониторинга сайтов Montry."
+        path="/user-agreement"
+    />
 
     <main class="min-h-screen bg-[#F8FAFC] text-[#111827]">
         <MarketingHeader context-label="Соглашение" />

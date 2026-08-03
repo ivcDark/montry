@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
+import { Link } from '@inertiajs/vue3'
 import MarketingHeader from '@/Components/MarketingHeader.vue'
 import MarketingFooter from '@/Components/MarketingFooter.vue'
+import SeoHead from '@/Components/SeoHead.vue'
 
 type Article = {
     id: number
@@ -29,7 +30,11 @@ function formatDate(value: string | null): string {
 </script>
 
 <template>
-    <Head title="Статьи" />
+    <SeoHead
+        title="Статьи"
+        description="Материалы о мониторинге сайтов, SSL-сертификатах, доменах, HTTP-проверках и работе с инцидентами."
+        path="/articles"
+    />
 
     <div class="min-h-screen bg-[#F9FCFA] font-sans text-[#26332D]">
         <MarketingHeader context-label="Статьи" />

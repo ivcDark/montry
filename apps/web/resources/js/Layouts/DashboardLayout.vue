@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Link, useForm, usePage } from '@inertiajs/vue3'
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
 import BrandMark from '@/Components/BrandMark.vue'
 import FlashToast from '@/Components/FlashToast.vue'
 import {
@@ -174,6 +174,10 @@ function submitProductIdea(): void {
 </script>
 
 <template>
+    <Head>
+        <meta head-key="robots" name="robots" content="noindex, nofollow">
+    </Head>
+
     <main class="min-h-screen bg-[#F3F8F5] font-sans text-[#26332D] lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
         <FlashToast
             :message="toastMessage"

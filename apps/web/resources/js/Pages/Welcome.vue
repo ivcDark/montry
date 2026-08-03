@@ -1,9 +1,10 @@
 ﻿<script setup lang="ts">
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
+import { Link, useForm, usePage } from '@inertiajs/vue3'
 import { Activity, BellRing, Building2, CalendarClock, ChartNoAxesCombined, CircleCheck, ChevronDown, Clock3, Globe, Laptop, Radar, Send, TriangleAlert, UsersRound } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import MarketingHeader from '@/Components/MarketingHeader.vue'
 import MarketingFooter from '@/Components/MarketingFooter.vue'
+import SeoHead from '@/Components/SeoHead.vue'
 
 type User = {
     id: number | string
@@ -185,7 +186,11 @@ function submitFeedback(): void {
 </script>
 
 <template>
-    <Head title="Montry — мониторинг сайтов без лишней сложности" />
+    <SeoHead
+        title="Мониторинг сайтов без лишней сложности"
+        description="Следите за доступностью сайта, доменом, DNS и SSL. Получайте понятные уведомления по почте и в Telegram."
+        path="/"
+    />
 
     <main class="min-h-screen bg-[#F3F8F5] font-sans text-[#26332D]">
         <MarketingHeader />

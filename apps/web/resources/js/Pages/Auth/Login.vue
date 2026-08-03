@@ -32,7 +32,9 @@ function submit() {
 </script>
 
 <template>
-    <Head title="Вход" />
+    <Head title="Вход">
+        <meta head-key="robots" name="robots" content="noindex, nofollow">
+    </Head>
 
     <main class="min-h-screen bg-[#F3F8F5] font-sans text-[#1F2B24]">
         <div class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-5 py-8 sm:px-8 lg:px-10">

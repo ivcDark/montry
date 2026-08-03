@@ -63,6 +63,9 @@ class HandleInertiaRequests extends Middleware
                     : null,
             ],
 
+            'appUrl' => rtrim((string) config('app.url'), '/'),
+            'seoIndexable' => (bool) config('seo.indexable'),
+
             'billing' => fn () => $this->billingSummary($request),
         ];
     }

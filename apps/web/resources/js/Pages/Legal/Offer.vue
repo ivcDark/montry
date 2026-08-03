@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
+import { Link } from '@inertiajs/vue3'
 import MarketingHeader from '@/Components/MarketingHeader.vue'
+import SeoHead from '@/Components/SeoHead.vue'
 import MarketingFooter from '@/Components/MarketingFooter.vue'
 
 type OfferTextBlock = {
@@ -290,7 +291,11 @@ const requisites = [
 </script>
 
 <template>
-    <Head title="Публичная оферта" />
+    <SeoHead
+        title="Публичная оферта"
+        description="Публичная оферта на оказание услуг сервиса мониторинга сайтов Montry."
+        path="/offers"
+    />
 
     <main class="min-h-screen bg-[#F8FAFC] text-[#111827]">
         <MarketingHeader context-label="Оферта" />

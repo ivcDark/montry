@@ -62,7 +62,9 @@ function formatDate(value: string | null): string {
 </script>
 
 <template>
-    <Head :title="statusPage.name" />
+    <Head :title="statusPage.name">
+        <meta head-key="robots" name="robots" content="noindex, nofollow">
+    </Head>
 
     <main class="min-h-screen bg-[#F4F7F5] text-[#26332D]">
         <div v-if="isPreview" class="border-b border-[#F4D89A] bg-[#FFF7E8] px-4 py-3 text-center text-sm font-semibold text-[#8A5B12]">

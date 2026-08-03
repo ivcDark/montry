@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Link, usePage } from '@inertiajs/vue3'
+import { Head, Link, usePage } from '@inertiajs/vue3'
 import BrandMark from '@/Components/BrandMark.vue'
 import FlashToast from '@/Components/FlashToast.vue'
 import {
@@ -83,6 +83,10 @@ const toastToken = computed(() => (
 </script>
 
 <template>
+    <Head>
+        <meta head-key="robots" name="robots" content="noindex, nofollow">
+    </Head>
+
     <main class="admin-shell min-h-screen bg-[#F3F8F5] text-[#26332D] lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
         <FlashToast
             :message="toastMessage"

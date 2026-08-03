@@ -2,9 +2,12 @@
 
 use App\Modules\Articles\Infrastructure\Persistence\Models\Article;
 use App\Modules\Billing\Infrastructure\Persistence\Models\Plan;
+use App\Shared\Presentation\Http\Controllers\SeoController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+Route::get('/robots.txt', [SeoController::class, 'robots'])->name('seo.robots');
+Route::get('/sitemap.xml', [SeoController::class, 'sitemap'])->name('seo.sitemap');
 
 Route::get('/offers', function () {
     return Inertia::render('Legal/Offer');
